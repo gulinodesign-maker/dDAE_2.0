@@ -8,12 +8,12 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="Cache-Control"/>
 <meta content="no-cache" http-equiv="Pragma"/>
 <meta content="0" http-equiv="Expires"/>
-<link href="./styles.css?v=dDAE_2.012" rel="stylesheet"/>
-<link href="./manifest.json?v=dDAE_2.012" rel="manifest"/>
-<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.012" rel="apple-touch-icon" sizes="180x180"/>
-<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.012" rel="apple-touch-icon-precomposed" sizes="180x180"/>
-<link href="./assets/icons/favicon-32.png?v=dDAE_2.012" rel="icon" sizes="32x32" type="image/png"/>
-<link href="./assets/icons/favicon-16.png?v=dDAE_2.012" rel="icon" sizes="16x16" type="image/png"/>
+<link href="./styles.css?v=dDAE_2.010" rel="stylesheet"/>
+<link href="./manifest.json?v=dDAE_2.010" rel="manifest"/>
+<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.010" rel="apple-touch-icon" sizes="180x180"/>
+<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.010" rel="apple-touch-icon-precomposed" sizes="180x180"/>
+<link href="./assets/icons/favicon-32.png?v=dDAE_2.010" rel="icon" sizes="32x32" type="image/png"/>
+<link href="./assets/icons/favicon-16.png?v=dDAE_2.010" rel="icon" sizes="16x16" type="image/png"/>
 <meta content="#ffffff" name="theme-color"/>
 <meta content="yes" name="apple-mobile-web-app-capable"/>
 <meta content="Daedalium PMS" name="apple-mobile-web-app-title"/>
@@ -23,7 +23,7 @@
 <header class="topbar">
 <div class="brand">
 <div class="brand-left">
-<img alt="Daedalium logo" class="logo" src="./assets/logo.jpg?v=dDAE_2.012"/>
+<img alt="Daedalium logo" class="logo" src="./assets/logo.jpg?v=dDAE_2.010"/>
 <h1>Daedalium PMS</h1>
 </div>
 <div class="brand-right">
@@ -72,7 +72,7 @@
 <div class="auth-page">
 <div class="auth-card">
 <div class="auth-logo-wrap">
-<img alt="Daedalium" class="auth-logo" src="./assets/logo.jpg?v=dDAE_2.012"/>
+<img alt="Daedalium" class="auth-logo" src="./assets/logo.jpg?v=dDAE_2.010"/>
 </div>
 <div class="field float">
 <input autocomplete="username" id="authUsername" placeholder=" "/>
@@ -183,14 +183,14 @@
 </svg></div>
 <div class="home-main-label">Lavanderia</div>
 </button>
-<button aria-label="Statistiche" class="home-main" id="goGuadagni" type="button">
+<button aria-label="Guadagni" class="home-main" id="goGuadagni" type="button">
 <div aria-hidden="true" class="home-main-glyph"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24">
 <path d="M7 9V7.5A2.5 2.5 0 0 1 9.5 5h5A2.5 2.5 0 0 1 17 7.5V9"></path>
 <path d="M6 9h12a2 2 0 0 1 2 2v7a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-7a2 2 0 0 1 2-2Z"></path>
 <path d="M9 15h6"></path>
 <path d="M12 12v6"></path>
 </svg></div>
-<div class="home-main-label">Statistiche</div>
+<div class="home-main-label">Guadagni</div>
 </button>
 <button aria-label="Impostazioni" class="home-main" id="goImpostazioni" type="button">
 <div aria-hidden="true" class="home-main-glyph alt"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24">
@@ -209,7 +209,7 @@
 
 
 
-</div><div class="home-gap"></div><div class="year-pill" hidden="" id="yearPill"></div><div class="build" id="buildText">dDAE_2.012</div></div></section>
+</div><div class="home-gap"></div><div class="year-pill" hidden="" id="yearPill"></div><div class="build" id="buildText">dDAE_2.010</div></div></section>
 <section class="page" hidden="" id="page-impostazioni">
 <div class="card">
 <div class="hd">
@@ -406,198 +406,6 @@
 </div>
 </div>
 </section>
-<!-- 2B) STATISTICHE -->
-<section class="page" hidden="" id="page-statistiche">
-  <div class="content stats-page">
-    <div class="stats-top">
-      <h2>Statistiche</h2>
-      <div class="period-tabs-row" style="margin-top:10px;">
-        <div class="field period-preset">
-          <select aria-label="Periodo" id="periodPreset4"></select>
-        </div>
-      </div>
-    </div>
-
-    <div class="stats-tabs" id="statsTabs" role="tablist">
-      <button class="stats-tab is-active" data-tab="overview" type="button">Panoramica</button>
-      <button class="stats-tab" data-tab="fatturato" type="button">Fatturato</button>
-      <button class="stats-tab" data-tab="iva" type="button">IVA</button>
-      <button class="stats-tab" data-tab="pagamenti" type="button">Pagamenti</button>
-      <button class="stats-tab" data-tab="spese" type="button">Spese</button>
-      <button class="stats-tab" data-tab="report" type="button">Report</button>
-    </div>
-
-    <div class="stats-panels">
-      <div class="stats-panel" id="statsPanel-overview">
-        <div class="stats-kpi-grid">
-          <div class="stats-kpi">
-            <div class="stats-kpi-label">Fatturato totale</div>
-            <div class="stats-kpi-value" id="kpiFatturatoTot">€ 0,00</div>
-          </div>
-          <div class="stats-kpi">
-            <div class="stats-kpi-label">Incassato totale</div>
-            <div class="stats-kpi-value" id="kpiIncassatoTot">€ 0,00</div>
-          </div>
-          <div class="stats-kpi">
-            <div class="stats-kpi-label">IVA da versare</div>
-            <div class="stats-kpi-value" id="kpiIvaVersare">€ 0,00</div>
-          </div>
-          <div class="stats-kpi">
-            <div class="stats-kpi-label">IVA da scaricare</div>
-            <div class="stats-kpi-value" id="kpiIvaScaricare">€ 0,00</div>
-          </div>
-        </div>
-
-        <div class="stats-actions-row"><button class="stats-action stats-opencharts" data-stats-charts="overview" type="button">Apri grafici</button></div>
-
-        <div class="stats-charts stats-charts-wrap" id="statsCharts-overview" hidden="">
-          <div class="stats-chart-card">
-            <div class="stats-chart-title">Pagamenti</div>
-            <div class="chart-wrap">
-              <canvas aria-label="Grafico pagamenti" id="statsPayPie" width="320" height="320"></canvas>
-            </div>
-            <div class="legend" id="statsPayLegend"></div>
-          </div>
-
-          <div class="stats-chart-card">
-            <div class="stats-chart-title">Spese per categoria</div>
-            <div class="chart-wrap">
-              <canvas aria-label="Grafico spese" id="statsSpesePie" width="320" height="320"></canvas>
-            </div>
-            <div class="legend" id="statsSpeseLegend"></div>
-          </div>
-        </div>
-      </div>
-
-      <div class="stats-panel" hidden="" id="statsPanel-fatturato">
-        <div class="stats-kpi-grid">
-          <div class="stats-kpi">
-            <div class="stats-kpi-label">Mese corrente</div>
-            <div class="stats-kpi-value" id="kpiFatturatoMese">€ 0,00</div>
-          </div>
-          <div class="stats-kpi">
-            <div class="stats-kpi-label">Media prenotazione</div>
-            <div class="stats-kpi-value" id="kpiMediaPren">€ 0,00</div>
-          </div>
-        </div>
-
-
-        <div class="stats-actions-row"><button class="stats-action stats-opencharts" data-stats-charts="fatturato" type="button">Apri grafico</button></div>
-
-        <div class="stats-charts-wrap" id="statsCharts-fatturato" hidden="">
-        <div class="stats-chart-card" style="margin-top:14px;">
-          <div class="stats-chart-title">Fatturato mese per mese</div>
-          <div class="chart-wrap">
-            <canvas aria-label="Grafico fatturato mensile" id="statsMonthPie" width="320" height="320"></canvas>
-          </div>
-          <div class="legend" id="statsMonthLegend"></div>
-        </div>
-
-        </div>
-
-        <div class="stats-table" id="statsMonthlyTable"></div>
-      </div>
-
-      <div class="stats-panel" hidden="" id="statsPanel-iva">
-        <div class="stats-kpi-grid">
-          <div class="stats-kpi">
-            <div class="stats-kpi-label">IVA a debito</div>
-            <div class="stats-kpi-value" id="kpiIvaDebito">€ 0,00</div>
-          </div>
-          <div class="stats-kpi">
-            <div class="stats-kpi-label">IVA a credito</div>
-            <div class="stats-kpi-value" id="kpiIvaCredito">€ 0,00</div>
-          </div>
-          <div class="stats-kpi">
-            <div class="stats-kpi-label">Saldo IVA</div>
-            <div class="stats-kpi-value" id="kpiSaldoIva">€ 0,00</div>
-          </div>
-        </div>
-
-        <div class="stats-actions-row"><button class="stats-action stats-opencharts" data-stats-charts="iva" type="button">Apri grafico</button></div>
-
-        <div class="stats-charts-wrap" id="statsCharts-iva" hidden="">
-        <div class="stats-chart-card" style="margin-top:14px;">
-          <div class="stats-chart-title">Debito vs credito</div>
-          <div class="chart-wrap">
-            <canvas aria-label="Grafico IVA" id="statsIvaPie" width="320" height="320"></canvas>
-          </div>
-          <div class="legend" id="statsIvaLegend"></div>
-        </div>
-      </div>
-
-      </div>
-
-      <div class="stats-panel" hidden="" id="statsPanel-pagamenti">
-        <div class="stats-kpi-grid">
-          <div class="stats-kpi">
-            <div class="stats-kpi-label">Totale contanti</div>
-            <div class="stats-kpi-value" id="kpiCash">€ 0,00</div>
-          </div>
-          <div class="stats-kpi">
-            <div class="stats-kpi-label">Totale elettronico</div>
-            <div class="stats-kpi-value" id="kpiElec">€ 0,00</div>
-          </div>
-          <div class="stats-kpi">
-            <div class="stats-kpi-label">Con ricevuta fiscale</div>
-            <div class="stats-kpi-value" id="kpiReceipt">€ 0,00</div>
-          </div>
-        </div>
-
-        <div class="stats-actions-row">
-          <button class="stats-action stats-opencharts" data-stats-charts="pagamenti" type="button">Apri grafico</button>
-        </div>
-
-        <div class="stats-charts-wrap" id="statsCharts-pagamenti" hidden="">
-          <div class="stats-chart-card" style="margin-top:14px;">
-            <div class="stats-chart-title">Distribuzione pagamenti</div>
-            <div class="chart-wrap">
-              <canvas aria-label="Grafico distribuzione pagamenti" id="statsPayPie2" width="320" height="320"></canvas>
-            </div>
-            <div class="legend" id="statsPayLegend2"></div>
-          </div>
-        </div>
-      <div class="stats-panel" hidden="" id="statsPanel-spese">
-        <div class="stats-kpi-grid">
-          <div class="stats-kpi">
-            <div class="stats-kpi-label">Totale spese</div>
-            <div class="stats-kpi-value" id="kpiSpeseTot">€ 0,00</div>
-          </div>
-          <div class="stats-kpi">
-            <div class="stats-kpi-label">IVA detraibile</div>
-            <div class="stats-kpi-value" id="kpiSpeseIvaDet">€ 0,00</div>
-          </div>
-          <div class="stats-kpi">
-            <div class="stats-kpi-label">Imponibile</div>
-            <div class="stats-kpi-value" id="kpiSpeseImp">€ 0,00</div>
-          </div>
-        </div>
-
-        <div class="stats-actions-row"><button class="stats-action stats-opencharts" data-stats-charts="spese" type="button">Apri grafico</button></div>
-
-        <div class="stats-charts-wrap" id="statsCharts-spese" hidden="">
-          <div class="stats-chart-card" style="margin-top:14px;">
-            <div class="stats-chart-title">Spese per categoria</div>
-            <div class="chart-wrap">
-              <canvas aria-label="Grafico spese per categoria" id="statsSpesePie2" width="320" height="320"></canvas>
-            </div>
-            <div class="legend" id="statsSpeseLegend2"></div>
-          </div>
-        </div>
-      </div>
-      <div class="stats-panel" hidden="" id="statsPanel-report">
-        <div class="stats-report">
-          <button class="stats-action" id="btnRepMese" type="button">Riepilogo mese</button>
-          <button class="stats-action" id="btnRepTrim" type="button">Riepilogo trimestre</button>
-          <button class="stats-action" id="btnRepAnno" type="button">Riepilogo anno</button>
-        </div>
-        <div class="stats-report-output" id="statsReportOut" hidden=""></div>
-      </div>
-    </div>
-  </div>
-</section>
-
-<!-- 3) RIEPILOGO -->
 <!-- 3) RIEPILOGO -->
 <!-- 4) GRAFICO -->
 <!-- Pagina Ospite (DB) -->
@@ -1049,8 +857,8 @@
 </div>
 </div>
 </div>
-<script defer="" src="./config.js?v=dDAE_2.012"></script>
-<script defer="" src="./app.js?v=dDAE_2.012"></script>
+<script defer="" src="./config.js?v=dDAE_2.010"></script>
+<script defer="" src="./app.js?v=dDAE_2.010"></script>
 <!-- TAX REPORT MODAL -->
 <div aria-hidden="true" class="modal" hidden="" id="taxReportModal">
 <div aria-labelledby="taxReportTitle" aria-modal="true" class="modal-card tax-report-card" role="dialog">

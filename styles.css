@@ -29,7 +29,7 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.011"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.010"),
     radial-gradient(900px 600px at 10% 0%, rgba(43,124,180,0.10), transparent 62%),
     radial-gradient(800px 520px at 90% 8%, rgba(201,119,43,0.10), transparent 64%),
     radial-gradient(900px 700px at 20% 100%, rgba(122,192,219,0.10), transparent 62%),
@@ -759,7 +759,7 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.011"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.010"),
     radial-gradient(900px 650px at 12% 8%, rgba(43,124,180,0.18), transparent 62%),
     radial-gradient(820px 560px at 92% 14%, rgba(201,119,43,0.16), transparent 62%),
     radial-gradient(900px 700px at 18% 96%, rgba(122,192,219,0.16), transparent 62%),
@@ -2063,7 +2063,7 @@ body[data-page="ospiti"] .guest-card .actions {
 /* dDAE_1.229 — Ospiti: azioni stile Apple (pallini verde/giallo/rosso) */
 
 /* =========================
-   dDAE_2.011 — Auth + Anno pill
+   dDAE_2.010 — Auth + Anno pill
 ========================= */
 
 .year-pill{
@@ -4949,7 +4949,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 }
 
 /* =========================
-   dDAE_2.011 — HOME: Year pill bottom-center, 100px under icons grid
+   dDAE_2.010 — HOME: Year pill bottom-center, 100px under icons grid
 ========================= */
 #page-home .home-page{
   display:flex;
@@ -5046,164 +5046,3 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 .settings-btn-reload{ background: rgba(31,41,55,0.40); }
 .settings-btn-delete{ background: rgba(220,38,38,0.40); }
 .settings-btn-logout{ background: rgba(201,119,43,0.40); }
-
-/* ============================
-   STATISTICHE (ex Guadagni) — Liquid Glass: sezioni appoggiate allo sfondo
-   - Schede: tinta unita 20%
-   - Tasti: tinta unita 40%
-============================ */
-
-.stats-page{
-  padding: 14px 14px calc(18px + var(--safe-bottom));
-}
-
-.stats-top h2{
-  margin: 0;
-  font-size: 22px;
-  letter-spacing: 0.2px;
-  color: rgba(43,124,180,0.98);
-}
-
-.stats-tabs{
-  display:flex;
-  gap: 8px;
-  overflow-x: auto;
-  padding: 10px 0 4px;
-  -webkit-overflow-scrolling: touch;
-}
-.stats-tabs::-webkit-scrollbar{ display:none; }
-
-.stats-tab{
-  flex: 0 0 auto;
-  height: 40px;
-  padding: 0 14px;
-  border-radius: 999px;
-  border: 1px solid rgba(15,23,42,0.10);
-  background: rgba(255,255,255,0.40);
-  color: rgba(43,124,180,0.95);
-  font-size: 12px;
-  font-weight: 950;
-  letter-spacing: 0.2px;
-  cursor: pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.stats-tab:active{ transform: scale(0.98); }
-.stats-tab.is-active{
-  border-color: rgba(255,255,255,0.55);
-  box-shadow: 0 10px 22px rgba(15,23,42,0.12);
-}
-
-.stats-panels{ margin-top: 10px; }
-
-.stats-actions-row{
-  margin-top: 12px;
-}
-
-.stats-charts-wrap{
-  margin-top: 14px;
-}
-
-.stats-kpi-grid{
-  display:grid;
-  grid-template-columns: 1fr 1fr;
-  gap: 10px;
-}
-
-.stats-kpi{
-  border-radius: 18px;
-  padding: 12px 12px;
-  border: 1px solid rgba(15,23,42,0.08);
-  background: rgba(255,255,255,0.20);
-  box-shadow: 0 10px 24px rgba(15,23,42,0.10);
-}
-
-.stats-kpi-label{
-  font-size: 11px;
-  font-weight: 900;
-  letter-spacing: 0.2px;
-  color: rgba(43,124,180,0.92);
-}
-
-.stats-kpi-value{
-  margin-top: 6px;
-  font-size: 18px;
-  font-weight: 950;
-  color: rgba(43,124,180,0.98);
-  letter-spacing: 0.2px;
-}
-
-.stats-charts{
-  margin-top: 14px;
-  display:grid;
-  grid-template-columns: 1fr;
-  gap: 14px;
-}
-
-.stats-chart-card{
-  border-radius: 20px;
-  padding: 12px;
-  border: 1px solid rgba(15,23,42,0.08);
-  background: rgba(255,255,255,0.20);
-  box-shadow: 0 10px 24px rgba(15,23,42,0.10);
-}
-
-.stats-chart-title{
-  font-size: 12px;
-  font-weight: 950;
-  letter-spacing: 0.2px;
-  color: rgba(43,124,180,0.96);
-  margin-bottom: 8px;
-}
-
-.stats-table{
-  margin-top: 12px;
-  border-radius: 18px;
-  padding: 10px;
-  border: 1px solid rgba(15,23,42,0.08);
-  background: rgba(255,255,255,0.20);
-  box-shadow: 0 10px 24px rgba(15,23,42,0.10);
-}
-
-.stats-table .st-row{
-  display:flex;
-  align-items:center;
-  justify-content: space-between;
-  gap: 10px;
-  padding: 8px 6px;
-  border-bottom: 1px solid rgba(255,255,255,0.18);
-}
-.stats-table .st-row:last-child{ border-bottom: none; }
-.stats-table .st-m{ font-weight: 950; color: rgba(43,124,180,0.94); font-size: 12px; }
-.stats-table .st-v{ font-weight: 950; color: rgba(43,124,180,0.98); font-size: 12px; }
-
-.stats-report{
-  display:grid;
-  grid-template-columns: 1fr;
-  gap: 10px;
-}
-
-.stats-action{
-  width: 100%;
-  min-height: 48px;
-  border-radius: 18px;
-  border: 1px solid rgba(15,23,42,0.10);
-  background: rgba(255,255,255,0.40);
-  color: rgba(43,124,180,0.96);
-  font-weight: 950;
-  letter-spacing: 0.2px;
-  cursor:pointer;
-  -webkit-tap-highlight-color: transparent;
-}
-.stats-action:active{ transform: scale(0.98); }
-
-.stats-report-output{
-  margin-top: 12px;
-  border-radius: 18px;
-  padding: 12px;
-  border: 1px solid rgba(15,23,42,0.08);
-  background: rgba(255,255,255,0.20);
-  color: rgba(43,124,180,0.95);
-  font-size: 12px;
-  line-height: 1.35;
-  white-space: pre-wrap;
-}
