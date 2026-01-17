@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.016";
+const BUILD_VERSION = "dDAE_2.017";
 
 
 function __parseBuildVersion(v){
@@ -22,7 +22,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.016)
+// AUTH + SESSION (dDAE_2.017)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -448,7 +448,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.016 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.017 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -1852,7 +1852,7 @@ state.page = page;
   if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.016: fallback visualizzazione Pulizie
+  // dDAE_2.017: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -2623,7 +2623,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.016)
+// STATISTICHE (dDAE_2.017)
 // =========================
 
 function computeStatGen(){
@@ -4373,7 +4373,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.016) =====
+// ===== CALENDARIO (dDAE_2.017) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -4729,7 +4729,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.016)
+   Lavanderia (dDAE_2.017)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -5132,7 +5132,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.016: renderSpese allineato al backend ---
+// --- FIX dDAE_2.017: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -5228,7 +5228,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.016: delete reale ospiti ---
+// --- FIX dDAE_2.017: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -5263,7 +5263,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.016: mostra nome ospite ---
+// --- FIX dDAE_2.017: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -5517,7 +5517,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.016
+   Build: dDAE_2.017
 ========================= */
 
 state.orepulizia = state.orepulizia || {
