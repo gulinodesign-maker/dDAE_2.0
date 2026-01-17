@@ -3,11 +3,55 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "2.001";
+const BUILD_VERSION = "dDAE_2.003";
 
-// dDAE_2.001 — Auth
-let __APP_DATA_LOADED = false;
-let __AFTER_LOGIN_TARGET_PAGE = "home";
+// =========================
+// AUTH + SESSION (dDAE_2.003)
+// =========================
+
+const __SESSION_KEY = "dDAE_session_v2";
+const __YEAR_KEY = "dDAE_exerciseYear";
+
+function loadSession(){
+  try{
+    const raw = localStorage.getItem(__SESSION_KEY);
+    if (!raw) return null;
+    const s = JSON.parse(raw);
+    if (!s || !s.user_id) return null;
+    return s;
+  } catch(_){ return null; }
+}
+
+function saveSession(session){
+  try{ localStorage.setItem(__SESSION_KEY, JSON.stringify(session || null)); } catch(_){ }
+}
+
+function clearSession(){
+  try{ localStorage.removeItem(__SESSION_KEY); } catch(_){ }
+}
+
+function loadExerciseYear(){
+  try{
+    const v = String(localStorage.getItem(__YEAR_KEY) || "").trim();
+    const n = Number(v);
+    if (isFinite(n) && n >= 2000 && n <= 2100) return String(n);
+  } catch(_){ }
+  return String(new Date().getFullYear());
+}
+
+function saveExerciseYear(year){
+  try{ localStorage.setItem(__YEAR_KEY, String(year || "")); } catch(_){ }
+}
+
+function updateYearPill(){
+  const pill = document.getElementById("yearPill");
+  if (!pill) return;
+  const y = state.exerciseYear;
+  if (!y){ pill.hidden = true; return; }
+  pill.textContent = `ANNO ${y}`;
+  pill.hidden = false;
+}
+
 
 
 
@@ -420,8 +464,9 @@ guestMarriage: false,
   // Impostazioni (foglio "impostazioni")
   settings: { loaded: false, byKey: {}, rows: [], loadedAt: 0 },
 
-  // Auth/session (dDAE_2.001)
-  session: { user_id: "", username: "", nome: "", ruolo: "", anno: "" },
+  // Auth/session + anno esercizio
+  session: null,
+  exerciseYear: null,
 };
 
 const COLORS = {
@@ -946,16 +991,20 @@ async function api(action, { method="GET", params={}, body=null, showLoader=true
   // Cache-busting for iOS/Safari aggressive caching
   url.searchParams.set("_ts", String(Date.now()));
 
-  // Session params (user_id + anno) — dDAE_2.001
+  // Context multi-account (user + anno)
   try{
-    const sess = state && state.session ? state.session : null;
-    if (sess && sess.user_id && sess.anno && !["login","utenti"].includes(action)){
-      url.searchParams.set("user_id", String(sess.user_id));
-      url.searchParams.set("anno", String(sess.anno));
+    if (state && state.session && state.session.user_id && action !== "utenti" && action !== "ping"){
+      if (!params) params = {};
+      if (params.user_id === undefined || params.user_id === null || String(params.user_id).trim() === "") {
+        params.user_id = String(state.session.user_id);
+      }
+      if (params.anno === undefined || params.anno === null || String(params.anno).trim() === "") {
+        params.anno = String(state.exerciseYear || "");
+      }
     }
-  }catch(_){}
+  }catch(_){ }
 
-  Object.entries(params).forEach(([k,v]) => {
+  Object.entries(params || {}).forEach(([k,v]) => {
     if (v !== undefined && v !== null && String(v).length) url.searchParams.set(k, v);
   });
 
@@ -978,7 +1027,23 @@ const fetchOpts = {
 // Headers/body solo quando serve (riduce rischi di preflight su Safari iOS)
 if (realMethod !== "GET") {
   fetchOpts.headers = { "Content-Type": "text/plain;charset=utf-8" };
-  fetchOpts.body = body ? JSON.stringify(body) : "{}";
+  let payload = body;
+  // Inietta user_id/anno su POST/PUT (se mancano)
+  try{
+    if (state && state.session && state.session.user_id && action !== "utenti"){
+      const uid = String(state.session.user_id);
+      const yr = String(state.exerciseYear || "");
+      const addCtx = (o)=>{
+        if (!o || typeof o !== "object") return o;
+        if (o.user_id === undefined || o.user_id === null || String(o.user_id).trim() === "") o.user_id = uid;
+        if (o.anno === undefined || o.anno === null || String(o.anno).trim() === "") o.anno = yr;
+        return o;
+      };
+      if (Array.isArray(payload)) payload = payload.map(x => addCtx(x));
+      else if (payload && typeof payload === "object") payload = addCtx(payload);
+    }
+  }catch(_){ }
+  fetchOpts.body = payload ? JSON.stringify(payload) : "{}";
 }
 
 let res;
@@ -1189,8 +1254,167 @@ function setupImpostazioni() {
   if (reload) reload.addEventListener("click", async () => {
     try { await loadImpostazioniPage({ force: true }); toast("Impostazioni ricaricate"); } catch (e) { toast(e.message); }
   });
+
+  // Anno di esercizio
+  const selAnno = document.getElementById("setAnno");
+  if (selAnno){
+    const cy = new Date().getFullYear();
+    const years = [];
+    for (let y = cy - 3; y <= cy + 2; y++) years.push(String(y));
+    selAnno.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join("");
+    selAnno.value = String(state.exerciseYear || loadExerciseYear());
+    selAnno.addEventListener("change", () => {
+      state.exerciseYear = String(selAnno.value || "");
+      saveExerciseYear(state.exerciseYear);
+      updateYearPill();
+      invalidateApiCache();
+    });
+  }
 }
 
+
+function setupAuth(){
+  const u = document.getElementById("authUsername");
+  const p = document.getElementById("authPassword");
+  const hint = document.getElementById("authHint");
+
+  const extra = document.getElementById("authExtra");
+  const nome = document.getElementById("authNome");
+  const tel = document.getElementById("authTelefono");
+  const email = document.getElementById("authEmail");
+  const p2 = document.getElementById("authPassword2");
+  const p2Wrap = document.getElementById("authConfirmPasswordWrap");
+  const np = document.getElementById("authNewPassword");
+  const np2 = document.getElementById("authNewPassword2");
+  const npWrap = document.getElementById("authNewPasswordWrap");
+
+  const setHint = (msg)=>{ try{ if (hint) hint.textContent = msg || ""; }catch(_){ } };
+
+  const btnCreate = document.getElementById("btnCreateAccount");
+  const btnEdit = document.getElementById("btnEditAccount");
+  const btnLogin = document.getElementById("btnLogin");
+
+  let mode = "login"; // login | create | edit
+
+  const setMode = (m)=>{
+    mode = m;
+    // active button styling
+    try{
+      [btnCreate, btnEdit, btnLogin].forEach(b=>b && b.classList.remove("is-active"));
+      if (m === "create" && btnCreate) btnCreate.classList.add("is-active");
+      if (m === "edit" && btnEdit) btnEdit.classList.add("is-active");
+      if (m === "login" && btnLogin) btnLogin.classList.add("is-active");
+    }catch(_){ }
+
+    // show/hide extra form
+    const needExtra = (m === "create" || m === "edit");
+    if (extra) extra.hidden = !needExtra;
+
+    if (p2Wrap) p2Wrap.hidden = (m !== "create");
+    if (npWrap) npWrap.hidden = (m !== "edit");
+
+    // reset fields that don't apply
+    if (m !== "create" && p2) p2.value = "";
+    if (m !== "edit"){
+      if (np) np.value = "";
+      if (np2) np2.value = "";
+    }
+
+    if (m === "login") setHint("");
+    if (m === "create") setHint("Inserisci i dati e premi di nuovo: crea account");
+    if (m === "edit") setHint("Inserisci i dati e premi di nuovo: modifica account");
+  };
+
+  const readCreds = ()=>({
+    username: String(u?.value||"").trim(),
+    password: String(p?.value||"")
+  });
+
+  const readProfile = ()=>({
+    nome: String(nome?.value||"").trim(),
+    telefono: String(tel?.value||"").trim(),
+    email: String(email?.value||"").trim(),
+  });
+
+  // default state
+  setMode("login");
+
+  if (btnCreate) bindFastTap(btnCreate, async ()=>{
+    if (mode !== "create"){
+      setMode("create");
+      try{ u && u.focus(); }catch(_){ }
+      return;
+    }
+
+    const {username, password} = readCreds();
+    const profile = readProfile();
+    const confirm = String(p2?.value||"");
+
+    if (!username || !password) { setHint("Inserisci username e password"); return; }
+    if (password !== confirm) { setHint("Le password non coincidono"); return; }
+
+    try{
+      setHint("...");
+      const data = await api("utenti", { method:"POST", body:{ op:"create", username, password, ...profile } });
+      setHint("Account creato");
+      if (data && data.user){
+        state.session = data.user;
+        saveSession(state.session);
+        state.exerciseYear = loadExerciseYear();
+        updateYearPill();
+        showPage("home");
+      }
+    } catch(e){ setHint(e.message || "Errore"); }
+  });
+
+  if (btnEdit) bindFastTap(btnEdit, async ()=>{
+    if (mode !== "edit"){
+      setMode("edit");
+      try{ u && u.focus(); }catch(_){ }
+      return;
+    }
+
+    const {username, password} = readCreds();
+    const profile = readProfile();
+    const newPassword = String(np?.value||"");
+    const newPassword2 = String(np2?.value||"");
+
+    if (!username || !password) { setHint("Inserisci username e password"); return; }
+    if ((newPassword || newPassword2) && newPassword !== newPassword2) { setHint("Le nuove password non coincidono"); return; }
+
+    try{
+      setHint("...");
+      const data = await api("utenti", { method:"POST", body:{ op:"update", username, password, newPassword, ...profile } });
+      setHint("Account aggiornato");
+      if (data && data.user){
+        state.session = data.user;
+        saveSession(state.session);
+      }
+    } catch(e){ setHint(e.message || "Errore"); }
+  });
+
+  if (btnLogin) bindFastTap(btnLogin, async ()=>{
+    if (mode !== "login"){
+      setMode("login");
+      try{ u && u.focus(); }catch(_){ }
+      return;
+    }
+
+    const {username, password} = readCreds();
+    if (!username || !password) { setHint("Inserisci username e password"); return; }
+    try{
+      setHint("...");
+      const data = await api("utenti", { method:"POST", body:{ op:"login", username, password } });
+      if (!data || !data.user) throw new Error("Credenziali non valide");
+      state.session = data.user;
+      saveSession(state.session);
+      state.exerciseYear = loadExerciseYear();
+      updateYearPill();
+      setHint("");
+      showPage("home");
+    } catch(e){ setHint(e.message || "Errore"); }
+  });
+}
 
 
 // ===== API Cache (speed + dedupe richieste) =====
@@ -1377,6 +1601,13 @@ function showPage(page){
     state.speseView = "insights";
   }
   if (page === "spese" && !state.speseView) state.speseView = "list";
+
+  // Gate: senza sessione si rimane in AUTH
+  try{
+    if (page !== "auth" && (!state.session || !state.session.user_id)) {
+      page = "auth";
+    }
+  }catch(_){ page = "auth"; }
 
 
   // Token navigazione: impedisce render/loader fuori contesto quando cambi pagina durante fetch
@@ -3191,243 +3422,6 @@ function renderGuestCards(){
 
 
 
-
-
-// =========================
-// LOGIN / ACCOUNT (dDAE_2.001)
-// =========================
-
-function __loadSessionDraft(){
-  try{
-    const raw = localStorage.getItem('ddae_session_draft');
-    if (!raw) return null;
-    const o = JSON.parse(raw);
-    return (o && typeof o === 'object') ? o : null;
-  }catch(_){ return null; }
-}
-
-function __saveSessionDraft(partial){
-  try{
-    const base = __loadSessionDraft() || {};
-    const merged = { ...base, ...partial };
-    localStorage.setItem('ddae_session_draft', JSON.stringify(merged));
-  }catch(_){ }
-}
-
-function __setSession(sess){
-  state.session = {
-    user_id: String(sess?.user_id || sess?.id || ''),
-    username: String(sess?.username || ''),
-    nome: String(sess?.nome || ''),
-    ruolo: String(sess?.ruolo || ''),
-    anno: String(sess?.anno || ''),
-  };
-  try{ localStorage.setItem('ddae_session', JSON.stringify(state.session)); }catch(_){ }
-  try{ __saveSessionDraft({ username: state.session.username, anno: state.session.anno }); }catch(_){ }
-
-  // Pill anno in HOME (solo HOME)
-  try{
-    const pill = document.getElementById('yearPill');
-    if (pill){
-      pill.textContent = `Anno ${state.session.anno}`;
-      pill.hidden = !state.session.anno;
-    }
-  }catch(_){ }
-}
-
-function __clearSession(){
-  state.session = { user_id:'', username:'', nome:'', ruolo:'', anno:'' };
-  try{ localStorage.removeItem('ddae_session'); }catch(_){ }
-}
-
-async function __refreshLoginUsers(){
-  const sel = document.getElementById('loginUsername');
-  if (!sel) return;
-  const prev = sel.value || '';
-  sel.innerHTML = '<option value="">Seleziona utente…</option>';
-  const users = await api('utenti', { method:'GET', showLoader:false });
-  (Array.isArray(users) ? users : []).forEach(u => {
-    const opt = document.createElement('option');
-    opt.value = String(u.username || '');
-    opt.textContent = String(u.username || '') + (u.nome ? ` — ${u.nome}` : '');
-    sel.appendChild(opt);
-  });
-  if (prev) sel.value = prev;
-}
-
-function __openAccountModal(mode){
-  const modal = document.getElementById('accountModal');
-  if (!modal) return;
-  const title = document.getElementById('accountModalTitle');
-  const u = document.getElementById('accUsername');
-  const pin = document.getElementById('accPin');
-  const pin2Wrap = document.getElementById('accPin2Wrap');
-  const pin2 = document.getElementById('accPin2');
-  const nome = document.getElementById('accNome');
-  const tel = document.getElementById('accTelefono');
-  const email = document.getElementById('accEmail');
-
-  modal.dataset.mode = mode;
-  if (title) title.textContent = (mode === 'create') ? 'Crea account' : 'Modifica account';
-
-  const loginSel = document.getElementById('loginUsername');
-  const selectedUser = loginSel ? String(loginSel.value || '').trim() : '';
-
-  if (u){
-    u.value = (mode === 'edit') ? selectedUser : '';
-    u.disabled = (mode === 'edit');
-  }
-
-  if (pin) pin.value = '';
-  if (pin2) pin2.value = '';
-  if (nome) nome.value = '';
-  if (tel) tel.value = '';
-  if (email) email.value = '';
-
-  // labels dinamiche
-  try{
-    const lab1 = modal.querySelector('label[for="accPin"]');
-    const lab2 = modal.querySelector('label[for="accPin2"]');
-    if (mode === 'create'){
-      if (lab1) lab1.textContent = 'PIN';
-      if (lab2) lab2.textContent = 'Conferma PIN';
-      if (pin2Wrap) pin2Wrap.hidden = false;
-    } else {
-      if (lab1) lab1.textContent = 'PIN attuale';
-      if (lab2) lab2.textContent = 'Nuovo PIN (opzionale)';
-      if (pin2Wrap) pin2Wrap.hidden = false;
-    }
-  }catch(_){ }
-
-  modal.hidden = false;
-}
-
-function __closeAccountModal(){
-  const modal = document.getElementById('accountModal');
-  if (modal) modal.hidden = true;
-}
-
-function setupLogin(){
-  const btnLogin = document.getElementById('btnLogin');
-  const btnCreate = document.getElementById('btnCreateAccount');
-  const btnEdit = document.getElementById('btnEditAccount');
-  const btnSwitch = document.getElementById('btnSwitchAccount');
-
-  const sel = document.getElementById('loginUsername');
-  const pin = document.getElementById('loginPin');
-  const anno = document.getElementById('loginAnno');
-
-  const draft = __loadSessionDraft() || {};
-  if (anno && !anno.value){
-    anno.value = String(draft.anno || new Date().getFullYear());
-  }
-
-  if (sel){
-    sel.addEventListener('change', () => {
-      __saveSessionDraft({ username: sel.value || '' });
-    });
-  }
-  if (anno){
-    anno.addEventListener('change', () => {
-      __saveSessionDraft({ anno: anno.value || '' });
-    });
-  }
-
-  async function refresh(){
-    try{
-      await __refreshLoginUsers();
-      if (sel && draft.username) sel.value = draft.username;
-    }catch(e){ toast(e.message); }
-  }
-  refresh();
-
-  if (btnLogin){
-    btnLogin.addEventListener('click', async () => {
-      try{
-        const username = String(sel?.value || '').trim();
-        const p = String(pin?.value || '').trim();
-        const y = String(anno?.value || '').trim();
-        if (!username) throw new Error('Seleziona un username');
-        if (!p) throw new Error('Inserisci il PIN');
-        if (!y) throw new Error("Seleziona l'anno");
-
-        const data = await api('login', { method:'POST', body:{ username, pin:p, anno:y }, showLoader:true });
-        __setSession({ ...data, anno:y, username });
-
-        // Salva anno_corrente in impostazioni (per utente)
-        try{
-          await api('impostazioni', { method:'POST', body:{ op:'set', key:'anno_corrente', value:y, type:'number' }, showLoader:false });
-        }catch(_){ }
-
-        // carica dati una sola volta dopo login
-        if (!__APP_DATA_LOADED){
-          __APP_DATA_LOADED = true;
-          try { await loadMotivazioni(); } catch(e){ toast(e.message); }
-          try { await ensureSettingsLoaded({ force:false, showLoader:false }); } catch(_) {}
-        }
-
-        showPage(__AFTER_LOGIN_TARGET_PAGE || 'home');
-      }catch(e){ toast(e.message); }
-    });
-  }
-
-  if (btnCreate){
-    btnCreate.addEventListener('click', () => __openAccountModal('create'));
-  }
-  if (btnEdit){
-    btnEdit.addEventListener('click', () => {
-      const username = String(sel?.value || '').trim();
-      if (!username){ toast('Seleziona prima un username'); return; }
-      __openAccountModal('edit');
-    });
-  }
-
-  if (btnSwitch){
-    btnSwitch.addEventListener('click', () => {
-      __clearSession();
-      showPage('login');
-    });
-  }
-
-  // Modal handlers
-  const accCancel = document.getElementById('accCancel');
-  const accSave = document.getElementById('accSave');
-  if (accCancel) accCancel.addEventListener('click', __closeAccountModal);
-  if (accSave){
-    accSave.addEventListener('click', async () => {
-      try{
-        const modal = document.getElementById('accountModal');
-        const mode = (modal && modal.dataset.mode) ? modal.dataset.mode : 'create';
-        const u = String(document.getElementById('accUsername')?.value || '').trim();
-        const p1 = String(document.getElementById('accPin')?.value || '').trim();
-        const p2 = String(document.getElementById('accPin2')?.value || '').trim();
-        const nome = String(document.getElementById('accNome')?.value || '').trim();
-        const telefono = String(document.getElementById('accTelefono')?.value || '').trim();
-        const email = String(document.getElementById('accEmail')?.value || '').trim();
-
-        if (!u) throw new Error('Username mancante');
-        if (!p1) throw new Error('PIN mancante');
-
-        if (mode === 'create'){
-          if (!p2) throw new Error('Conferma PIN mancante');
-          if (p1 !== p2) throw new Error('I PIN non coincidono');
-          await api('utenti', { method:'POST', body:{ op:'create', username:u, pin:p1, nome, telefono, email }, showLoader:true });
-          toast('Account creato');
-        } else {
-          // edit: p1 = pin attuale; p2 (se presente) = nuovo pin
-          if (p2 && p1 === p2) throw new Error('Il nuovo PIN deve essere diverso');
-          await api('utenti', { method:'POST', body:{ op:'update', username:u, pin:p1, newPin:p2, nome, telefono, email }, showLoader:true });
-          toast('Account aggiornato');
-        }
-
-        __closeAccountModal();
-        await __refreshLoginUsers();
-        const sel = document.getElementById('loginUsername');
-        if (sel) sel.value = u;
-      }catch(e){ toast(e.message); }
-    });
-  }
-}
 function initFloatingLabels(){
   const fields = document.querySelectorAll(".field.float");
   fields.forEach((f) => {
@@ -3459,14 +3453,27 @@ async function init(){
   // Perf mode: deve girare DOPO che body esiste e DOPO init delle costanti
   applyPerfMode();
   const __restore = __readRestoreState();
-  document.body.dataset.page = "home";
+  // Session + anno
+  state.session = loadSession();
+  state.exerciseYear = loadExerciseYear();
+  updateYearPill();
+
+  document.body.dataset.page = (state.session && state.session.user_id) ? "home" : "auth";
   setupHeader();
+  setupAuth();
   setupHome();
   setupCalendario();
   setupImpostazioni();
 
     setupOspite();
   initFloatingLabels();
+
+  // Pagina iniziale
+  if (!state.session || !state.session.user_id) {
+    showPage("auth");
+  } else {
+    showPage("home");
+  }
 // periodo iniziale
   if (__restore && __restore.preset) state.periodPreset = __restore.preset;
   if (__restore && __restore.period && __restore.period.from && __restore.period.to) {
@@ -3518,6 +3525,19 @@ async function init(){
   $("#btnSaveSpesa").addEventListener("click", async () => {
     try { await saveSpesa(); } catch(e){ toast(e.message); }
   });
+
+
+  // prefetch leggero (evita lentezza all'avvio) — solo dopo login
+  if (state.session && state.session.user_id){
+    try { await loadMotivazioni(); } catch(e){ toast(e.message); }
+    // Impostazioni: carica in background (serve per tassa soggiorno / operatori)
+    try { await ensureSettingsLoaded({ force:false, showLoader:false }); } catch(_) {}
+  }
+
+  // avvio: ripristina sezione se il SW ha forzato un reload su iOS
+  const targetPage = (__restore && __restore.page) ? __restore.page : "home";
+  showPage(targetPage);
+  if (__restore) setTimeout(() => { try { __applyUiState(__restore); } catch(_) {} }, 0);
 
 
   // --- Pulizie (solo grafica) ---
@@ -4061,12 +4081,6 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
     });
   }
 
-
-
-  // AUTH gate (dDAE_2.001)
-  __AFTER_LOGIN_TARGET_PAGE = (__restore && __restore.page) ? __restore.page : "home";
-  setupLogin();
-  showPage("login");
 }
 
 

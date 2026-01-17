@@ -8,12 +8,12 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="Cache-Control"/>
 <meta content="no-cache" http-equiv="Pragma"/>
 <meta content="0" http-equiv="Expires"/>
-<link href="./styles.css?v=2.001" rel="stylesheet"/>
-<link href="./manifest.json?v=2.001" rel="manifest"/>
-<link href="./assets/icons/apple-touch-icon.png?v=2.001" rel="apple-touch-icon" sizes="180x180"/>
-<link href="./assets/icons/apple-touch-icon.png?v=2.001" rel="apple-touch-icon-precomposed" sizes="180x180"/>
-<link href="./assets/icons/favicon-32.png?v=2.001" rel="icon" sizes="32x32" type="image/png"/>
-<link href="./assets/icons/favicon-16.png?v=2.001" rel="icon" sizes="16x16" type="image/png"/>
+<link href="./styles.css?v=dDAE_2.003" rel="stylesheet"/>
+<link href="./manifest.json?v=dDAE_2.003" rel="manifest"/>
+<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.003" rel="apple-touch-icon" sizes="180x180"/>
+<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.003" rel="apple-touch-icon-precomposed" sizes="180x180"/>
+<link href="./assets/icons/favicon-32.png?v=dDAE_2.003" rel="icon" sizes="32x32" type="image/png"/>
+<link href="./assets/icons/favicon-16.png?v=dDAE_2.003" rel="icon" sizes="16x16" type="image/png"/>
 <meta content="#ffffff" name="theme-color"/>
 <meta content="yes" name="apple-mobile-web-app-capable"/>
 <meta content="Daedalium PMS" name="apple-mobile-web-app-title"/>
@@ -23,7 +23,7 @@
 <header class="topbar">
 <div class="brand">
 <div class="brand-left">
-<img alt="Daedalium logo" class="logo" src="./assets/logo.jpg?v=2.001"/>
+<img alt="Daedalium logo" class="logo" src="./assets/logo.jpg?v=dDAE_2.003"/>
 <h1>Daedalium PMS</h1>
 </div>
 <div class="brand-right">
@@ -67,43 +67,67 @@
 </div>
 </header>
 <main class="wrap">
-<!-- LOGIN / ACCOUNT -->
-<section class="page" hidden id="page-login">
-  <div class="card login-card">
-    <div class="hd">
-      <h2 class="page-title">Accesso</h2>
-    </div>
-    <div class="bd">
+<!-- AUTH (account) -->
+<section class="page" hidden id="page-auth">
+  <div class="auth-page">
+    <div class="auth-card">
+      <div class="auth-logo-wrap">
+        <img src="./assets/logo.jpg?v=dDAE_2.003" alt="Daedalium" class="auth-logo"/>
+      </div>
+
       <div class="field float">
-        <select id="loginUsername" required>
-          <option value="">Seleziona utente…</option>
-        </select>
-        <label for="loginUsername">Username</label>
+        <input id="authUsername" autocomplete="username" placeholder=" "/>
+        <label for="authUsername">Username</label>
       </div>
       <div class="field float" style="margin-top:10px;">
-        <input id="loginPin" inputmode="numeric" pattern="[0-9]*" placeholder=" " type="password" autocomplete="off"/>
-        <label for="loginPin">PIN</label>
-      </div>
-      <div class="field float" style="margin-top:10px;">
-        <input id="loginAnno" inputmode="numeric" min="2000" max="2100" placeholder=" " type="number"/>
-        <label for="loginAnno">Anno di esercizio</label>
+        <input id="authPassword" type="password" autocomplete="current-password" placeholder=" "/>
+        <label for="authPassword">Password</label>
       </div>
 
-      <div class="row" style="margin-top:16px; gap:10px;">
-        <button class="btn primary" id="btnLogin" style="flex:1;" type="button">Accedi</button>
-      </div>
-      <div class="row" style="margin-top:10px; gap:10px;">
-        <button class="btn ghost" id="btnCreateAccount" style="flex:1;" type="button">Crea account</button>
-        <button class="btn ghost" id="btnEditAccount" style="flex:1;" type="button">Modifica account</button>
+
+      <div id="authExtra" class="auth-extra" hidden>
+        <div class="field float" style="margin-top:10px;">
+          <input id="authNome" autocomplete="name" placeholder=" "/>
+          <label for="authNome">Nome</label>
+        </div>
+        <div class="field float" style="margin-top:10px;">
+          <input id="authTelefono" inputmode="tel" autocomplete="tel" placeholder=" "/>
+          <label for="authTelefono">Telefono</label>
+        </div>
+        <div class="field float" style="margin-top:10px;">
+          <input id="authEmail" inputmode="email" autocomplete="email" placeholder=" "/>
+          <label for="authEmail">Email</label>
+        </div>
+
+        <div id="authConfirmPasswordWrap" hidden>
+          <div class="field float" style="margin-top:10px;">
+            <input id="authPassword2" type="password" autocomplete="new-password" placeholder=" "/>
+            <label for="authPassword2">Conferma password</label>
+          </div>
+        </div>
+
+        <div id="authNewPasswordWrap" hidden>
+          <div class="field float" style="margin-top:10px;">
+            <input id="authNewPassword" type="password" autocomplete="new-password" placeholder=" "/>
+            <label for="authNewPassword">Nuova password</label>
+          </div>
+          <div class="field float" style="margin-top:10px;">
+            <input id="authNewPassword2" type="password" autocomplete="new-password" placeholder=" "/>
+            <label for="authNewPassword2">Conferma nuova password</label>
+          </div>
+        </div>
       </div>
 
-      <div class="hint" style="margin-top:12px; opacity:.85;">
-        Seleziona utente, inserisci PIN e anno per accedere.
+      <div class="auth-btn-row">
+        <button id="btnCreateAccount" class="auth-btn auth-btn-azure" type="button">crea account</button>
+        <button id="btnEditAccount" class="auth-btn auth-btn-gray" type="button">modifica account</button>
+        <button id="btnLogin" class="auth-btn auth-btn-orange" type="button">accedi</button>
       </div>
+
+      <div class="auth-hint" id="authHint" aria-live="polite"></div>
     </div>
   </div>
 </section>
-
 <!-- HOME (launcher) -->
 <section class="page" id="page-home">
 <div class="home-page">
@@ -191,8 +215,8 @@
 </svg></div>
 <div class="home-main-label">Impostazioni</div>
 </button>
-<div class="year-pill" id="yearPill" hidden>Anno —</div>
-<div class="build" id="buildText">2.001</div>
+<div class="year-pill" id="yearPill" hidden></div>
+<div class="build" id="buildText">dDAE_2.003</div>
 <div class="home-spacer"></div>
 </div>
 </div></section>
@@ -202,6 +226,11 @@
 <h2 class="page-title">Impostazioni</h2>
 </div>
 <div class="bd">
+<div class="field float">
+  <select id="setAnno" class="select" aria-label="Anno di esercizio"></select>
+  <label for="setAnno">Anno di esercizio</label>
+</div>
+
 <div class="field float">
 <input autocomplete="off" id="setOp1" placeholder=" "/>
 <label for="setOp1">Operatore 1 (nome)</label>
@@ -229,9 +258,6 @@
 <div class="row" style="margin-top:16px; gap:10px;">
 <button class="btn primary" id="settingsSaveBtn" style="flex:1;" type="button">Salva</button>
 <button class="btn ghost" id="settingsReloadBtn" type="button">Ricarica</button>
-</div>
-<div class="row" style="margin-top:12px;">
-  <button class="btn ghost" id="btnSwitchAccount" style="width:100%;" type="button">Cambia account</button>
 </div>
 <!-- hint rimosso (già presente altrove / non necessario) -->
 </div>
@@ -825,8 +851,8 @@
 </div>
 </div>
 </div>
-<script defer="" src="./config.js?v=2.001"></script>
-<script defer="" src="./app.js?v=2.001"></script>
+<script defer="" src="./config.js?v=1.278"></script>
+<script defer="" src="./app.js?v=1.278"></script>
 <!-- TAX REPORT MODAL -->
 <div aria-hidden="true" class="modal" hidden="" id="taxReportModal">
 <div aria-labelledby="taxReportTitle" aria-modal="true" class="modal-card tax-report-card" role="dialog">
@@ -857,48 +883,6 @@
 <button aria-label="Chiudi" class="btn ghost clean-info-close" id="cleanHeaderClose" type="button">✕</button>
 <div class="clean-info-text" id="cleanHeaderText">—</div>
 </div>
-</div>
-
-<!-- ACCOUNT MODAL (create/edit) -->
-<div class="modal" hidden id="accountModal">
-  <div class="modal-card">
-    <h3 id="accountModalTitle" style="margin:0 0 10px 0;">Account</h3>
-
-    <div class="field float">
-      <input autocomplete="off" id="accUsername" placeholder=" "/>
-      <label for="accUsername">Username</label>
-    </div>
-
-    <div class="field float" style="margin-top:10px;">
-      <input id="accPin" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder=" " type="password"/>
-      <label for="accPin">PIN</label>
-    </div>
-
-    <div class="field float" style="margin-top:10px;" id="accPin2Wrap">
-      <input id="accPin2" inputmode="numeric" pattern="[0-9]*" autocomplete="off" placeholder=" " type="password"/>
-      <label for="accPin2">Conferma PIN</label>
-    </div>
-
-    <div class="field float" style="margin-top:10px;">
-      <input autocomplete="name" id="accNome" placeholder=" "/>
-      <label for="accNome">Nome</label>
-    </div>
-
-    <div class="field float" style="margin-top:10px;">
-      <input autocomplete="tel" id="accTelefono" placeholder=" "/>
-      <label for="accTelefono">Telefono</label>
-    </div>
-
-    <div class="field float" style="margin-top:10px;">
-      <input autocomplete="email" id="accEmail" placeholder=" "/>
-      <label for="accEmail">Email</label>
-    </div>
-
-    <div class="row" style="justify-content:flex-end; gap:10px; margin-top:12px;">
-      <button class="btn ghost" id="accCancel" type="button">Annulla</button>
-      <button class="btn primary" id="accSave" type="button">Salva</button>
-    </div>
-  </div>
 </div>
 </body>
 </html>

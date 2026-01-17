@@ -29,7 +29,7 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=2.001"),
+    url("./assets/bg-daedalium.png?v=dDAE_2.003"),
     radial-gradient(900px 600px at 10% 0%, rgba(43,124,180,0.10), transparent 62%),
     radial-gradient(800px 520px at 90% 8%, rgba(201,119,43,0.10), transparent 64%),
     radial-gradient(900px 700px at 20% 100%, rgba(122,192,219,0.10), transparent 62%),
@@ -641,7 +641,7 @@ input[type="date"]{
   pointer-events:none;
   transition: opacity .2s ease;
   max-width: 92vw;
-  z-index: 2000;
+  z-index: 300;
 }
 .toast.show{ opacity: 1; }
 
@@ -759,7 +759,7 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=2.001"),
+    url("./assets/bg-daedalium.png?v=dDAE_2.003"),
     radial-gradient(900px 650px at 12% 8%, rgba(43,124,180,0.18), transparent 62%),
     radial-gradient(820px 560px at 92% 14%, rgba(201,119,43,0.16), transparent 62%),
     radial-gradient(900px 700px at 18% 96%, rgba(122,192,219,0.16), transparent 62%),
@@ -2061,6 +2061,83 @@ body[data-page="ospiti"] .guest-card .actions {
 
 
 /* dDAE_1.229 — Ospiti: azioni stile Apple (pallini verde/giallo/rosso) */
+
+/* =========================
+   dDAE_2.003 — Auth + Anno pill
+========================= */
+
+.year-pill{
+  display:inline-flex;
+  align-items:center;
+  justify-content:center;
+  padding:6px 12px;
+  border-radius:999px;
+  font-weight:600;
+  font-size:12px;
+  letter-spacing:.6px;
+  text-transform:uppercase;
+  background: rgba(140, 165, 190, 0.22);
+  color: rgba(18, 36, 52, 0.75);
+  margin: 0 auto 8px auto;
+}
+
+.auth-page{
+  min-height: calc(100vh - 120px);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding: 18px 14px;
+}
+
+.auth-card{
+  width: min(420px, 92vw);
+  border-radius: 22px;
+  padding: 18px 16px 14px;
+  background: rgba(255,255,255,0.72);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 12px 34px rgba(0,0,0,0.08);
+}
+
+.auth-logo-wrap{ display:flex; justify-content:center; margin: 2px 0 12px; }
+.auth-logo{ width: 148px; height: 148px; object-fit: contain; border-radius: 18px; }
+
+.auth-btn-row{
+  display:flex;
+  gap:10px;
+  margin-top: 14px;
+}
+
+.auth-btn{
+  flex:1;
+  border: none;
+  border-radius: 14px;
+  padding: 12px 8px;
+  font-weight: 700;
+  letter-spacing: .3px;
+  text-transform: lowercase;
+  color: rgba(12, 20, 28, 0.9);
+}
+
+.auth-btn-azure{ background: rgba(90, 160, 210, 0.40); }
+.auth-btn-gray{ background: rgba(140, 140, 140, 0.40); }
+.auth-btn-orange{ background: rgba(230, 140, 70, 0.40); }
+
+.auth-extra{ margin-top: 6px; }
+.auth-extra[hidden]{ display:none !important; }
+
+.auth-btn.is-active{
+  outline: 2px solid rgba(15,23,42,0.26);
+  outline-offset: 2px;
+}
+
+.auth-hint{
+  min-height: 18px;
+  margin-top: 10px;
+  font-size: 12px;
+  opacity: .75;
+  text-align: center;
+}
 .sr-only{
   position:absolute !important;
   width:1px !important;
@@ -4864,29 +4941,3 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   border: 1px solid rgba(52,199,89,0.35) !important;
   color: rgba(255,255,255,0.96) !important;
 }
-
-/* ===== dDAE_2.001 — Login + anno pill ===== */
-body[data-page="login"] .topbar{ display:none !important; }
-body[data-page="login"] .wrap{ padding-top: 0 !important; }
-
-#page-home .year-pill{
-  position: fixed;
-  left: 50%;
-  transform: translateX(-50%);
-  bottom: calc(34px + var(--safe-bottom));
-  margin: 0;
-  padding: 6px 12px;
-  border-radius: 999px;
-  font-size: 12px;
-  font-weight: 800;
-  letter-spacing: .3px;
-  color: rgba(17,24,39,0.92);
-  background: rgba(255,255,255,0.55);
-  border: 1px solid rgba(255,255,255,0.55);
-  box-shadow: 0 10px 26px rgba(15,23,42,0.14);
-  backdrop-filter: blur(10px);
-  -webkit-backdrop-filter: blur(10px);
-  z-index: 61;
-}
-
-.login-card{ width: min(520px, 94vw); margin: 18px auto 0 auto; }
