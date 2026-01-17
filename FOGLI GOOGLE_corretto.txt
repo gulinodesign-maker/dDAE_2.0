@@ -1,0 +1,26 @@
+IMPOSTAZIONI
+id | user_id | key | value | type | unit | descrizione | operatore_1 | operatore_2 | operatore_3 | createdAt | updatedAt
+
+UTENTI
+id | username | password_hash | ruolo | attivo | nome | telefono | email | last_login | createdAt | updatedAt
+
+OSPITI
+id | user_id | anno | nome | adulti | bambini_u10 | altri | check_in | check_out | importo_prenotazione | importo_booking | acconto_importo | acconto_tipo | saldo_pagato | saldo_tipo | matrimonio | ps_registrato | istat_registrato | stanze | acconto_ricevuta | saldo_ricevuta | createdAt | updatedAt
+
+STANZE
+id | user_id | anno | ospite_id | stanza_num | letto_m | letto_s | culla | note | createdAt | updatedAt
+
+SPESE
+id | user_id | anno | dataSpesa | categoria | motivazione | importoLordo | aliquotaIva | imponibile | iva | ivaDetraibile | note | isDeleted | createdAt | updatedAt
+
+MOTIVAZIONI
+id | user_id | anno | motivazione | attiva | createdAt | updatedAt
+
+PULIZIE
+id | user_id | anno | data | stanza | MAT | SIN | FED | TDO | TFA | TBI | TAP | TPI | createdAt | updatedAt
+
+LAVANDERIA
+id | user_id | anno | startDate | endDate | MAT | SIN | FED | TDO | TFA | TBI | TAP | TPI | createdAt | updatedAt
+
+OPERATORI
+id | user_id | anno | data | operatore | ore | benzina_euro | note | createdAt | updatedAt

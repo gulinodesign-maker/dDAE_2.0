@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.009";
+const BUILD_VERSION = "dDAE_2.010";
 
 // =========================
 // AUTH + SESSION (dDAE_2.008)
@@ -1284,6 +1284,31 @@ function setupImpostazioni() {
   const reload = document.getElementById("settingsReloadBtn");
   if (reload) reload.addEventListener("click", async () => {
     try { await loadImpostazioniPage({ force: true }); toast("Impostazioni ricaricate"); } catch (e) { toast(e.message); }
+  });
+
+  const del = document.getElementById("settingsDeleteBtn");
+  if (del) bindFastTap(del, async () => {
+    try{
+      const s = state.session || loadSession();
+      if (!s || !s.username){ toast("Nessun account"); return; }
+
+      const ok = confirm("Eliminare definitivamente questo account e tutti i suoi dati?");
+      if (!ok) return;
+
+      const pwd = prompt("Password dell'account da eliminare:");
+      if (pwd === null) return;
+      const password = String(pwd || "");
+      if (!password) { toast("Password mancante"); return; }
+
+      await api("utenti", { method:"POST", body:{ op:"delete", username: String(s.username||"").trim(), password } , showLoader:true });
+
+      try{ clearSession(); }catch(_){ }
+      try{ state.session = null; }catch(_){ }
+      try{ invalidateApiCache(); }catch(_){ }
+      try{ __lsClearAll(); }catch(_){ }
+      toast("Account eliminato");
+      try{ showPage("auth"); }catch(_){ }
+    }catch(e){ toast(e.message || "Errore"); }
   });
 
   const logout = document.getElementById("settingsLogoutBtn");
