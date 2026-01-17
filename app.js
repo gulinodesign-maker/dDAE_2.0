@@ -3,10 +3,10 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.003";
+const BUILD_VERSION = "dDAE_2.004";
 
 // =========================
-// AUTH + SESSION (dDAE_2.003)
+// AUTH + SESSION (dDAE_2.004)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
