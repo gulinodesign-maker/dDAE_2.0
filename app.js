@@ -1849,13 +1849,6 @@ state.page = page;
       .then(()=>{ if (state.navId !== _nav || state.page !== "statgen") return; renderStatGen(); })
       .catch(e=>toast(e.message));
   }
-
-  if (page === "statspese") {
-    const _nav = navId;
-    ensurePeriodData({ showLoader:true })
-      .then(()=>{ if (state.navId !== _nav || state.page !== "statspese") return; renderStatSpese(); })
-      .catch(e=>toast(e.message));
-  }
   if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
@@ -1867,32 +1860,6 @@ state.page = page;
     }
   }catch(_){}
 
-}
-
-function computeStatSpese(){
-  const report = state.report || null;
-  const by = report?.byCategoria || {};
-
-  const contanti = Number(by?.CONTANTI?.importoLordo || 0) || 0;
-  const tassa = Number(by?.TASSA_SOGGIORNO?.importoLordo || 0) || 0;
-  const iva22 = Number(by?.IVA_22?.importoLordo || 0) || 0;
-  const iva10 = Number(by?.IVA_10?.importoLordo || 0) || 0;
-  const iva4 = Number(by?.IVA_4?.importoLordo || 0) || 0;
-
-  return { contanti, tassa, iva22, iva10, iva4 };
-}
-
-function renderStatSpese(){
-  const s = computeStatSpese();
-  const set = (id, v) => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = euro(Number(v || 0));
-  };
-  set("ssContanti", s.contanti);
-  set("ssTassa", s.tassa);
-  set("ssIva22", s.iva22);
-  set("ssIva10", s.iva10);
-  set("ssIva4", s.iva4);
 }
 
 function setupHeader(){
@@ -2035,7 +2002,7 @@ if (goCalendarioTopOspiti){
   const s2 = $("#goStatMensili");
   if (s2){ bindFastTap(s2, () => toast("Incassi mensili: in arrivo")); }
   const s3 = $("#goStatSpese");
-  if (s3){ bindFastTap(s3, () => { hideLauncher(); showPage("statspese"); }); }
+  if (s3){ bindFastTap(s3, () => toast("Spese: in arrivo")); }
   const s4 = $("#goStatPrenotazioni");
   if (s4){ bindFastTap(s4, () => toast("Statistiche prenotazioni: in arrivo")); }
 
@@ -2044,20 +2011,6 @@ if (goCalendarioTopOspiti){
   if (btnBackStats){ bindFastTap(btnBackStats, () => { closeStatPieModal(); showPage("statistiche"); }); }
   const btnPie = $("#btnStatPie");
   if (btnPie){ bindFastTap(btnPie, () => { openStatPieModal(); }); }
-
-  const btnBackStatsInline = $("#btnBackStatisticheInline");
-  if (btnBackStatsInline){ bindFastTap(btnBackStatsInline, () => { closeStatPieModal(); showPage("statistiche"); }); }
-  const btnPieInline = $("#btnStatPieInline");
-  if (btnPieInline){ bindFastTap(btnPieInline, () => { openStatPieModal(); }); }
-  const btnHomeFromStatGen = $("#btnHomeFromStatGen");
-  if (btnHomeFromStatGen){ bindFastTap(btnHomeFromStatGen, () => { closeStatPieModal(); showPage("home"); }); }
-
-  const btnBackStatisticheSpese = $("#btnBackStatisticheSpese");
-  if (btnBackStatisticheSpese){ bindFastTap(btnBackStatisticheSpese, () => { closeStatPieModal(); showPage("statistiche"); }); }
-  const btnStatSpesePie = $("#btnStatSpesePie");
-  if (btnStatSpesePie){ bindFastTap(btnStatSpesePie, () => { openStatSpesePieModal(); }); }
-  const btnHomeFromStatSpese = $("#btnHomeFromStatSpese");
-  if (btnHomeFromStatSpese){ bindFastTap(btnHomeFromStatSpese, () => { closeStatPieModal(); showPage("home"); }); }
   const statPieClose = $("#statPieClose");
   if (statPieClose){ bindFastTap(statPieClose, () => closeStatPieModal()); }
   const statPieModal = $("#statPieModal");
@@ -2707,18 +2660,7 @@ function computeStatGen(){
   }
 
   const speseTot = Number(report?.totals?.importoLordo || 0) || 0;
-
-  // IVA incassata: 10% sugli importi con ricevuta
-  const ivaIncassata = conRicevuta * 0.10;
-
-  // IVA spese: somma IVA di tutte le spese al 4%, 10%, 22%
-  const by = report?.byCategoria || {};
-  const ivaSpese =
-    (Number(by?.IVA_4?.iva || 0) || 0) +
-    (Number(by?.IVA_10?.iva || 0) || 0) +
-    (Number(by?.IVA_22?.iva || 0) || 0);
-
-  const ivaDaVersare = ivaIncassata - ivaSpese;
+  const ivaDaVersare = conRicevuta * 0.10;
   const guadagno = fatturato - speseTot;
 
   return {
@@ -2730,80 +2672,6 @@ function computeStatGen(){
     guadagnoTotale: guadagno,
     giacenzaCassa: cash,
   };
-}
-
-function computeStatSpese(){
-  const report = state.report || null;
-  const by = report?.byCategoria || {};
-
-  const safe = (k) => Number(by?.[k]?.importoLordo || 0) || 0;
-
-  return {
-    contanti: safe("CONTANTI"),
-    tassa: safe("TASSA_SOGGIORNO"),
-    iva22: safe("IVA_22"),
-    iva10: safe("IVA_10"),
-    iva4: safe("IVA_4"),
-  };
-}
-
-function renderStatSpese(){
-  const s = computeStatSpese();
-  state.statSpese = s;
-
-  const set = (id, v) => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = euro(Number(v || 0));
-  };
-
-  set("ssContanti", s.contanti);
-  set("ssTassa", s.tassa);
-  set("ssIva22", s.iva22);
-  set("ssIva10", s.iva10);
-  set("ssIva4", s.iva4);
-}
-
-function openStatSpesePieModal(){
-  try{
-    if (!state.statSpese) state.statSpese = computeStatSpese();
-  }catch(_){ state.statSpese = state.statSpese || null; }
-
-  const s = state.statSpese || computeStatSpese();
-  const slices = [
-    { key:"contanti", label:"Contanti", value:s.contanti, color:"#1e4ed8" },
-    { key:"tassa", label:"Tassa soggiorno", value:s.tassa, color:"#d8bd97" },
-    { key:"iva22", label:"IVA 22", value:s.iva22, color:"#f97316" },
-    { key:"iva10", label:"IVA 10", value:s.iva10, color:"#38bdf8" },
-    { key:"iva4", label:"IVA 4", value:s.iva4, color:"#0b0b0b" },
-  ];
-
-  // riuso modal esistente
-  const m = document.getElementById("statPieModal");
-  if (!m) return;
-  m.hidden = false;
-  m.setAttribute("aria-hidden", "false");
-
-  drawPie("statPieCanvas", slices);
-
-  const leg = document.getElementById("statPieLegend");
-  if (leg){
-    const total = slices.reduce((a,x)=>a+Math.max(0,Number(x.value||0)),0);
-    leg.innerHTML = "";
-    slices.forEach((sl)=>{
-      const v = Math.max(0, Number(sl.value || 0));
-      const pct = total > 0 ? (v/total*100) : 0;
-      const row = document.createElement("div");
-      row.className = "legrow";
-      row.innerHTML = `
-        <div class="legleft">
-          <div class="dot" style="background:${sl.color}"></div>
-          <div class="legname">${escapeHtml(sl.label)}</div>
-        </div>
-        <div class="legright">${pct.toFixed(1)}% · ${euro(v)}</div>
-      `;
-      leg.appendChild(row);
-    });
-  }
 }
 
 function renderStatGen(){
@@ -2874,8 +2742,6 @@ function closeStatPieModal(){
   m.hidden = true;
   m.setAttribute("aria-hidden", "true");
 }
-
-// (duplicato rimosso) openStatSpesePieModal definito in alto
 
 /* Wire buttons */
 

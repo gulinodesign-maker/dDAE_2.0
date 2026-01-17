@@ -66,7 +66,9 @@
 <div hidden="" id="statGenTopTools">
 <button aria-label="Torna a Statistiche" class="icon-btn icon-btn-whiteorange" id="btnBackStatistiche" type="button">
 <svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24">
-<path d="M15 18l-6-6 6-6"></path>
+<path d="M10 14.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"></path>
+<path d="M14.5 21a5.5 5.5 0 0 0 0-11"></path>
+<path d="M14.5 10V3"></path>
 </svg>
 </button>
 <button aria-label="Apri grafico" class="icon-btn icon-btn-whiteblue" id="btnStatPie" type="button">
@@ -282,26 +284,6 @@
   <div class="stats-gen">
     <div class="stats-title">Conteggio generale</div>
     <div class="stats-divider" aria-hidden="true"></div>
-    <div class="stats-topbar" id="statGenTopBar" aria-label="Azioni conteggio generale">
-      <button class="icon-btn icon-btn-whiteorange" id="btnBackStatisticheInline" type="button" aria-label="Torna a Statistiche">
-        <svg aria-hidden="true" class="ui-ico" viewBox="0 0 24 24">
-          <path d="M15 18l-6-6 6-6"></path>
-        </svg>
-      </button>
-      <button class="icon-btn icon-btn-whiteblue" id="btnStatPieInline" type="button" aria-label="Apri grafico">
-        <svg aria-hidden="true" class="ui-ico" viewBox="0 0 24 24">
-          <path d="M12 12V2a10 10 0 1 1-10 10h10Z"></path>
-          <path d="M14 2.2A10 10 0 0 1 21.8 10H14V2.2Z"></path>
-        </svg>
-      </button>
-      <button class="icon-btn icon-btn-whiteblack" id="btnHomeFromStatGen" type="button" aria-label="Home">
-        <svg aria-hidden="true" class="ui-ico" viewBox="0 0 24 24">
-          <path d="M3 10.5L12 3l9 7.5"></path>
-          <path d="M5 10v11h14V10"></path>
-          <path d="M9 21v-6h6v6"></path>
-        </svg>
-      </button>
-    </div>
     <div class="stats-stack">
       <button class="stat-row" style="--statbg:#ef4444" type="button">
         <span class="stat-name">Fatturato totale</span>
@@ -330,79 +312,6 @@
       <button class="stat-row" style="--statbg:#6366f1" type="button">
         <span class="stat-name">Giacenza in cassa</span>
         <span class="stat-val" id="sgCassa">€0,00</span>
-      </button>
-    </div>
-  </div>
-</section>
-
-<!-- STATISTICHE: SPESE PER CATEGORIA -->
-<section class="page" hidden="" id="page-statspese">
-  <div class="stats-gen" id="statspeseWrap">
-    <div class="stats-title">Spese</div>
-    <div class="stats-divider" aria-hidden="true"></div>
-    <div class="stats-topbar" id="statSpeseTopBar" aria-label="Azioni spese">
-      <button class="icon-btn icon-btn-whiteorange" id="btnBackStatisticheSpese" type="button" aria-label="Torna a Statistiche">
-        <svg aria-hidden="true" class="ui-ico" viewBox="0 0 24 24"><path d="M15 18l-6-6 6-6"></path></svg>
-      </button>
-      <button class="icon-btn icon-btn-whiteblue" id="btnStatSpesePie" type="button" aria-label="Apri grafico">
-        <svg aria-hidden="true" class="ui-ico" viewBox="0 0 24 24">
-          <path d="M12 12V2a10 10 0 1 1-10 10h10Z"></path>
-          <path d="M14 2.2A10 10 0 0 1 21.8 10H14V2.2Z"></path>
-        </svg>
-      </button>
-      <button class="icon-btn icon-btn-whiteblack" id="btnHomeFromStatSpese" type="button" aria-label="Home">
-        <svg aria-hidden="true" class="ui-ico" viewBox="0 0 24 24">
-          <path d="M3 10.5L12 3l9 7.5"></path>
-          <path d="M5 10v11h14V10"></path>
-          <path d="M9 21v-6h6v6"></path>
-        </svg>
-      </button>
-    </div>
-    <div class="stats-stack" id="statSpeseStack">
-      <button class="stat-row stat-row-solid" style="--statbg:#1e4ed8" type="button">
-        <span class="stat-name">Contanti</span>
-        <span class="stat-val" id="ssContanti">€0,00</span>
-      </button>
-      <button class="stat-row stat-row-solid" style="--statbg:#d8bd97" type="button">
-        <span class="stat-name">Tassa soggiorno</span>
-        <span class="stat-val" id="ssTassa">€0,00</span>
-      </button>
-      <button class="stat-row stat-row-solid" style="--statbg:#f97316" type="button">
-        <span class="stat-name">IVA 22</span>
-        <span class="stat-val" id="ssIva22">€0,00</span>
-      </button>
-      <button class="stat-row stat-row-solid" style="--statbg:#38bdf8" type="button">
-        <span class="stat-name">IVA 10</span>
-        <span class="stat-val" id="ssIva10">€0,00</span>
-      </button>
-      <button class="stat-row stat-row-solid" style="--statbg:#0b0b0b" type="button">
-        <span class="stat-name">IVA 4</span>
-        <span class="stat-val" id="ssIva4">€0,00</span>
-      </button>
-    </div>
-  </div>
-</section>
-
-    <div class="stats-stack">
-      <button class="stat-row" style="--statbg:#3b82f6" type="button">
-        <span class="stat-name">Contanti</span>
-        <span class="stat-val" id="ssContanti">€0,00</span>
-      </button>
-      <button class="stat-row" style="--statbg:#d8bd97" type="button">
-        <span class="stat-name">Tassa soggiorno</span>
-        <span class="stat-val" id="ssTassa">€0,00</span>
-      </button>
-      <button class="stat-row" style="--statbg:#f97316" type="button">
-        <span class="stat-name">IVA 22</span>
-        <span class="stat-val" id="ssIva22">€0,00</span>
-      </button>
-      <button class="stat-row" style="--statbg:#38bdf8" type="button">
-        <span class="stat-name">IVA 10</span>
-        <span class="stat-val" id="ssIva10">€0,00</span>
-      </button>
-      <button class="stat-row" style="--statbg:#111827" type="button">
-        <span class="stat-name">IVA 4</span>
-        <span class="stat-val" id="ssIva4">€0,00</span>
       </button>
     </div>
   </div>
