@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.008";
+const BUILD_VERSION = "dDAE_2.009";
 
 // =========================
 // AUTH + SESSION (dDAE_2.008)
@@ -60,14 +60,14 @@ function updateSettingsTabs(){
 
     if (yEl){
       const y = String(state.exerciseYear || "").trim();
-      yEl.textContent = y ? `ANNO ${y}` : "ANNO";
+      yEl.textContent = y ? `${y}` : "—";
     }
 
     if (aEl){
       const s = state.session || {};
       const raw = (s.username || s.user || s.nome || s.name || s.email || "").toString().trim();
       const label = raw ? raw : "—";
-      aEl.textContent = `ACCOUNT ${label}`;
+      aEl.textContent = `${label}`;
     }
   }catch(_){ }
 }
