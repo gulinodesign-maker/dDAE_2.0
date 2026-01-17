@@ -3,10 +3,10 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.006";
+const BUILD_VERSION = "dDAE_2.007";
 
 // =========================
-// AUTH + SESSION (dDAE_2.006)
+// AUTH + SESSION (dDAE_2.007)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -1039,8 +1039,21 @@ if (realMethod !== "GET") {
         if (o.anno === undefined || o.anno === null || String(o.anno).trim() === "") o.anno = yr;
         return o;
       };
-      if (Array.isArray(payload)) payload = payload.map(x => addCtx(x));
-      else if (payload && typeof payload === "object") payload = addCtx(payload);
+
+      const deep = (x, depth = 0)=>{
+        if (!x || typeof x !== "object") return x;
+        if (Array.isArray(x)) return x.map(v => deep(v, depth));
+        addCtx(x);
+        if (depth >= 1) return x;
+        // pattern comuni: bulk payloads
+        ["rows","items","records","data","list"].forEach((k)=>{
+          const v = x[k];
+          if (Array.isArray(v)) x[k] = v.map(r => deep(r, depth + 1));
+        });
+        return x;
+      };
+
+      payload = deep(payload, 0);
     }
   }catch(_){ }
   fetchOpts.body = payload ? JSON.stringify(payload) : "{}";
@@ -1417,6 +1430,7 @@ function setupAuth(){
       if (!data || !data.user) throw new Error("Credenziali non valide");
       state.session = data.user;
       saveSession(state.session);
+      try{ invalidateApiCache(); }catch(_){ }
       state.exerciseYear = loadExerciseYear();
       updateYearPill();
       setHint("");
@@ -1430,6 +1444,21 @@ function setupAuth(){
 const __apiCache = new Map();      // key -> { t:number, data:any }
 const __apiInflight = new Map();   // key -> Promise
 
+function __applyCtxToParams(action, params){
+  const p = Object.assign({}, params || {});
+  try{
+    if (state && state.session && state.session.user_id && action !== "utenti" && action !== "ping"){
+      if (p.user_id === undefined || p.user_id === null || String(p.user_id).trim() === "") {
+        p.user_id = String(state.session.user_id);
+      }
+      if (p.anno === undefined || p.anno === null || String(p.anno).trim() === "") {
+        p.anno = String(state.exerciseYear || "");
+      }
+    }
+  }catch(_){ }
+  return p;
+}
+
 function __cacheKey(action, params){
   try { return action + "|" + JSON.stringify(params || {}); }
   catch (_) { return action + "|{}"; }
@@ -1441,10 +1470,21 @@ function invalidateApiCache(prefix){
       if (!prefix || k.startsWith(prefix)) __apiCache.delete(k);
     }
   } catch (_) {}
+  try{ __lsClearAll(); }catch(_){ }
 }
 
 // ===== LocalStorage cache (perceived speed on iOS) =====
 const __lsPrefix = "ddae_cache_v1:";
+function __lsClearAll(){
+  try{
+    const keys = [];
+    for (let i=0; i<localStorage.length; i++){
+      const k = localStorage.key(i);
+      if (k && k.startsWith(__lsPrefix)) keys.push(k);
+    }
+    keys.forEach(k => { try{ localStorage.removeItem(k); }catch(_){ } });
+  } catch(_){ }
+}
 function __lsGet(key){
   try{
     const raw = localStorage.getItem(__lsPrefix + key);
@@ -1462,7 +1502,8 @@ function __lsSet(key, data){
 
 // GET con cache in-memory (non tocca SW): evita chiamate duplicate e loader continui
 async function cachedGet(action, params = {}, { ttlMs = 30000, showLoader = true, force = false } = {}){
-  const key = __cacheKey(action, params);
+  const ctxParams = __applyCtxToParams(action, params);
+  const key = __cacheKey(action, ctxParams);
 
   if (!force) {
     const hit = __apiCache.get(key);
@@ -1472,7 +1513,7 @@ async function cachedGet(action, params = {}, { ttlMs = 30000, showLoader = true
   if (__apiInflight.has(key)) return __apiInflight.get(key);
 
   const p = (async () => {
-    const data = await api(action, { params, showLoader });
+    const data = await api(action, { params: ctxParams, showLoader });
     __apiCache.set(key, { t: Date.now(), data });
     return data;
   })();
