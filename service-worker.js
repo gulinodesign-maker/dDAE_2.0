@@ -1,5 +1,5 @@
 /* dDAE - Service Worker (PWA)
- * Build: dDAE_2.010
+ * Build: dDAE_2.011
  *
  * Obiettivi:
  * - cache name cambia ad ogni build
@@ -9,7 +9,7 @@
  * - fix iOS/Safari cache aggressiva (cache:"reload"/"no-store" + query ?v)
  */
 
-const BUILD = "dDAE_2.010";
+const BUILD = "dDAE_2.011";
 const CACHE_NAME = `dDAE-cache-${BUILD}`; // cambia ad ogni build // cambia ad ogni build
 
 // Asset principali (versionati per forzare il fetch anche con cache aggressiva iOS)
@@ -21,6 +21,8 @@ const CORE_ASSETS = [
   `./app.js?v=${BUILD}`,
   `./config.js?v=${BUILD}`,
   `./manifest.json?v=${BUILD}`,
+  `./version.json?v=${BUILD}`,
+  "./version.json",
 
   // Immagini / icone (alcune linkate con ?v=... da index.html)
   `./assets/logo.jpg?v=${BUILD}`,

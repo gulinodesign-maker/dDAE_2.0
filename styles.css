@@ -29,7 +29,7 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.010"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.011"),
     radial-gradient(900px 600px at 10% 0%, rgba(43,124,180,0.10), transparent 62%),
     radial-gradient(800px 520px at 90% 8%, rgba(201,119,43,0.10), transparent 64%),
     radial-gradient(900px 700px at 20% 100%, rgba(122,192,219,0.10), transparent 62%),
@@ -759,7 +759,7 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.010"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.011"),
     radial-gradient(900px 650px at 12% 8%, rgba(43,124,180,0.18), transparent 62%),
     radial-gradient(820px 560px at 92% 14%, rgba(201,119,43,0.16), transparent 62%),
     radial-gradient(900px 700px at 18% 96%, rgba(122,192,219,0.16), transparent 62%),
@@ -1905,7 +1905,7 @@ body::before{
 #page-home #goCalendario .home-main-glyph{ color: rgba(43,124,180,0.92); }
 #page-home #goTassaSoggiorno .home-main-glyph{ color: rgba(201,119,43,0.92); }
 #page-home #goPulizie .home-main-glyph{ color: rgba(15,23,42,0.92); }
-#page-home #goGuadagni .home-main-glyph{ color: rgba(176,92,18,0.92); }
+#page-home #goStatistiche .home-main-glyph{ color: rgba(176,92,18,0.92); }
 /* dDAE_1.229 - Ospiti: solo consultazione (azioni nascoste per ora) */
 body[data-page="ospiti"] .guest-card .actions {
   display: flex !important;
@@ -2063,7 +2063,7 @@ body[data-page="ospiti"] .guest-card .actions {
 /* dDAE_1.229 — Ospiti: azioni stile Apple (pallini verde/giallo/rosso) */
 
 /* =========================
-   dDAE_2.010 — Auth + Anno pill
+   dDAE_2.011 — Auth + Anno pill
 ========================= */
 
 .year-pill{
@@ -4949,7 +4949,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 }
 
 /* =========================
-   dDAE_2.010 — HOME: Year pill bottom-center, 100px under icons grid
+   dDAE_2.011 — HOME: Year pill bottom-center, 100px under icons grid
 ========================= */
 #page-home .home-page{
   display:flex;
@@ -5046,3 +5046,244 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 .settings-btn-reload{ background: rgba(31,41,55,0.40); }
 .settings-btn-delete{ background: rgba(220,38,38,0.40); }
 .settings-btn-logout{ background: rgba(201,119,43,0.40); }
+
+
+/* ============================
+   STATISTICHE (Liquid Glass su sfondo)
+============================ */
+#page-statistiche .stats-page{
+  padding: 14px 14px calc(18px + var(--safe-bottom));
+}
+#page-statistiche .stats-menu{
+  padding-top: 6px;
+}
+#page-statistiche .stats-grid{
+  display: grid;
+  grid-template-columns: repeat(2, minmax(0, 1fr));
+  gap: 14px;
+  align-items: stretch;
+}
+#page-statistiche .stats-main{
+  width: 100%;
+  max-width: none;
+}
+#page-statistiche .stats-main .home-main-glyph{
+  width: 100%;
+  height: 108px;
+  border-radius: 28px;
+}
+#page-statistiche .stats-main .home-main-label{
+  text-align: center;
+  font-size: 15px;
+}
+
+/* Conteggio generale: etichette (tinta unita 40%) direttamente sullo sfondo */
+#page-statistiche .stats-labels{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding-top: 6px;
+}
+#page-statistiche .stats-label{
+  appearance: none;
+  -webkit-appearance: none;
+  border: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 10px;
+  padding: 14px 14px;
+  border-radius: 18px;
+  color: rgba(255,255,255,0.96);
+  backdrop-filter: blur(10px);
+  -webkit-backdrop-filter: blur(10px);
+  box-shadow: 0 10px 22px rgba(15,23,42,0.10);
+  text-shadow: 0 1px 0 rgba(0,0,0,0.18);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+#page-statistiche .stats-label .k{
+  font-weight: 850;
+  letter-spacing: .2px;
+  font-size: 14px;
+  opacity: .95;
+}
+#page-statistiche .stats-label .v{
+  font-weight: 950;
+  font-size: 16px;
+  letter-spacing: .2px;
+  white-space: nowrap;
+}
+
+#page-statistiche .stats-label.c1{ background: rgba(201,119,43,0.40); }
+#page-statistiche .stats-label.c2{ background: rgba(43,124,180,0.40); }
+#page-statistiche .stats-label.c3{ background: rgba(15,23,42,0.40); }
+#page-statistiche .stats-label.c4{ background: rgba(122,192,219,0.40); }
+#page-statistiche .stats-label.c5{ background: rgba(216,189,151,0.40); color: rgba(15,23,42,0.92); text-shadow:none; }
+#page-statistiche .stats-label.c6{ background: rgba(155,92,32,0.40); }
+#page-statistiche .stats-label.c7{ background: rgba(31,41,55,0.40); }
+
+/* Popup grafico */
+#page-statistiche .stats-popup{
+  position: fixed;
+  inset: 0;
+  z-index: 520;
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+}
+#page-statistiche .stats-popup-backdrop{
+  position: absolute;
+  inset: 0;
+  background: rgba(255,255,255,0.30);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+}
+#page-statistiche .stats-popup-panel{
+  position: relative;
+  margin: 14px auto;
+  width: min(520px, calc(100vw - 28px));
+  border-radius: 22px;
+  background: rgba(255,255,255,0.20);
+  border: 1px solid rgba(255,255,255,0.24);
+  box-shadow: 0 18px 60px rgba(15,23,42,0.16);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  overflow: hidden;
+}
+#page-statistiche .stats-popup-body{
+  padding: 16px 14px 14px;
+}
+#page-statistiche .stats-popup-close{
+  position: absolute;
+  top: 12px;
+  right: 12px;
+  width: 40px;
+  height: 40px;
+  border-radius: 999px;
+  border: 0;
+  background: rgba(255,255,255,0.95);
+  display: grid;
+  place-items: center;
+  box-shadow: 0 12px 26px rgba(15,23,42,0.14);
+  cursor: pointer;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+#page-statistiche .stats-popup-close .x{
+  color: rgba(201,119,43,0.95);
+  font-size: 22px;
+  line-height: 1;
+  font-weight: 900;
+}
+#page-statistiche .stats-chart canvas{
+  max-width: 100%;
+  height: auto;
+}
+
+
+/* STATISTICHE (Liquid Glass) */
+#page-statistiche .stats-page{
+  padding: 10px 14px calc(18px + var(--safe-bottom));
+}
+#page-statistiche .stats-spacer{ height: 8px; }
+#page-statistiche .stats-grid{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 14px;
+  padding: 10px 0;
+}
+#page-statistiche .stats-main{
+  width: 100%;
+  max-width: none;
+}
+#page-statistiche .home-main-glyph{
+  width: 104px;
+  height: 104px;
+  border-radius: 30px;
+}
+#page-statistiche .home-main-label{
+  font-size: 14px;
+  line-height: 1.1;
+  text-align: center;
+}
+
+#page-statistiche .stats-labels{
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  padding: 10px 0;
+}
+.stats-label{
+  border: 0;
+  width: 100%;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  padding: 14px 14px;
+  border-radius: 18px;
+  color: rgba(255,255,255,0.96);
+  font-weight: 850;
+  letter-spacing: .2px;
+  background: rgba(15,23,42,0.40);
+  -webkit-tap-highlight-color: transparent;
+  touch-action: manipulation;
+}
+.stats-label .k{ font-size: 13px; opacity: .95; }
+.stats-label .v{ font-size: 16px; }
+
+/* Colori diversi (tinta unita, 40% opacità) */
+.stats-label.s1{ background: rgba(201,119,43,0.40); }
+.stats-label.s2{ background: rgba(43,124,180,0.40); }
+.stats-label.s3{ background: rgba(31,41,55,0.40); }
+.stats-label.s4{ background: rgba(122,192,219,0.40); }
+.stats-label.s5{ background: rgba(155,92,32,0.40); }
+.stats-label.s6{ background: rgba(216,189,151,0.40); color: rgba(15,23,42,0.92); }
+.stats-label.s7{ background: rgba(15,23,42,0.40); }
+
+/* Popup grafico */
+.stats-popup[hidden]{ display:none !important; }
+.stats-popup{
+  position: fixed;
+  inset: 0;
+  z-index: 600;
+  padding-top: var(--safe-top);
+  padding-bottom: var(--safe-bottom);
+}
+.stats-popup-backdrop{
+  position: absolute;
+  inset: 0;
+  background: rgba(255,255,255,0.30);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+}
+.stats-popup-card{
+  position: relative;
+  width: min(92vw, 420px);
+  max-height: calc(100vh - 60px - var(--safe-top) - var(--safe-bottom));
+  overflow: auto;
+  margin: 20px auto;
+  border-radius: 22px;
+  border: 1px solid rgba(15,23,42,0.10);
+  background: rgba(255,255,255,0.20);
+  backdrop-filter: blur(18px);
+  -webkit-backdrop-filter: blur(18px);
+  box-shadow: 0 18px 40px rgba(15,23,42,0.18);
+  padding: 16px 14px 14px;
+}
+.stats-popup-close{
+  position: absolute;
+  top: 10px;
+  right: 10px;
+  width: 38px;
+  height: 38px;
+  border-radius: 999px;
+  border: 1px solid rgba(15,23,42,0.10);
+  background: rgba(255,255,255,0.92);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  color: rgba(201,119,43,0.95);
+}
+.stats-popup-close .ui-ico{ width: 18px; height: 18px; }

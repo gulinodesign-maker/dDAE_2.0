@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.010";
+const BUILD_VERSION = "dDAE_2.011";
 
 // =========================
 // AUTH + SESSION (dDAE_2.008)
@@ -1624,12 +1624,146 @@ const lav = e.target.closest && e.target.closest("#goLavanderia") || e.target.cl
     const imp = e.target.closest && e.target.closest("#goImpostazioni");
     if (imp){ hideLauncher(); showPage("impostazioni"); return; }
 
-const g = e.target.closest && e.target.closest("#goGuadagni");
-    if (g){ hideLauncher(); toast("Guadagni: in arrivo"); return; }
+const g = e.target.closest && e.target.closest("#goStatistiche");
+    if (g){ hideLauncher(); try{ setStatsSub("menu"); }catch(_){} showPage("statistiche"); return; }
 
   });
 }
 
+
+
+// ============================
+// STATISTICHE
+// ============================
+state.statsSub = state.statsSub || "menu"; // menu | general
+
+function setStatsSub(sub, { render=true } = {}){
+  state.statsSub = sub;
+  const menu = document.getElementById("statsMenu");
+  const gen = document.getElementById("statsGeneral");
+  if (menu) menu.hidden = (sub !== "menu");
+  if (gen) gen.hidden = (sub !== "general");
+
+  // Top tools: visibili solo dentro Conteggio generale
+  const statsTopTools = document.getElementById("statsTopTools");
+  if (statsTopTools) statsTopTools.hidden = (sub !== "general");
+
+  if (render && sub === "general"){
+    try{ renderStatsGeneral(); }catch(_){ }
+  }
+}
+
+function sumGuestsAmounts(guests){
+  let total = 0;
+  let conRicev = 0;
+  let senzaRicev = 0;
+  let cashIn = 0;
+
+  for (const g of (guests||[])){
+    const dep = Number(g.acconto_importo || 0) || 0;
+    const saldo = Number(g.saldo_pagato ?? g.saldoPagato ?? g.saldo ?? 0) || 0;
+
+    const depRec = truthy(g.acconto_ricevuta ?? g.accontoRicevuta ?? g.ricevuta_acconto ?? g.ricevutaAcconto ?? g.acconto_ricevutain);
+    const saldoRec = truthy(g.saldo_ricevuta ?? g.saldoRicevuta ?? g.ricevuta_saldo ?? g.ricevutaSaldo ?? g.saldo_ricevutain);
+
+    total += dep + saldo;
+    conRicev += (depRec ? dep : 0) + (saldoRec ? saldo : 0);
+    senzaRicev += (depRec ? 0 : dep) + (saldoRec ? 0 : saldo);
+
+    const depType = String(g.acconto_tipo || g.depositType || g.guestDepositType || "contante").toLowerCase();
+    const saldoType = String(g.saldo_tipo || g.saldoTipo || g.saldoType || g.guestSaldoType || "").toLowerCase();
+    if (dep && !depType.includes("elet")) cashIn += dep;
+    if (saldo && !saldoType.includes("elet")) cashIn += saldo;
+  }
+
+  return { total, conRicev, senzaRicev, cashIn };
+}
+
+async function renderStatsGeneral(){
+  // Assicura dati periodo (spese/report) + ospiti
+  const { from, to } = state.period || { from: todayISO(), to: todayISO() };
+
+  const [ , guests ] = await Promise.all([
+    ensurePeriodData({ showLoader:true }),
+    cachedGet("ospiti", { from, to }, { showLoader:true, ttlMs: 30*1000 })
+  ]);
+
+  const gArr = Array.isArray(guests) ? guests : [];
+  const g = sumGuestsAmounts(gArr);
+
+  const r = state.report || {};
+  const speseTot = Number(r?.totals?.importoLordo || 0) || 0;
+
+  // Giacenza: incassi contanti - spese categoria CONTANTI
+  let cashSpese = 0;
+  const sp = Array.isArray(state.spese) ? state.spese : [];
+  for (const s of sp){
+    const cat = String(s.categoria || s.cat || "").toUpperCase();
+    if (cat === "CONTANTI") cashSpese += Number(s.importoLordo || 0) || 0;
+  }
+  const giacenza = g.cashIn - cashSpese;
+
+  // IVA da versare: per ora calcolo minimo (iva spese non detraibile) come fallback
+  const iva = Number(r?.totals?.iva || 0) || 0;
+  const ivaDetr = Number(r?.totals?.ivaDetraibile || 0) || 0;
+  const ivaDaVersare = Math.max(0, iva - ivaDetr);
+
+  const guadagno = g.total - speseTot;
+
+  const set = (id, val) => { const el = document.getElementById(id); if (el) el.textContent = val; };
+  set("statFatturato", euro(g.total));
+  set("statSpese", euro(speseTot));
+  set("statNoRicev", euro(g.senzaRicev));
+  set("statConRicev", euro(g.conRicev));
+  set("statIva", euro(ivaDaVersare));
+  set("statGuadagno", euro(guadagno));
+  set("statCassa", euro(giacenza));
+
+  // Prepara dataset per popup pie
+  state._statsGeneralPie = [
+    { key:"FATT", label:"Fatturato", value: g.total, color: "#c9772b" },
+    { key:"SPE", label:"Spese", value: speseTot, color: "#2b7cb4" },
+    { key:"NOR", label:"Senza ricevuta", value: g.senzaRicev, color: "#1f2937" },
+    { key:"COR", label:"Con ricevuta", value: g.conRicev, color: "#7ac0db" },
+    { key:"IVA", label:"IVA da versare", value: ivaDaVersare, color: "#d8bd97" },
+    { key:"GUA", label:"Guadagno", value: guadagno, color: "#9B5C20" },
+    { key:"CAS", label:"Cassa", value: giacenza, color: "#0b0f16" },
+  ];
+}
+
+function openStatsPie(){
+  const pop = document.getElementById("statsPiePopup");
+  if (!pop) return;
+  pop.hidden = false;
+  pop.setAttribute("aria-hidden", "false");
+
+  const data = Array.isArray(state._statsGeneralPie) ? state._statsGeneralPie : [];
+  if (data.length){
+    try{ drawPie("statsPieCanvas", data); }catch(_){ }
+
+    const leg = document.getElementById("statsPieLegend");
+    if (leg){
+      leg.innerHTML = "";
+      data.forEach(d => {
+        const row = document.createElement("div");
+        row.className = "legrow";
+        row.innerHTML = `
+          <span class="dot" style="background:${hexToRgba(d.color, 0.9)}"></span>
+          <span class="name">${escapeHtml(d.label)}</span>
+          <span class="val">${euro(d.value)}</span>
+        `;
+        leg.appendChild(row);
+      });
+    }
+  }
+}
+
+function closeStatsPie(){
+  const pop = document.getElementById("statsPiePopup");
+  if (!pop) return;
+  pop.hidden = true;
+  pop.setAttribute("aria-hidden", "true");
+}
 function bindLauncherDelegation(){
   if (launcherDelegationBound) return;
   launcherDelegationBound = true;
@@ -1729,6 +1863,11 @@ state.page = page;
     try { setSpeseView(state.speseView || "list"); } catch (_) {}
   }
 
+  if (page === "statistiche"){
+    try{ setStatsSub("menu", { render:false }); }catch(_){ }
+  }
+
+
   // Period chip: nascosto in HOME (per rispettare "nessun altro testo" sulla home)
   const chip = $("#periodChip");
   if (chip){
@@ -1767,6 +1906,23 @@ state.page = page;
   if (speseTopTools){
     speseTopTools.hidden = (page !== "spese");
   }
+
+  // Top tools (Statistiche) — torna a Statistiche + grafico accanto al tasto Home
+  const statsTopTools = $("#statsTopTools");
+  if (statsTopTools){
+    // visibili solo in Conteggio generale
+    statsTopTools.hidden = !(page === "statistiche" && (state.statsSub === "general"));
+  }
+
+  // Statistiche: sotto-pagine (menu ↔ conteggio generale)
+  if (page === "statistiche") {
+    try{
+      const sub = state.statsSub || "menu";
+      setStatsSub(sub, { render: (sub === "general") });
+    }catch(_){ }
+  }
+
+
 
 // render on demand
   if (page === "spese") {
@@ -1945,9 +2101,9 @@ if (goCalendarioTopOspiti){
   }
 
   // HOME: guadagni (placeholder)
-  const goG = $("#goGuadagni");
+  const goG = $("#goStatistiche");
   if (goG){
-    bindFastTap(goG, () => { toast("Guadagni: in arrivo"); });
+    bindFastTap(goG, () => { try{ setStatsSub("menu"); }catch(_){} hideLauncher(); showPage("statistiche"); });
   }
 
 
@@ -3560,8 +3716,10 @@ async function init(){
   setupHeader();
   setupAuth();
   setupHome();
+  try{ bindStatsEvents(); }catch(_){}
   setupCalendario();
   setupImpostazioni();
+  try{ bindStatsEvents(); }catch(_){}
 
     setupOspite();
   initFloatingLabels();
@@ -5599,3 +5757,153 @@ async function initOrePuliziaPage(){
   __renderOrePuliziaCalendar_();
 }
 
+
+
+/* ============================
+   STATISTICHE
+============================ */
+state.statsSub = state.statsSub || "menu";
+
+function setStatsSub(sub, { render=false } = {}){
+  state.statsSub = sub;
+  const menu = document.getElementById("statsMenu");
+  const gen = document.getElementById("statsGeneral");
+  if (menu) menu.hidden = (sub !== "menu");
+  if (gen) gen.hidden = (sub !== "general");
+
+  const statsTopTools = document.getElementById("statsTopTools");
+  if (statsTopTools) statsTopTools.hidden = !(state.page === "statistiche" && sub === "general");
+
+  if (render && sub === "general"){
+    try{ renderStatsGeneral(); }catch(_){ }
+  }
+}
+
+async function renderStatsGeneral(){
+  const { from, to } = state.period || { from:"", to:"" };
+  try{ await ensurePeriodData({ showLoader:true }); }catch(_){ }
+
+  let guests = [];
+  try{
+    const data = await cachedGet("ospiti", { from, to }, { showLoader:true, ttlMs: 20000 });
+    guests = Array.isArray(data) ? data : [];
+  }catch(_){
+    guests = Array.isArray(state.guests) ? state.guests : [];
+  }
+
+  const report = state.report || {};
+  const spese = Array.isArray(state.spese) ? state.spese : [];
+
+  let fatturato = 0;
+  let conRic = 0;
+  let senzaRic = 0;
+  let cashIn = 0;
+
+  for (const g of guests){
+    const dep = Number(g.acconto_importo ?? g.accontoImporto ?? 0) || 0;
+    const saldo = Number(g.saldo_pagato ?? g.saldoPagato ?? g.saldo ?? 0) || 0;
+    fatturato += dep + saldo;
+
+    const depRec = truthy(g.acconto_ricevuta ?? g.accontoRicevuta ?? g.ricevuta_acconto ?? g.ricevutaAcconto ?? g.acconto_ricevutain);
+    const saldoRec = truthy(g.saldo_ricevuta ?? g.saldoRicevuta ?? g.ricevuta_saldo ?? g.ricevutaSaldo ?? g.saldo_ricevutain);
+    if (dep) (depRec ? conRic : senzaRic) += dep;
+    if (saldo) (saldoRec ? conRic : senzaRic) += saldo;
+
+    const depTypeRaw = (g.acconto_tipo || g.depositType || g.guestDepositType || "contante").toString().toLowerCase();
+    const saldoTypeRaw = (g.saldo_tipo || g.saldoTipo || g.saldoType || g.guestSaldoType || "").toString().toLowerCase();
+    if (dep && !depTypeRaw.includes("elet")) cashIn += dep;
+    if (saldo && !saldoTypeRaw.includes("elet")) cashIn += saldo;
+  }
+
+  const speseTot = Number(report?.totals?.importoLordo ?? 0) || 0;
+
+  let cashOut = 0;
+  for (const s of spese){
+    const cat = String(s.categoria || s.cat || "").toUpperCase();
+    if (cat === "CONTANTI") cashOut += Number(s.importoLordo || 0) || 0;
+  }
+
+  const guadagno = fatturato - speseTot;
+  const cassa = cashIn - cashOut;
+
+  // IVA da versare: verrà definita con regole fiscali specifiche
+  const ivaVersare = 0;
+
+  const set = (id, val)=>{ const el = document.getElementById(id); if (el) el.textContent = val; };
+  set("statFatturato", euro(fatturato));
+  set("statSpese", euro(speseTot));
+  set("statNoRicev", euro(senzaRic));
+  set("statConRicev", euro(conRic));
+  set("statIva", euro(ivaVersare));
+  set("statGuadagno", euro(guadagno));
+  set("statCassa", euro(cassa));
+}
+
+function openStatsPie(){
+  const pop = document.getElementById("statsPiePopup");
+  if (!pop) return;
+  pop.hidden = false;
+  pop.setAttribute("aria-hidden", "false");
+
+  const parseEuro = (id)=>{
+    const raw = (document.getElementById(id)?.textContent || "").trim();
+    // euro() usa formato IT: € 1.234,56
+    let s = raw.replace(/[^0-9.,-]/g, "");
+    // rimuovi separatori migliaia "." quando presenti
+    s = s.replace(/\.(?=\d{3}(\D|$))/g, "");
+    s = s.replace(",", ".");
+    const n = Number(s);
+    return isFinite(n) ? n : 0;
+  };
+
+  const data = [
+    { key:"FATT", label:"Fatturato", value:parseEuro("statFatturato"), color:"#c9772b" },
+    { key:"SPESE", label:"Spese", value:parseEuro("statSpese"), color:"#2b7cb4" },
+    { key:"NORIC", label:"Senza ricevuta", value:parseEuro("statNoRicev"), color:"#1f2937" },
+    { key:"CONRIC", label:"Con ricevuta", value:parseEuro("statConRicev"), color:"#7ac0db" },
+    { key:"IVA", label:"IVA", value:parseEuro("statIva"), color:"#9b5c20" },
+    { key:"GUAD", label:"Guadagno", value:parseEuro("statGuadagno"), color:"#d8bd97" },
+    { key:"CASSA", label:"Cassa", value:parseEuro("statCassa"), color:"#0f172a" },
+  ];
+
+  try{ drawPie("statsPieCanvas", data); }catch(_){ }
+
+  const leg = document.getElementById("statsPieLegend");
+  if (leg){
+    leg.innerHTML = "";
+    data.forEach(d=>{
+      const row = document.createElement("div");
+      row.className = "legitem";
+      row.innerHTML = `<span class="dot" style="background:${hexToRgba(d.color, 0.65)}"></span><div class="legname">${escapeHtml(d.label)}</div><div class="legval">${euro(d.value)}</div>`;
+      leg.appendChild(row);
+    });
+  }
+}
+
+function closeStatsPie(){
+  const pop = document.getElementById("statsPiePopup");
+  if (!pop) return;
+  pop.hidden = true;
+  pop.setAttribute("aria-hidden", "true");
+}
+
+function bindStatsEvents(){
+  const i1 = document.getElementById("statsGoGeneral");
+  const i2 = document.getElementById("statsGoIncassi");
+  const i3 = document.getElementById("statsGoSpese");
+  const i4 = document.getElementById("statsGoPrenotazioni");
+  const back = document.getElementById("btnStatsBack");
+  const pie = document.getElementById("btnStatsPie");
+  const pieClose = document.getElementById("statsPieClose");
+  const pieBackdrop = document.querySelector("#statsPiePopup [data-close]");
+
+  if (i1) bindTap(i1, ()=>{ setStatsSub("general", { render:true }); });
+  if (i2) bindTap(i2, ()=>{ toast("Incassi mensili: in arrivo"); });
+  if (i3) bindTap(i3, ()=>{ toast("Spese: usa la sezione Spese"); });
+  if (i4) bindTap(i4, ()=>{ toast("Prenotazioni: in arrivo"); });
+
+  if (back) bindTap(back, ()=>{ if (state.page === "statistiche"){ setStatsSub("menu"); } });
+  if (pie) bindTap(pie, ()=>{ openStatsPie(); });
+  if (pieClose) bindTap(pieClose, ()=>{ closeStatsPie(); });
+  if (pieBackdrop) bindTap(pieBackdrop, ()=>{ closeStatsPie(); });
+}
