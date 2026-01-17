@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.014";
+const BUILD_VERSION = "dDAE_2.015";
 
 // =========================
 // AUTH + SESSION (dDAE_2.008)
@@ -2607,7 +2607,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.014)
+// STATISTICHE (dDAE_2.015)
 // =========================
 
 function computeStatGen(){
@@ -4964,18 +4964,24 @@ async function registerSW(){
       updateViaCache: "none"
     });
 
-    const checkUpdate = () => {
-      try { reg?.update?.(); } catch (_) {}
+    const checkUpdate = async () => {
+      try {
+        const cur = await navigator.serviceWorker.getRegistration();
+        if (!cur) return;
+        // Se la registration e' stata invalidata/unregistered, update() puo' lanciare.
+        // Chiudiamo in try/catch per evitare crash.
+        await cur.update();
+      } catch (_) {}
     };
 
     // check immediato + quando torna in primo piano
     checkUpdate();
-    window.addEventListener("focus", checkUpdate);
+    window.addEventListener("focus", () => { checkUpdate(); });
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden) checkUpdate();
     });
     // check periodico (non invasivo)
-    setInterval(checkUpdate, 60 * 60 * 1000);
+    setInterval(() => { checkUpdate(); }, 60 * 60 * 1000);
 
     // Se viene trovata una nuova versione, prova ad attivarla subito
     reg.addEventListener("updatefound", () => {
