@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.011";
+const BUILD_VERSION = "dDAE_2.012";
 
 // =========================
 // AUTH + SESSION (dDAE_2.008)
@@ -2580,6 +2580,14 @@ function setupStatistiche(){
   if (bT) bT.addEventListener("click", () => { showStatsReport("trimestre"); });
   if (bA) bA.addEventListener("click", () => { showStatsReport("anno"); });
 
+  // Charts toggles (open only on demand)
+  document.querySelectorAll("#page-statistiche [data-stats-charts]").forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const tab = btn.getAttribute("data-stats-charts") || "";
+      toggleStatsCharts(tab, btn);
+    });
+  });
+
   // Default
   if (!state.statsTab) state.statsTab = "overview";
   try { setStatsTab(state.statsTab); } catch(_) {}
@@ -2599,6 +2607,23 @@ function setStatsTab(tab){
   if (panel) panel.hidden = false;
 }
 
+function toggleStatsCharts(tab, btn){
+  const box = document.getElementById("statsCharts-" + tab);
+  if (!box) return;
+  const willShow = !!box.hidden;
+  box.hidden = !willShow;
+  if (btn){
+    btn.setAttribute("aria-pressed", willShow ? "true" : "false");
+    if (tab === "overview") btn.textContent = willShow ? "Nascondi grafici" : "Apri grafici";
+    else btn.textContent = willShow ? "Nascondi grafico" : "Apri grafico";
+  }
+  if (willShow && state.page === "statistiche"){
+    try { renderStatistiche(); } catch(_) {}
+    try { box.scrollIntoView({ block:"start", behavior:"smooth" }); } catch(_) {}
+  }
+}
+
+
 function monthKey(iso){
   const s = String(iso || "").trim();
   if (!s) return null;
@@ -2616,7 +2641,12 @@ function inRangeISO(iso, from, to){
 function payBucket(typeRaw, receiptFlag){
   if (truthy(receiptFlag)) return "receipt";
   const t = String(typeRaw || "contante").toLowerCase();
-  return t.includes("elet") ? "elec" : "cash";
+  if (t.includes("ricev")) return "receipt";
+  const elec = ["elet", "pos", "carta", "card", "bancomat", "bonif", "paypal", "stripe", "sumup", "satispay", "apple pay", "google pay", "gpay", "apay"];
+  if (elec.some(w => t.includes(w))) return "elec";
+  const cash = ["cont", "cash"];
+  if (cash.some(w => t.includes(w))) return "cash";
+  return "cash";
 }
 
 function drawPieLegend(canvasId, legendId, slices){
@@ -2739,14 +2769,22 @@ async function renderStatistiche(){
     }
   }
 
+  const canDraw = (canvasId) => {
+    const el = document.getElementById(canvasId);
+    if (!el) return false;
+    const wrap = el.closest && el.closest(".stats-charts-wrap");
+    if (wrap && wrap.hidden) return false;
+    return true;
+  };
+
   // Grafici: Pagamenti
   const paySlices = [
     { key:"cash", label:"Contanti", value: cashTot, color: STATS_COLORS.cash },
     { key:"elec", label:"Elettronico", value: elecTot, color: STATS_COLORS.elec },
     { key:"receipt", label:"Ricevuta", value: receiptTot, color: STATS_COLORS.receipt },
   ];
-  drawPieLegend("statsPayPie", "statsPayLegend", paySlices);
-  drawPieLegend("statsPayPie2", "statsPayLegend2", paySlices);
+  if (canDraw("statsPayPie")) drawPieLegend("statsPayPie", "statsPayLegend", paySlices);
+  if (canDraw("statsPayPie2")) drawPieLegend("statsPayPie2", "statsPayLegend2", paySlices);
 
   // Grafici: Spese per categoria
   const by = r?.byCategoria || {};
@@ -2757,8 +2795,8 @@ async function renderStatistiche(){
     value: Number(by[k]?.importoLordo || 0),
     color: COLORS[k] || STATS_COLORS.dark
   }));
-  drawPieLegend("statsSpesePie", "statsSpeseLegend", spSlices);
-  drawPieLegend("statsSpesePie2", "statsSpeseLegend2", spSlices);
+  if (canDraw("statsSpesePie")) drawPieLegend("statsSpesePie", "statsSpeseLegend", spSlices);
+  if (canDraw("statsSpesePie2")) drawPieLegend("statsSpesePie2", "statsSpeseLegend2", spSlices);
 
   // Grafico: Fatturato mesi (donut)
   const monthKeys = Object.keys(monthly).sort();
@@ -2768,14 +2806,14 @@ async function renderStatistiche(){
     value: Number(monthly[k] || 0),
     color: (i % 2 ? STATS_COLORS.elec : STATS_COLORS.cash)
   }));
-  drawPieLegend("statsMonthPie", "statsMonthLegend", monthSlices);
+  if (canDraw("statsMonthPie")) drawPieLegend("statsMonthPie", "statsMonthLegend", monthSlices);
 
   // Grafico: IVA
   const ivaSlices = [
     { key:"deb", label:"Debito", value: ivaVersare, color: STATS_COLORS.receipt },
     { key:"cre", label:"Credito", value: ivaScaricare, color: STATS_COLORS.elec },
   ];
-  drawPieLegend("statsIvaPie", "statsIvaLegend", ivaSlices);
+  if (canDraw("statsIvaPie")) drawPieLegend("statsIvaPie", "statsIvaLegend", ivaSlices);
 }
 
 function showStatsReport(mode){

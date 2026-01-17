@@ -5061,6 +5061,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   margin: 0;
   font-size: 22px;
   letter-spacing: 0.2px;
+  color: rgba(43,124,180,0.98);
 }
 
 .stats-tabs{
@@ -5079,7 +5080,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   border-radius: 999px;
   border: 1px solid rgba(15,23,42,0.10);
   background: rgba(255,255,255,0.40);
-  color: rgba(255,255,255,0.96);
+  color: rgba(43,124,180,0.95);
   font-size: 12px;
   font-weight: 950;
   letter-spacing: 0.2px;
@@ -5093,6 +5094,14 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 }
 
 .stats-panels{ margin-top: 10px; }
+
+.stats-actions-row{
+  margin-top: 12px;
+}
+
+.stats-charts-wrap{
+  margin-top: 14px;
+}
 
 .stats-kpi-grid{
   display:grid;
@@ -5112,14 +5121,14 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   font-size: 11px;
   font-weight: 900;
   letter-spacing: 0.2px;
-  color: rgba(255,255,255,0.90);
+  color: rgba(43,124,180,0.92);
 }
 
 .stats-kpi-value{
   margin-top: 6px;
   font-size: 18px;
   font-weight: 950;
-  color: rgba(255,255,255,0.98);
+  color: rgba(43,124,180,0.98);
   letter-spacing: 0.2px;
 }
 
@@ -5142,7 +5151,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   font-size: 12px;
   font-weight: 950;
   letter-spacing: 0.2px;
-  color: rgba(255,255,255,0.95);
+  color: rgba(43,124,180,0.96);
   margin-bottom: 8px;
 }
 
@@ -5164,8 +5173,8 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   border-bottom: 1px solid rgba(255,255,255,0.18);
 }
 .stats-table .st-row:last-child{ border-bottom: none; }
-.stats-table .st-m{ font-weight: 950; color: rgba(255,255,255,0.92); font-size: 12px; }
-.stats-table .st-v{ font-weight: 950; color: rgba(255,255,255,0.98); font-size: 12px; }
+.stats-table .st-m{ font-weight: 950; color: rgba(43,124,180,0.94); font-size: 12px; }
+.stats-table .st-v{ font-weight: 950; color: rgba(43,124,180,0.98); font-size: 12px; }
 
 .stats-report{
   display:grid;
@@ -5179,7 +5188,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   border-radius: 18px;
   border: 1px solid rgba(15,23,42,0.10);
   background: rgba(255,255,255,0.40);
-  color: rgba(255,255,255,0.96);
+  color: rgba(43,124,180,0.96);
   font-weight: 950;
   letter-spacing: 0.2px;
   cursor:pointer;
@@ -5193,7 +5202,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   padding: 12px;
   border: 1px solid rgba(15,23,42,0.08);
   background: rgba(255,255,255,0.20);
-  color: rgba(255,255,255,0.95);
+  color: rgba(43,124,180,0.95);
   font-size: 12px;
   line-height: 1.35;
   white-space: pre-wrap;
