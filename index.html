@@ -8,12 +8,12 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="Cache-Control"/>
 <meta content="no-cache" http-equiv="Pragma"/>
 <meta content="0" http-equiv="Expires"/>
-<link href="./styles.css?v=dDAE_2.010" rel="stylesheet"/>
-<link href="./manifest.json?v=dDAE_2.010" rel="manifest"/>
-<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.010" rel="apple-touch-icon" sizes="180x180"/>
-<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.010" rel="apple-touch-icon-precomposed" sizes="180x180"/>
-<link href="./assets/icons/favicon-32.png?v=dDAE_2.010" rel="icon" sizes="32x32" type="image/png"/>
-<link href="./assets/icons/favicon-16.png?v=dDAE_2.010" rel="icon" sizes="16x16" type="image/png"/>
+<link href="./styles.css?v=dDAE_2.011" rel="stylesheet"/>
+<link href="./manifest.json?v=dDAE_2.011" rel="manifest"/>
+<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.011" rel="apple-touch-icon" sizes="180x180"/>
+<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.011" rel="apple-touch-icon-precomposed" sizes="180x180"/>
+<link href="./assets/icons/favicon-32.png?v=dDAE_2.011" rel="icon" sizes="32x32" type="image/png"/>
+<link href="./assets/icons/favicon-16.png?v=dDAE_2.011" rel="icon" sizes="16x16" type="image/png"/>
 <meta content="#ffffff" name="theme-color"/>
 <meta content="yes" name="apple-mobile-web-app-capable"/>
 <meta content="Daedalium PMS" name="apple-mobile-web-app-title"/>
@@ -23,7 +23,7 @@
 <header class="topbar">
 <div class="brand">
 <div class="brand-left">
-<img alt="Daedalium logo" class="logo" src="./assets/logo.jpg?v=dDAE_2.010"/>
+<img alt="Daedalium logo" class="logo" src="./assets/logo.jpg?v=dDAE_2.011"/>
 <h1>Daedalium PMS</h1>
 </div>
 <div class="brand-right">
@@ -62,7 +62,23 @@
 </svg>
 </button>
 </div>
-<div hidden="" id="speseTopTools"><button aria-label="Aggiungi spesa" class="icon-btn icon-btn-whiteorange" id="btnAddSpesa" type="button"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg></button><button aria-label="Grafico e riepilogo" class="icon-btn icon-btn-whiteblue" id="btnSpeseInsights" type="button"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24"><path d="M4 19V5"></path><path d="M4 19h16"></path><path d="M8 17v-6"></path><path d="M12 17V7"></path><path d="M16 17v-3"></path></svg></button></div><button aria-label="Home" class="icon-btn-whiteblack icon-btn" id="hamburgerBtn"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5"></path><path d="M5 10v11h14V10"></path><path d="M9 21v-6h6v6"></path></svg></button>
+<div hidden="" id="speseTopTools"><button aria-label="Aggiungi spesa" class="icon-btn icon-btn-whiteorange" id="btnAddSpesa" type="button"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg></button><button aria-label="Grafico e riepilogo" class="icon-btn icon-btn-whiteblue" id="btnSpeseInsights" type="button"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24"><path d="M4 19V5"></path><path d="M4 19h16"></path><path d="M8 17v-6"></path><path d="M12 17V7"></path><path d="M16 17v-3"></path></svg></button></div>
+<div hidden="" id="statGenTopTools">
+<button aria-label="Torna a Statistiche" class="icon-btn icon-btn-whiteorange" id="btnBackStatistiche" type="button">
+<svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24">
+<path d="M10 14.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"></path>
+<path d="M14.5 21a5.5 5.5 0 0 0 0-11"></path>
+<path d="M14.5 10V3"></path>
+</svg>
+</button>
+<button aria-label="Apri grafico" class="icon-btn icon-btn-whiteblue" id="btnStatPie" type="button">
+<svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24">
+<path d="M12 12V2a10 10 0 1 1-10 10h10Z"></path>
+<path d="M14 2.2A10 10 0 0 1 21.8 10H14V2.2Z"></path>
+</svg>
+</button>
+</div>
+<button aria-label="Home" class="icon-btn-whiteblack icon-btn" id="hamburgerBtn"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5"></path><path d="M5 10v11h14V10"></path><path d="M9 21v-6h6v6"></path></svg></button>
 </div>
 </div>
 </header>
@@ -72,7 +88,7 @@
 <div class="auth-page">
 <div class="auth-card">
 <div class="auth-logo-wrap">
-<img alt="Daedalium" class="auth-logo" src="./assets/logo.jpg?v=dDAE_2.010"/>
+<img alt="Daedalium" class="auth-logo" src="./assets/logo.jpg?v=dDAE_2.011"/>
 </div>
 <div class="field float">
 <input autocomplete="username" id="authUsername" placeholder=" "/>
@@ -183,14 +199,14 @@
 </svg></div>
 <div class="home-main-label">Lavanderia</div>
 </button>
-<button aria-label="Guadagni" class="home-main" id="goGuadagni" type="button">
+<button aria-label="Statistiche" class="home-main" id="goStatistiche" type="button">
 <div aria-hidden="true" class="home-main-glyph"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24">
 <path d="M7 9V7.5A2.5 2.5 0 0 1 9.5 5h5A2.5 2.5 0 0 1 17 7.5V9"></path>
 <path d="M6 9h12a2 2 0 0 1 2 2v7a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-7a2 2 0 0 1 2-2Z"></path>
 <path d="M9 15h6"></path>
 <path d="M12 12v6"></path>
 </svg></div>
-<div class="home-main-label">Guadagni</div>
+<div class="home-main-label">Statistiche</div>
 </button>
 <button aria-label="Impostazioni" class="home-main" id="goImpostazioni" type="button">
 <div aria-hidden="true" class="home-main-glyph alt"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24">
@@ -209,7 +225,96 @@
 
 
 
-</div><div class="home-gap"></div><div class="year-pill" hidden="" id="yearPill"></div><div class="build" id="buildText">dDAE_2.010</div></div></section>
+</div><div class="home-gap"></div><div class="year-pill" hidden="" id="yearPill"></div><div class="build" id="buildText">dDAE_2.011</div></div></section>
+
+<!-- STATISTICHE -->
+<section class="page" hidden="" id="page-statistiche">
+  <div class="stats-page">
+    <div class="stats-title">Statistiche</div>
+    <div aria-label="Sezioni statistiche" class="home-grid" role="navigation">
+      <button aria-label="Conteggio generale" class="home-main" id="goStatGen" type="button">
+        <div aria-hidden="true" class="home-main-glyph"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24">
+          <path d="M7 9V7.5A2.5 2.5 0 0 1 9.5 5h5A2.5 2.5 0 0 1 17 7.5V9"></path>
+          <path d="M6 9h12a2 2 0 0 1 2 2v7a3 3 0 0 1-3 3H7a3 3 0 0 1-3-3v-7a2 2 0 0 1 2-2Z"></path>
+          <path d="M9 15h6"></path>
+          <path d="M12 12v6"></path>
+        </svg></div>
+        <div class="home-main-label">Conteggio generale</div>
+      </button>
+
+      <button aria-label="Incassi mensili" class="home-main" id="goStatMensili" type="button">
+        <div aria-hidden="true" class="home-main-glyph alt"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24">
+          <path d="M4 19V5"></path>
+          <path d="M4 19h16"></path>
+          <path d="M8 17v-6"></path>
+          <path d="M12 17V7"></path>
+          <path d="M16 17v-3"></path>
+        </svg></div>
+        <div class="home-main-label">Incassi mensili</div>
+      </button>
+
+      <button aria-label="Spese" class="home-main" id="goStatSpese" type="button">
+        <div aria-hidden="true" class="home-main-glyph"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24">
+          <path d="M9 6.5h6"></path>
+          <path d="M9 6.5V5.5A2.5 2.5 0 0 1 11.5 3h1A2.5 2.5 0 0 1 15 5.5v1"></path>
+          <path d="M4.5 9.5h15a2 2 0 0 1 2 2v6.5a3 3 0 0 1-3 3h-13a3 3 0 0 1-3-3V11.5a2 2 0 0 1 2-2Z"></path>
+          <path d="M4.5 13h15"></path>
+        </svg></div>
+        <div class="home-main-label">Spese</div>
+      </button>
+
+      <button aria-label="Statistiche prenotazione" class="home-main" id="goStatPrenotazioni" type="button">
+        <div aria-hidden="true" class="home-main-glyph alt"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24">
+          <path d="M7 3v3"></path>
+          <path d="M17 3v3"></path>
+          <path d="M4.5 8h15"></path>
+          <path d="M6 6h12a2 2 0 0 1 2 2v12a2 2 0 0 1-2 2H6a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2Z"></path>
+          <path d="M8 12h.01"></path><path d="M12 12h.01"></path><path d="M16 12h.01"></path>
+          <path d="M8 16h.01"></path><path d="M12 16h.01"></path><path d="M16 16h.01"></path>
+        </svg></div>
+        <div class="home-main-label">Prenotazioni</div>
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- STATISTICHE: CONTEGGIO GENERALE -->
+<section class="page" hidden="" id="page-statgen">
+  <div class="stats-gen">
+    <div class="stats-title">Conteggio generale</div>
+    <div class="stats-stack">
+      <button class="stat-row" style="--statbg:#ff7a1a" type="button">
+        <span class="stat-name">Fatturato totale</span>
+        <span class="stat-val" id="sgFatturato">€0,00</span>
+      </button>
+      <button class="stat-row" style="--statbg:#0ea5e9" type="button">
+        <span class="stat-name">Spese totali</span>
+        <span class="stat-val" id="sgSpese">€0,00</span>
+      </button>
+      <button class="stat-row" style="--statbg:#a855f7" type="button">
+        <span class="stat-name">Importo senza ricevuta fiscale</span>
+        <span class="stat-val" id="sgNoRicevuta">€0,00</span>
+      </button>
+      <button class="stat-row" style="--statbg:#22c55e" type="button">
+        <span class="stat-name">Importo con ricevuta fiscale</span>
+        <span class="stat-val" id="sgRicevuta">€0,00</span>
+      </button>
+      <button class="stat-row" style="--statbg:#f59e0b" type="button">
+        <span class="stat-name">IVA da versare</span>
+        <span class="stat-val" id="sgIva">€0,00</span>
+      </button>
+      <button class="stat-row" style="--statbg:#f43f5e" type="button">
+        <span class="stat-name">Guadagno totale</span>
+        <span class="stat-val" id="sgGuadagno">€0,00</span>
+      </button>
+      <button class="stat-row" style="--statbg:#0f766e" type="button">
+        <span class="stat-name">Giacenza in cassa</span>
+        <span class="stat-val" id="sgCassa">€0,00</span>
+      </button>
+    </div>
+  </div>
+</section>
+
 <section class="page" hidden="" id="page-impostazioni">
 <div class="card">
 <div class="hd">
@@ -857,8 +962,8 @@
 </div>
 </div>
 </div>
-<script defer="" src="./config.js?v=dDAE_2.010"></script>
-<script defer="" src="./app.js?v=dDAE_2.010"></script>
+<script defer="" src="./config.js?v=dDAE_2.011"></script>
+<script defer="" src="./app.js?v=dDAE_2.011"></script>
 <!-- TAX REPORT MODAL -->
 <div aria-hidden="true" class="modal" hidden="" id="taxReportModal">
 <div aria-labelledby="taxReportTitle" aria-modal="true" class="modal-card tax-report-card" role="dialog">
@@ -889,6 +994,18 @@
 <button aria-label="Chiudi" class="btn ghost clean-info-close" id="cleanHeaderClose" type="button">✕</button>
 <div class="clean-info-text" id="cleanHeaderText">—</div>
 </div>
+</div>
+
+<!-- STATISTICHE: PIE MODAL -->
+<div aria-hidden="true" class="modal" hidden="" id="statPieModal">
+  <div aria-modal="true" class="modal-card stat-pie-card" role="dialog">
+    <button aria-label="Chiudi" class="stat-modal-close" id="statPieClose" type="button">✕</button>
+    <div class="stat-pie-title">Grafico</div>
+    <div class="pie-wrap">
+      <canvas id="statPieCanvas"></canvas>
+    </div>
+    <div class="pie-legend" id="statPieLegend"></div>
+  </div>
 </div>
 </body>
 </html>
