@@ -3,9 +3,9 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "2.001";
+const BUILD_VERSION = "2.000";
 
-// dDAE_2.001 — Auth
+// dDAE_2.002 — Auth
 let __APP_DATA_LOADED = false;
 let __AFTER_LOGIN_TARGET_PAGE = "home";
 
@@ -420,7 +420,7 @@ guestMarriage: false,
   // Impostazioni (foglio "impostazioni")
   settings: { loaded: false, byKey: {}, rows: [], loadedAt: 0 },
 
-  // Auth/session (dDAE_2.001)
+  // Auth/session (dDAE_2.002)
   session: { user_id: "", username: "", nome: "", ruolo: "", anno: "" },
 };
 
@@ -946,7 +946,7 @@ async function api(action, { method="GET", params={}, body=null, showLoader=true
   // Cache-busting for iOS/Safari aggressive caching
   url.searchParams.set("_ts", String(Date.now()));
 
-  // Session params (user_id + anno) — dDAE_2.001
+  // Session params (user_id + anno) — dDAE_2.002
   try{
     const sess = state && state.session ? state.session : null;
     if (sess && sess.user_id && sess.anno && !["login","utenti"].includes(action)){
@@ -3194,7 +3194,7 @@ function renderGuestCards(){
 
 
 // =========================
-// LOGIN / ACCOUNT (dDAE_2.001)
+// LOGIN / ACCOUNT (dDAE_2.002)
 // =========================
 
 function __loadSessionDraft(){
@@ -4063,7 +4063,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 
 
 
-  // AUTH gate (dDAE_2.001)
+  // AUTH gate (dDAE_2.002)
   __AFTER_LOGIN_TARGET_PAGE = (__restore && __restore.page) ? __restore.page : "home";
   setupLogin();
   showPage("login");
