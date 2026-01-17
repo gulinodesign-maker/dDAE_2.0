@@ -3,10 +3,26 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.015";
+const BUILD_VERSION = "dDAE_2.016";
+
+
+function __parseBuildVersion(v){
+  try{
+    const m = String(v||'').match(/dDAE_(\d+)\.(\d+)/);
+    if(!m) return null;
+    return {maj:Number(m[1]), min:Number(m[2])};
+  }catch(_){ return null; }
+}
+function __isRemoteNewer(remote, local){
+  const r = __parseBuildVersion(remote);
+  const l = __parseBuildVersion(local);
+  if(!r || !l) return String(remote).trim() !== String(local).trim();
+  if(r.maj !== l.maj) return r.maj > l.maj;
+  return r.min > l.min;
+}
 
 // =========================
-// AUTH + SESSION (dDAE_2.008)
+// AUTH + SESSION (dDAE_2.016)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -89,7 +105,7 @@ async function hardUpdateCheck(){
     if (!res.ok) return;
     const data = await res.json();
     const remote = String(data?.build || "").trim();
-    if (!remote || remote === BUILD_VERSION) return;
+    if (!remote || !__isRemoteNewer(remote, BUILD_VERSION)) return;
 
     try{ toast(`Aggiornamento ${remote}…`); } catch(_) {}
 
@@ -432,7 +448,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_1.229 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.016 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -1836,7 +1852,7 @@ state.page = page;
   if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_1.229: fallback visualizzazione Pulizie
+  // dDAE_2.016: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -2607,7 +2623,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.015)
+// STATISTICHE (dDAE_2.016)
 // =========================
 
 function computeStatGen(){
@@ -4357,7 +4373,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_1.229) =====
+// ===== CALENDARIO (dDAE_2.016) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -4713,7 +4729,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_1.229)
+   Lavanderia (dDAE_2.016)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -4964,24 +4980,18 @@ async function registerSW(){
       updateViaCache: "none"
     });
 
-    const checkUpdate = async () => {
-      try {
-        const cur = await navigator.serviceWorker.getRegistration();
-        if (!cur) return;
-        // Se la registration e' stata invalidata/unregistered, update() puo' lanciare.
-        // Chiudiamo in try/catch per evitare crash.
-        await cur.update();
-      } catch (_) {}
+    const checkUpdate = () => {
+      try { reg?.update?.(); } catch (_) {}
     };
 
     // check immediato + quando torna in primo piano
     checkUpdate();
-    window.addEventListener("focus", () => { checkUpdate(); });
+    window.addEventListener("focus", checkUpdate);
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden) checkUpdate();
     });
     // check periodico (non invasivo)
-    setInterval(() => { checkUpdate(); }, 60 * 60 * 1000);
+    setInterval(checkUpdate, 60 * 60 * 1000);
 
     // Se viene trovata una nuova versione, prova ad attivarla subito
     reg.addEventListener("updatefound", () => {
@@ -5122,7 +5132,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_1.229: renderSpese allineato al backend ---
+// --- FIX dDAE_2.016: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -5218,7 +5228,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_1.229: delete reale ospiti ---
+// --- FIX dDAE_2.016: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -5253,7 +5263,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_1.229: mostra nome ospite ---
+// --- FIX dDAE_2.016: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -5507,7 +5517,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_1.229
+   Build: dDAE_2.016
 ========================= */
 
 state.orepulizia = state.orepulizia || {
