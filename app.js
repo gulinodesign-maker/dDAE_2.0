@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.013";
+const BUILD_VERSION = "dDAE_2.014";
 
 // =========================
 // AUTH + SESSION (dDAE_2.008)
@@ -2607,7 +2607,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.013)
+// STATISTICHE (dDAE_2.014)
 // =========================
 
 function computeStatGen(){
@@ -2644,7 +2644,7 @@ function computeStatGen(){
   }
 
   const speseTot = Number(report?.totals?.importoLordo || 0) || 0;
-  const ivaDaVersare = 0; // placeholder: verrà definito con regole fiscali
+  const ivaDaVersare = conRicevuta * 0.10;
   const guadagno = fatturato - speseTot;
 
   return {
@@ -2688,13 +2688,13 @@ function openStatPieModal(){
 
   const s = state.statGen || computeStatGen();
   const slices = [
-    { key:"fatturato", label:"Fatturato totale", value:s.fatturatoTotale, color:"#ff7a1a" },
-    { key:"spese", label:"Spese totali", value:s.speseTotali, color:"#0ea5e9" },
-    { key:"noR", label:"Senza ricevuta", value:s.senzaRicevuta, color:"#a855f7" },
-    { key:"R", label:"Con ricevuta", value:s.conRicevuta, color:"#22c55e" },
-    { key:"iva", label:"IVA da versare", value:s.ivaDaVersare, color:"#f59e0b" },
-    { key:"gua", label:"Guadagno", value:Math.max(0, Number(s.guadagnoTotale || 0)), color:"#f43f5e" },
-    { key:"cash", label:"Cassa", value:s.giacenzaCassa, color:"#0f766e" },
+    { key:"fatturato", label:"Fatturato totale", value:s.fatturatoTotale, color:"#ef4444" },
+    { key:"spese", label:"Spese totali", value:s.speseTotali, color:"#f97316" },
+    { key:"noR", label:"Senza ricevuta", value:s.senzaRicevuta, color:"#f59e0b" },
+    { key:"R", label:"Con ricevuta", value:s.conRicevuta, color:"#84cc16" },
+    { key:"iva", label:"IVA da versare", value:s.ivaDaVersare, color:"#22c55e" },
+    { key:"gua", label:"Guadagno", value:Math.max(0, Number(s.guadagnoTotale || 0)), color:"#3b82f6" },
+    { key:"cash", label:"Cassa", value:s.giacenzaCassa, color:"#6366f1" },
   ];
 
   drawPie("statPieCanvas", slices);

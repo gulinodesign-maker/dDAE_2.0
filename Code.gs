@@ -1296,63 +1296,6 @@ function findUserByUsername_(rows, username){
   return null;
 }
 
-// Riscrive un foglio preservando la header row esistente.
-// NB: cancella i contenuti eccedenti ma non rimuove formattazioni.
-function rewriteSheetFromObjects_(sh, headers, rows){
-  headers = Array.isArray(headers) ? headers : [];
-  rows = Array.isArray(rows) ? rows : [];
-
-  const out = [headers];
-  for (const r of rows){
-    out.push(buildRowFromHeaders_(headers, r || {}));
-  }
-
-  const needRows = Math.max(1, out.length);
-  const needCols = Math.max(1, headers.length);
-
-  if (sh.getMaxColumns() < needCols) sh.insertColumnsAfter(sh.getMaxColumns(), needCols - sh.getMaxColumns());
-  if (sh.getMaxRows() < needRows) sh.insertRowsAfter(sh.getMaxRows(), needRows - sh.getMaxRows());
-
-  // Clear old contents (only used range)
-  sh.getRange(1, 1, sh.getMaxRows(), needCols).clearContent();
-  sh.getRange(1, 1, out.length, needCols).setValues(out);
-}
-
-function purgeUserFromSheet_(sheetName, uid){
-  const sh = getSheet_(sheetName);
-  const data = readAll_(sh);
-  const headers = data.headers || [];
-  const rows = data.rows || [];
-  const keep = rows.filter(r => String(r.user_id || r.userId || "").trim() !== uid);
-  rewriteSheetFromObjects_(sh, headers, keep);
-}
-
-function deleteUserRowById_(uid){
-  const sh = getSheet_(SHEETS.UTENTI);
-  const data = readAll_(sh);
-  const headers = data.headers || [];
-  const rows = data.rows || [];
-  const keep = rows.filter(r => String(r.id || r.ID || "").trim() !== uid);
-  rewriteSheetFromObjects_(sh, headers, keep);
-}
-
-function purgeAllUserData_(uid){
-  // Ripulisce tutti i fogli tenant-aware.
-  const targets = [
-    SHEETS.IMPOSTAZIONI,
-    SHEETS.OSPITI,
-    SHEETS.STANZE,
-    SHEETS.SPESE,
-    SHEETS.MOTIVAZIONI,
-    SHEETS.PULIZIE,
-    SHEETS.LAVANDERIA,
-    SHEETS.OPERATORI,
-  ];
-  for (const name of targets){
-    try{ purgeUserFromSheet_(name, uid); }catch(_){ }
-  }
-}
-
 function handleUtenti_(e, method){
   const sh = getSheet_(SHEETS.UTENTI);
 
@@ -1419,17 +1362,6 @@ function handleUtenti_(e, method){
     upd.updatedAt = nowIso;
     upsertById_(sh, upd, "id");
     return jsonOk_({ user: sanitizeUserOut_(upd) });
-  }
-
-  if (op === "delete"){
-    const uid = String(existing.id || existing.ID || existing.user_id || existing.userId || "").trim();
-    if (!uid) return jsonError_("ID utente mancante");
-
-    // 1) purge dati
-    purgeAllUserData_(uid);
-    // 2) elimina account
-    deleteUserRowById_(uid);
-    return jsonOk_({ deleted: true });
   }
 
   return jsonError_("Operazione utenti non valida: " + op);

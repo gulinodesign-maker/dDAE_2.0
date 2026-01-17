@@ -29,7 +29,7 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.013"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.014"),
     radial-gradient(900px 600px at 10% 0%, rgba(43,124,180,0.10), transparent 62%),
     radial-gradient(800px 520px at 90% 8%, rgba(201,119,43,0.10), transparent 64%),
     radial-gradient(900px 700px at 20% 100%, rgba(122,192,219,0.10), transparent 62%),
@@ -761,7 +761,7 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.013"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.014"),
     radial-gradient(900px 650px at 12% 8%, rgba(43,124,180,0.18), transparent 62%),
     radial-gradient(820px 560px at 92% 14%, rgba(201,119,43,0.16), transparent 62%),
     radial-gradient(900px 700px at 18% 96%, rgba(122,192,219,0.16), transparent 62%),
@@ -2065,7 +2065,7 @@ body[data-page="ospiti"] .guest-card .actions {
 /* dDAE_1.229 — Ospiti: azioni stile Apple (pallini verde/giallo/rosso) */
 
 /* =========================
-   dDAE_2.013 — Auth + Anno pill
+   dDAE_2.014 — Auth + Anno pill
 ========================= */
 
 .year-pill{
@@ -4951,7 +4951,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 }
 
 /* =========================
-   dDAE_2.013 — HOME: Year pill sopra le icone (>=30px)
+   dDAE_2.014 — HOME: Year pill sopra le icone (>=30px)
 ========================= */
 #page-home .home-page{
   display:flex;
@@ -5047,7 +5047,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 .settings-btn-logout{ background: rgba(201,119,43,0.40); }
 
 /* =========================
- * STATISTICHE (dDAE_2.013)
+ * STATISTICHE (dDAE_2.014)
  * - elementi appoggiati allo sfondo
  * - schede tinta unita 20% (se usate)
  * - tasti tinta unita 40%
@@ -5067,8 +5067,8 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 }
 
 .stats-divider{
-  height: 2px;
-  background: #000;
+  height: 1px;
+  background: var(--border);
   width: 100vw;
   margin: 0 0 14px;
   margin-left: calc(50% - 50vw);
@@ -5092,10 +5092,9 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 }
 
 .stats-page .home-main-glyph{
-  width: 100%;
-  aspect-ratio: 1/1;
-  max-width: 170px;
-  border-radius: 0px;
+  width: 118px;
+  height: 118px;
+  border-radius: 34px;
   display: flex;
   align-items: center;
   justify-content: center;
@@ -5138,8 +5137,8 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   border: 0;
   width: 100%;
   text-align: left;
-  padding: 12px 12px;
-  border-radius: 16px;
+  padding: 18px 16px;
+  border-radius: 22px;
   background: rgba(0,0,0,0.0);
   position: relative;
   overflow: hidden;
@@ -5163,7 +5162,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   content: "";
   position: absolute;
   inset: 1px;
-  border-radius: 15px;
+  border-radius: 21px;
   border: 1px solid rgba(255,255,255,0.22);
 }
 
@@ -5174,13 +5173,13 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 
 .stat-name{
   font-weight: 900;
-  font-size: 14px;
+  font-size: 18px;
   line-height: 1.15;
 }
 
 .stat-val{
   font-weight: 950;
-  font-size: 15px;
+  font-size: 20px;
   letter-spacing: 0.2px;
   white-space: nowrap;
 }
@@ -5192,6 +5191,19 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   border-radius: 22px;
   padding: 16px 14px 14px;
   position: relative;
+}
+
+/* Statistiche: centra il grafico nel popup */
+#statPieModal .pie-wrap{
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  width: 100%;
+}
+#statPieModal .pie-wrap canvas{
+  display: block;
+  width: min(320px, 78vw);
+  height: min(320px, 78vw);
 }
 
 .stat-pie-title{
