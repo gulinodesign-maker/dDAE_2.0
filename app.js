@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.011";
+const BUILD_VERSION = "dDAE_2.012";
 
 // =========================
 // AUTH + SESSION (dDAE_2.008)
@@ -1589,7 +1589,12 @@ function bindFastTap(el, fn){
 
   // In PWA iOS/Safari: evita doppi trigger (touch/pointer/click)
   const usePointer = (typeof window !== "undefined") && ("PointerEvent" in window);
-  const events = usePointer ? ["pointerup", "click"] : ["touchend", "click"];
+  // NOTA: non aggiungere anche 'click' quando usiamo PointerEvent.
+  // In Safari/PWA iOS alcuni elementi ricevono un click sintetico dopo pointerup,
+  // che qui veniva bloccato da stopPropagation/preventDefault e faceva sembrare l'app "bloccata".
+  // Su iOS/Safari PWA il mix pointerup+click può bloccare il tap sulle icone.
+  // Usiamo un solo evento: pointerup se disponibile, altrimenti click.
+  const events = usePointer ? ["pointerup"] : ["click"];
 
   for (const evt of events){
     try{ el.addEventListener(evt, handler, { passive:false }); }
