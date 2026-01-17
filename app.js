@@ -3,10 +3,10 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.007";
+const BUILD_VERSION = "dDAE_2.008";
 
 // =========================
-// AUTH + SESSION (dDAE_2.007)
+// AUTH + SESSION (dDAE_2.008)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -50,9 +50,27 @@ function updateYearPill(){
   if (!y){ pill.hidden = true; return; }
   pill.textContent = `ANNO ${y}`;
   pill.hidden = false;
+  try{ updateSettingsTabs(); }catch(_){ }
 }
 
+function updateSettingsTabs(){
+  try{
+    const yEl = document.getElementById("settingsYearTab");
+    const aEl = document.getElementById("settingsAccountTab");
 
+    if (yEl){
+      const y = String(state.exerciseYear || "").trim();
+      yEl.textContent = y ? `ANNO ${y}` : "ANNO";
+    }
+
+    if (aEl){
+      const s = state.session || {};
+      const raw = (s.username || s.user || s.nome || s.name || s.email || "").toString().trim();
+      const label = raw ? raw : "—";
+      aEl.textContent = `ACCOUNT ${label}`;
+    }
+  }catch(_){ }
+}
 
 
 // Mostra la build a runtime (se il JS è vecchio, lo vedi subito)
@@ -1675,6 +1693,11 @@ state.page = page;
   document.querySelectorAll(".page").forEach(s => s.hidden = true);
   const el = $(`#page-${page}`);
   if (el) el.hidden = false;
+
+  // Impostazioni: aggiorna tabs (account + anno)
+  if (page === "impostazioni"){
+    try{ updateSettingsTabs(); }catch(_){ }
+  }
 
   // Sotto-viste della pagina Spese (lista ↔ grafico+riepilogo)
   if (page === "spese") {

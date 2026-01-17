@@ -29,7 +29,7 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.007"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.008"),
     radial-gradient(900px 600px at 10% 0%, rgba(43,124,180,0.10), transparent 62%),
     radial-gradient(800px 520px at 90% 8%, rgba(201,119,43,0.10), transparent 64%),
     radial-gradient(900px 700px at 20% 100%, rgba(122,192,219,0.10), transparent 62%),
@@ -759,7 +759,7 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.007"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.008"),
     radial-gradient(900px 650px at 12% 8%, rgba(43,124,180,0.18), transparent 62%),
     radial-gradient(820px 560px at 92% 14%, rgba(201,119,43,0.16), transparent 62%),
     radial-gradient(900px 700px at 18% 96%, rgba(122,192,219,0.16), transparent 62%),
@@ -2063,7 +2063,7 @@ body[data-page="ospiti"] .guest-card .actions {
 /* dDAE_1.229 — Ospiti: azioni stile Apple (pallini verde/giallo/rosso) */
 
 /* =========================
-   dDAE_2.007 — Auth + Anno pill
+   dDAE_2.008 — Auth + Anno pill
 ========================= */
 
 .year-pill{
@@ -4949,7 +4949,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 }
 
 /* =========================
-   dDAE_2.007 — HOME: Year pill bottom-center, 100px under icons grid
+   dDAE_2.008 — HOME: Year pill bottom-center, 100px under icons grid
 ========================= */
 #page-home .home-page{
   display:flex;
@@ -4974,3 +4974,74 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   padding-bottom: calc(10px + var(--safe-bottom));
   position: static;
 }
+
+
+/* ============================
+   IMPOSTAZIONI: tabs (Account + Anno) e azioni (Salva/Ricarica/Logout)
+============================ */
+.settings-tabs{
+  display:flex;
+  gap: 10px;
+  align-items: center;
+}
+.settings-tab{
+  flex: 1;
+  height: 44px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.70);
+  backdrop-filter: blur(12px);
+  -webkit-backdrop-filter: blur(12px);
+  box-shadow: 0 10px 26px rgba(15,23,42,0.10);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding: 0 10px;
+  font-size: 12px;
+  font-weight: 950;
+  letter-spacing: 0.2px;
+  color: rgba(15,23,42,0.86);
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.row.settings-actions{
+  display:flex;
+  gap: 10px;
+  flex-wrap: nowrap;
+  align-items:center;
+}
+
+.settings-btn{
+  flex: 1;
+  min-height: 48px;
+  border-radius: 16px;
+  border: 1px solid rgba(15,23,42,0.10);
+  background: rgba(255,255,255,0.40);
+  box-shadow: 0 10px 26px rgba(15,23,42,0.10);
+  -webkit-tap-highlight-color: transparent;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding: 0;
+  cursor: pointer;
+  backdrop-filter: none;
+  -webkit-backdrop-filter: none;
+}
+.settings-btn:active{ transform: scale(0.98); }
+
+.settings-btn .ui-ico{
+  width: 22px;
+  height: 22px;
+  stroke: rgba(255,255,255,0.96);
+  fill: none;
+  stroke-width: 2.4;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+}
+
+/* colori: azzurro / grigio / arancione (40% opacita') */
+.settings-btn-save{ background: rgba(122,192,219,0.40); }
+.settings-btn-reload{ background: rgba(31,41,55,0.40); }
+.settings-btn-logout{ background: rgba(201,119,43,0.40); }
