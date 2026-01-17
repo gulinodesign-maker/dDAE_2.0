@@ -29,7 +29,7 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.005"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.006"),
     radial-gradient(900px 600px at 10% 0%, rgba(43,124,180,0.10), transparent 62%),
     radial-gradient(800px 520px at 90% 8%, rgba(201,119,43,0.10), transparent 64%),
     radial-gradient(900px 700px at 20% 100%, rgba(122,192,219,0.10), transparent 62%),
@@ -759,7 +759,7 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.005"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.006"),
     radial-gradient(900px 650px at 12% 8%, rgba(43,124,180,0.18), transparent 62%),
     radial-gradient(820px 560px at 92% 14%, rgba(201,119,43,0.16), transparent 62%),
     radial-gradient(900px 700px at 18% 96%, rgba(122,192,219,0.16), transparent 62%),
@@ -2063,7 +2063,7 @@ body[data-page="ospiti"] .guest-card .actions {
 /* dDAE_1.229 — Ospiti: azioni stile Apple (pallini verde/giallo/rosso) */
 
 /* =========================
-   dDAE_2.005 — Auth + Anno pill
+   dDAE_2.006 — Auth + Anno pill
 ========================= */
 
 .year-pill{
@@ -2079,6 +2079,12 @@ body[data-page="ospiti"] .guest-card .actions {
   background: rgba(140, 165, 190, 0.22);
   color: rgba(18, 36, 52, 0.75);
   margin: 0 auto 8px auto;
+}
+
+.btn.logout-orange{
+  background: rgba(255, 149, 0, 0.40) !important;
+  border: 1px solid rgba(255, 149, 0, 0.35) !important;
+  color: rgba(255,255,255,0.96) !important;
 }
 
 .auth-page{
@@ -4943,7 +4949,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 }
 
 /* =========================
-   dDAE_2.005 — HOME: Year pill bottom-center, 100px under icons grid
+   dDAE_2.006 — HOME: Year pill bottom-center, 100px under icons grid
 ========================= */
 #page-home .home-page{
   display:flex;
@@ -4959,6 +4965,9 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 }
 #page-home .year-pill{
   margin: 0;
+  padding: 11px 22px;
+  font-size: 22px;
+  letter-spacing: 1px;
 }
 #page-home .build{
   margin-top: 12px;

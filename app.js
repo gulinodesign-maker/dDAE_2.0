@@ -3,10 +3,10 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.005";
+const BUILD_VERSION = "dDAE_2.006";
 
 // =========================
-// AUTH + SESSION (dDAE_2.005)
+// AUTH + SESSION (dDAE_2.006)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -1254,6 +1254,15 @@ function setupImpostazioni() {
   if (reload) reload.addEventListener("click", async () => {
     try { await loadImpostazioniPage({ force: true }); toast("Impostazioni ricaricate"); } catch (e) { toast(e.message); }
   });
+
+  const logout = document.getElementById("settingsLogoutBtn");
+  if (logout) logout.addEventListener("click", () => {
+    try{ clearSession(); }catch(_){ }
+    try{ state.session = null; }catch(_){ }
+    try{ invalidateApiCache(); }catch(_){ }
+    try{ showPage("auth"); }catch(_){ }
+  });
+
 
   // Anno di esercizio
   const selAnno = document.getElementById("setAnno");
