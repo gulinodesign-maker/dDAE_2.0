@@ -8,12 +8,12 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="Cache-Control"/>
 <meta content="no-cache" http-equiv="Pragma"/>
 <meta content="0" http-equiv="Expires"/>
-<link href="./styles.css?v=dDAE_2.018" rel="stylesheet"/>
-<link href="./manifest.json?v=dDAE_2.018" rel="manifest"/>
-<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.018" rel="apple-touch-icon" sizes="180x180"/>
-<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.018" rel="apple-touch-icon-precomposed" sizes="180x180"/>
-<link href="./assets/icons/favicon-32.png?v=dDAE_2.018" rel="icon" sizes="32x32" type="image/png"/>
-<link href="./assets/icons/favicon-16.png?v=dDAE_2.018" rel="icon" sizes="16x16" type="image/png"/>
+<link href="./styles.css?v=dDAE_2.019" rel="stylesheet"/>
+<link href="./manifest.json?v=dDAE_2.019" rel="manifest"/>
+<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.019" rel="apple-touch-icon" sizes="180x180"/>
+<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.019" rel="apple-touch-icon-precomposed" sizes="180x180"/>
+<link href="./assets/icons/favicon-32.png?v=dDAE_2.019" rel="icon" sizes="32x32" type="image/png"/>
+<link href="./assets/icons/favicon-16.png?v=dDAE_2.019" rel="icon" sizes="16x16" type="image/png"/>
 <meta content="#ffffff" name="theme-color"/>
 <meta content="yes" name="apple-mobile-web-app-capable"/>
 <meta content="Daedalium PMS" name="apple-mobile-web-app-title"/>
@@ -23,7 +23,7 @@
 <header class="topbar">
 <div class="brand">
 <div class="brand-left">
-<img alt="Daedalium logo" class="logo" src="./assets/logo.jpg?v=dDAE_2.018"/>
+<img alt="Daedalium logo" class="logo" src="./assets/logo.jpg?v=dDAE_2.019"/>
 <h1>Daedalium PMS</h1>
 </div>
 <div class="brand-right">
@@ -88,7 +88,7 @@
 <div class="auth-page">
 <div class="auth-card">
 <div class="auth-logo-wrap">
-<img alt="Daedalium" class="auth-logo" src="./assets/logo.jpg?v=dDAE_2.018"/>
+<img alt="Daedalium" class="auth-logo" src="./assets/logo.jpg?v=dDAE_2.019"/>
 </div>
 <div class="field float">
 <input autocomplete="username" id="authUsername" placeholder=" "/>
@@ -169,7 +169,7 @@
 <path d="M4.5 9.5h15a2 2 0 0 1 2 2v6.5a3 3 0 0 1-3 3h-13a3 3 0 0 1-3-3V11.5a2 2 0 0 1 2-2Z"></path>
 <path d="M4.5 13h15"></path>
 </svg></div>
-<div class="home-main-label">Spese</div>
+<div class="home-main-label">Spese generali</div>
 </button>
 <button aria-label="Tassa di soggiorno" class="home-main" id="goTassaSoggiorno" type="button">
 <div aria-hidden="true" class="home-main-glyph"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24">
@@ -225,7 +225,7 @@
 
 
 
-</div><div class="build" id="buildText">dDAE_2.018</div></div></section>
+</div><div class="build" id="buildText">dDAE_2.019</div></div></section>
 
 <!-- STATISTICHE -->
 <section class="page" hidden="" id="page-statistiche">
@@ -254,14 +254,14 @@
         <div class="home-main-label">Incassi mensili</div>
       </button>
 
-      <button aria-label="Spese" class="home-main" id="goStatSpese" type="button">
+      <button aria-label="Spese generali" class="home-main" id="goStatSpese" type="button">
         <div aria-hidden="true" class="home-main-glyph"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24">
           <path d="M9 6.5h6"></path>
           <path d="M9 6.5V5.5A2.5 2.5 0 0 1 11.5 3h1A2.5 2.5 0 0 1 15 5.5v1"></path>
           <path d="M4.5 9.5h15a2 2 0 0 1 2 2v6.5a3 3 0 0 1-3 3h-13a3 3 0 0 1-3-3V11.5a2 2 0 0 1 2-2Z"></path>
           <path d="M4.5 13h15"></path>
         </svg></div>
-        <div class="home-main-label">Spese</div>
+        <div class="home-main-label">Spese generali</div>
       </button>
 
       <button aria-label="Statistiche prenotazione" class="home-main" id="goStatPrenotazioni" type="button">
@@ -312,6 +312,36 @@
       <button class="stat-row" style="--statbg:#6366f1" type="button">
         <span class="stat-name">Giacenza in cassa</span>
         <span class="stat-val" id="sgCassa">€0,00</span>
+      </button>
+    </div>
+  </div>
+</section>
+
+<!-- STATISTICHE: SPESE GENERALI -->
+<section class="page" hidden="" id="page-statspese">
+  <div class="stats-gen">
+    <div class="stats-title">Spese generali</div>
+    <div class="stats-divider" aria-hidden="true"></div>
+    <div class="stats-stack">
+      <button class="stat-row" style="--statbg:var(--blue)" type="button">
+        <span class="stat-name">Contanti</span>
+        <span class="stat-val" id="ssContanti">€0,00</span>
+      </button>
+      <button class="stat-row" style="--statbg:var(--beige); --statfg:rgba(15,23,42,0.92)" type="button">
+        <span class="stat-name">Tassa soggiorno</span>
+        <span class="stat-val" id="ssTassa">€0,00</span>
+      </button>
+      <button class="stat-row" style="--statbg:var(--orange)" type="button">
+        <span class="stat-name">IVA 22%</span>
+        <span class="stat-val" id="ssIva22">€0,00</span>
+      </button>
+      <button class="stat-row" style="--statbg:var(--blue2); --statfg:rgba(15,23,42,0.92)" type="button">
+        <span class="stat-name">IVA 10%</span>
+        <span class="stat-val" id="ssIva10">€0,00</span>
+      </button>
+      <button class="stat-row" style="--statbg:var(--black)" type="button">
+        <span class="stat-name">IVA 4%</span>
+        <span class="stat-val" id="ssIva4">€0,00</span>
       </button>
     </div>
   </div>
@@ -964,8 +994,8 @@
 </div>
 </div>
 </div>
-<script defer="" src="./config.js?v=dDAE_2.018"></script>
-<script defer="" src="./app.js?v=dDAE_2.018"></script>
+<script defer="" src="./config.js?v=dDAE_2.019"></script>
+<script defer="" src="./app.js?v=dDAE_2.019"></script>
 <!-- TAX REPORT MODAL -->
 <div aria-hidden="true" class="modal" hidden="" id="taxReportModal">
 <div aria-labelledby="taxReportTitle" aria-modal="true" class="modal-card tax-report-card" role="dialog">
@@ -1009,5 +1039,18 @@
     <div class="pie-legend" id="statPieLegend"></div>
   </div>
 </div>
+
+<!-- STATISTICHE: SPESE GENERALI PIE MODAL -->
+<div aria-hidden="true" class="modal" hidden="" id="statSpesePieModal">
+  <div aria-modal="true" class="modal-card stat-pie-card" role="dialog">
+    <button aria-label="Chiudi" class="stat-modal-close" id="statSpesePieClose" type="button">✕</button>
+    <div class="stat-pie-title">Grafico</div>
+    <div class="pie-wrap">
+      <canvas id="statSpesePieCanvas"></canvas>
+    </div>
+    <div class="pie-legend" id="statSpesePieLegend"></div>
+  </div>
+</div>
+
 </body>
 </html>

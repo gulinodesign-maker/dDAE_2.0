@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.018";
+const BUILD_VERSION = "dDAE_2.019";
 
 
 function __parseBuildVersion(v){
@@ -22,7 +22,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.018)
+// AUTH + SESSION (dDAE_2.019)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -448,7 +448,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.018 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.019 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -1649,7 +1649,7 @@ const lav = e.target.closest && e.target.closest("#goLavanderia") || e.target.cl
     const s2 = e.target.closest && e.target.closest("#goStatMensili");
     if (s2){ hideLauncher(); toast("Incassi mensili: in arrivo"); return; }
     const s3 = e.target.closest && e.target.closest("#goStatSpese");
-    if (s3){ hideLauncher(); toast("Spese: in arrivo"); return; }
+    if (s3){ hideLauncher(); showPage("statspese"); return; }
     const s4 = e.target.closest && e.target.closest("#goStatPrenotazioni");
     if (s4){ hideLauncher(); toast("Statistiche prenotazioni: in arrivo"); return; }
 
@@ -1800,6 +1800,12 @@ state.page = page;
     statGenTopTools.hidden = (page !== "statgen");
   }
 
+  // Top tools (Statistiche → Spese generali)
+  const statSpeseTopTools = $("#statSpeseTopTools");
+  if (statSpeseTopTools){
+    statSpeseTopTools.hidden = (page !== "statspese");
+  }
+
 // render on demand
   if (page === "spese") {
     const _nav = navId;
@@ -1838,6 +1844,7 @@ state.page = page;
 
   if (page === "statistiche") {
     try{ closeStatPieModal(); }catch(_){ }
+    try{ closeStatSpesePieModal(); }catch(_){ }
   }
 
   if (page === "statgen") {
@@ -1849,10 +1856,18 @@ state.page = page;
       .then(()=>{ if (state.navId !== _nav || state.page !== "statgen") return; renderStatGen(); })
       .catch(e=>toast(e.message));
   }
+
+  if (page === "statspese") {
+    const _nav = navId;
+    ensurePeriodData({ showLoader:true })
+      .then(()=>{ if (state.navId !== _nav || state.page !== "statspese") return; renderStatSpese(); })
+      .catch(e=>toast(e.message));
+  }
+
   if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.018: fallback visualizzazione Pulizie
+  // dDAE_2.019: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -2002,7 +2017,7 @@ if (goCalendarioTopOspiti){
   const s2 = $("#goStatMensili");
   if (s2){ bindFastTap(s2, () => toast("Incassi mensili: in arrivo")); }
   const s3 = $("#goStatSpese");
-  if (s3){ bindFastTap(s3, () => toast("Spese: in arrivo")); }
+  if (s3){ bindFastTap(s3, () => { hideLauncher(); showPage("statspese"); }); }
   const s4 = $("#goStatPrenotazioni");
   if (s4){ bindFastTap(s4, () => toast("Statistiche prenotazioni: in arrivo")); }
 
@@ -2017,6 +2032,21 @@ if (goCalendarioTopOspiti){
   if (statPieModal){
     statPieModal.addEventListener("click", (e)=>{
       if (e.target === statPieModal) closeStatPieModal();
+    });
+  }
+
+  // STATISTICHE: Spese generali topbar tools
+  const btnBackStatsSpese = $("#btnBackStatisticheSpese");
+  if (btnBackStatsSpese){ bindFastTap(btnBackStatsSpese, () => { closeStatSpesePieModal(); showPage("statistiche"); }); }
+  const btnPieSpese = $("#btnStatSpesePie");
+  if (btnPieSpese){ bindFastTap(btnPieSpese, () => { openStatSpesePieModal(); }); }
+
+  const statSpesePieClose = $("#statSpesePieClose");
+  if (statSpesePieClose){ bindFastTap(statSpesePieClose, () => closeStatSpesePieModal()); }
+  const statSpesePieModal = $("#statSpesePieModal");
+  if (statSpesePieModal){
+    statSpesePieModal.addEventListener("click", (e)=>{
+      if (e.target === statSpesePieModal) closeStatSpesePieModal();
     });
   }
 
@@ -2623,7 +2653,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.018)
+// STATISTICHE (dDAE_2.019)
 // =========================
 
 function computeStatGen(){
@@ -2660,7 +2690,43 @@ function computeStatGen(){
   }
 
   const speseTot = Number(report?.totals?.importoLordo || 0) || 0;
-  const ivaDaVersare = conRicevuta * 0.10;
+
+  // IVA da versare = IVA su incassi (10%) - IVA detraibile su spese (4/10/22)
+  let ivaSpese = Number(report?.totals?.ivaDetraibile || 0) || 0;
+  if (!isFinite(ivaSpese) || ivaSpese === 0){
+    try{
+      const items = Array.isArray(state.spese) ? state.spese : [];
+      let sum = 0;
+      for (const s of items){
+        const lordo = Number(s?.importoLordo || 0);
+        if (!isFinite(lordo) || lordo <= 0) continue;
+
+        const catRaw = (s?.categoria ?? s?.cat ?? "").toString().trim().toLowerCase();
+        let rate = 0;
+        if (catRaw.includes("iva")) {
+          if (catRaw.includes("22")) rate = 22;
+          else if (catRaw.includes("10")) rate = 10;
+          else if (catRaw.includes("4")) rate = 4;
+        } else {
+          const n = parseFloat(String(s?.aliquotaIva ?? s?.aliquota_iva ?? "").replace(",", "."));
+          if (!isNaN(n)) {
+            if (n >= 21.5) rate = 22;
+            else if (n >= 9.5 && n < 11.5) rate = 10;
+            else if (n >= 3.5 && n < 5.5) rate = 4;
+          }
+        }
+
+        if (rate > 0){
+          const imponibile = lordo / (1 + rate/100);
+          const iva = lordo - imponibile;
+          if (isFinite(iva)) sum += iva;
+        }
+      }
+      if (sum > 0) ivaSpese = sum;
+    }catch(_){ }
+  }
+
+  const ivaDaVersare = (conRicevuta * 0.10) - (Number(ivaSpese) || 0);
   const guadagno = fatturato - speseTot;
 
   return {
@@ -2738,6 +2804,131 @@ function openStatPieModal(){
 
 function closeStatPieModal(){
   const m = document.getElementById("statPieModal");
+  if (!m) return;
+  m.hidden = true;
+  m.setAttribute("aria-hidden", "true");
+}
+
+
+function computeStatSpese(){
+  const r = state.report || null;
+  const by = (r && r.byCategoria) ? r.byCategoria : null;
+
+  const get = (k) => {
+    try{ return Number(by?.[k]?.importoLordo || 0) || 0; }catch(_){ return 0; }
+  };
+
+  let contanti = get("CONTANTI");
+  let tassa = get("TASSA_SOGGIORNO");
+  let iva22 = get("IVA_22");
+  let iva10 = get("IVA_10");
+  let iva4 = get("IVA_4");
+
+  // Fallback: se il report non ha la breakdown, aggrega dalle spese
+  if (!by){
+    const items = Array.isArray(state.spese) ? state.spese : [];
+    const acc = { CONTANTI:0, TASSA_SOGGIORNO:0, IVA_22:0, IVA_10:0, IVA_4:0 };
+
+    for (const s of items){
+      const lordo = Number(s?.importoLordo || 0) || 0;
+      if (!isFinite(lordo) || lordo === 0) continue;
+
+      const catRaw = (s?.categoria ?? s?.cat ?? "").toString().trim().toLowerCase();
+
+      if (catRaw.includes("contant")) { acc.CONTANTI += lordo; continue; }
+      if (catRaw.includes("tassa") && catRaw.includes("sogg")) { acc.TASSA_SOGGIORNO += lordo; continue; }
+
+      if (catRaw.includes("iva")){
+        if (catRaw.includes("22")) { acc.IVA_22 += lordo; continue; }
+        if (catRaw.includes("10")) { acc.IVA_10 += lordo; continue; }
+        if (catRaw.includes("4")) { acc.IVA_4 += lordo; continue; }
+      }
+
+      // fallback su aliquota numerica
+      const n = parseFloat(String(s?.aliquotaIva ?? s?.aliquota_iva ?? "").replace(",","."));
+      if (!isNaN(n)){
+        if (n >= 21.5) acc.IVA_22 += lordo;
+        else if (n >= 9.5 && n < 11.5) acc.IVA_10 += lordo;
+        else if (n >= 3.5 && n < 5.5) acc.IVA_4 += lordo;
+      }
+    }
+
+    contanti = acc.CONTANTI;
+    tassa = acc.TASSA_SOGGIORNO;
+    iva22 = acc.IVA_22;
+    iva10 = acc.IVA_10;
+    iva4 = acc.IVA_4;
+  }
+
+  return {
+    contanti,
+    tassaSoggiorno: tassa,
+    iva22,
+    iva10,
+    iva4,
+  };
+}
+
+function renderStatSpese(){
+  const s = computeStatSpese();
+  state.statSpese = s;
+
+  const set = (id, v) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = euro(Number(v || 0));
+  };
+
+  set("ssContanti", s.contanti);
+  set("ssTassa", s.tassaSoggiorno);
+  set("ssIva22", s.iva22);
+  set("ssIva10", s.iva10);
+  set("ssIva4", s.iva4);
+}
+
+function openStatSpesePieModal(){
+  try{
+    if (!state.statSpese) state.statSpese = computeStatSpese();
+  }catch(_){ state.statSpese = state.statSpese || null; }
+
+  const m = document.getElementById("statSpesePieModal");
+  if (!m) return;
+  m.hidden = false;
+  m.setAttribute("aria-hidden", "false");
+
+  const s = state.statSpese || computeStatSpese();
+  const slices = [
+    { key:"CONTANTI", label: categoriaLabel("CONTANTI"), value:s.contanti, color:(COLORS.CONTANTI || "#2b7cb4") },
+    { key:"TASSA_SOGGIORNO", label: categoriaLabel("TASSA_SOGGIORNO"), value:s.tassaSoggiorno, color:(COLORS.TASSA_SOGGIORNO || "#d8bd97") },
+    { key:"IVA_22", label: categoriaLabel("IVA_22"), value:s.iva22, color:(COLORS.IVA_22 || "#c9772b") },
+    { key:"IVA_10", label: categoriaLabel("IVA_10"), value:s.iva10, color:(COLORS.IVA_10 || "#7ac0db") },
+    { key:"IVA_4", label: categoriaLabel("IVA_4"), value:s.iva4, color:(COLORS.IVA_4 || "#1f2937") },
+  ];
+
+  drawPie("statSpesePieCanvas", slices);
+
+  const leg = document.getElementById("statSpesePieLegend");
+  if (leg){
+    const total = slices.reduce((a,x)=>a+Math.max(0,Number(x.value||0)),0);
+    leg.innerHTML = "";
+    slices.forEach((sl)=>{
+      const v = Math.max(0, Number(sl.value || 0));
+      const pct = total > 0 ? (v/total*100) : 0;
+      const row = document.createElement("div");
+      row.className = "legrow";
+      row.innerHTML = `
+        <div class="legleft">
+          <div class="dot" style="background:${sl.color}"></div>
+          <div class="legname">${escapeHtml(sl.label)}</div>
+        </div>
+        <div class="legright">${pct.toFixed(1)}% · ${euro(v)}</div>
+      `;
+      leg.appendChild(row);
+    });
+  }
+}
+
+function closeStatSpesePieModal(){
+  const m = document.getElementById("statSpesePieModal");
   if (!m) return;
   m.hidden = true;
   m.setAttribute("aria-hidden", "true");
@@ -4373,7 +4564,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.018) =====
+// ===== CALENDARIO (dDAE_2.019) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -4729,7 +4920,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.018)
+   Lavanderia (dDAE_2.019)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -5132,7 +5323,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.018: renderSpese allineato al backend ---
+// --- FIX dDAE_2.019: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -5228,7 +5419,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.018: delete reale ospiti ---
+// --- FIX dDAE_2.019: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -5263,7 +5454,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.018: mostra nome ospite ---
+// --- FIX dDAE_2.019: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -5517,7 +5708,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.018
+   Build: dDAE_2.019
 ========================= */
 
 state.orepulizia = state.orepulizia || {
