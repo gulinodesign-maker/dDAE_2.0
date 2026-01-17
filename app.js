@@ -3,10 +3,10 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.004";
+const BUILD_VERSION = "dDAE_2.005";
 
 // =========================
-// AUTH + SESSION (dDAE_2.004)
+// AUTH + SESSION (dDAE_2.005)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -4051,30 +4051,6 @@ if (cleanSaveHours){
     if (fromEl){ fromEl.addEventListener("change", syncLaundryDateText_); fromEl.addEventListener("input", syncLaundryDateText_); }
     if (toEl){ toEl.addEventListener("change", syncLaundryDateText_); toEl.addEventListener("input", syncLaundryDateText_); }
     syncLaundryDateText_();
-
-    // iOS fix: rendi cliccabili le date (span) per aprire il date picker
-    try{
-      const fromTxt = document.getElementById("laundryFromText");
-      const toTxt   = document.getElementById("laundryToText");
-      const openPicker = (inp) => {
-        if (!inp) return;
-        try{
-          if (typeof inp.showPicker === "function") { inp.showPicker(); return; }
-        }catch(_){}
-        try{ inp.focus(); }catch(_){}
-        try{ inp.click(); }catch(_){}
-      };
-      if (fromTxt && fromEl && !fromTxt.__bound){
-        fromTxt.__bound = true;
-        fromTxt.style.cursor = "pointer";
-        bindFastTap(fromTxt, () => openPicker(fromEl));
-      }
-      if (toTxt && toEl && !toTxt.__bound){
-        toTxt.__bound = true;
-        toTxt.style.cursor = "pointer";
-        bindFastTap(toTxt, () => openPicker(toEl));
-      }
-    }catch(_){}
   }catch(_){ }
 
 if (btnLaundryGenerate){
