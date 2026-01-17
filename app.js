@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.011";
+const BUILD_VERSION = "dDAE_2.012";
 
 // =========================
 // AUTH + SESSION (dDAE_2.008)
@@ -2607,7 +2607,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.011)
+// STATISTICHE (dDAE_2.012)
 // =========================
 
 function computeStatGen(){
