@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.010";
+const BUILD_VERSION = "dDAE_2.011";
 
 // =========================
 // AUTH + SESSION (dDAE_2.008)
@@ -935,7 +935,7 @@ function setPresetValue(value){
   state.periodPreset = value;
   presetSyncLock += 1;
   try {
-    const sels = ["#periodPreset1","#periodPreset2","#periodPreset3"]
+    const sels = ["#periodPreset1","#periodPreset2","#periodPreset3","#periodPreset4"]
       .map(s => document.querySelector(s))
       .filter(Boolean);
     for (const s of sels) s.value = value;
@@ -1625,7 +1625,7 @@ const lav = e.target.closest && e.target.closest("#goLavanderia") || e.target.cl
     if (imp){ hideLauncher(); showPage("impostazioni"); return; }
 
 const g = e.target.closest && e.target.closest("#goGuadagni");
-    if (g){ hideLauncher(); toast("Guadagni: in arrivo"); return; }
+    if (g){ hideLauncher(); showPage("statistiche"); return; }
 
   });
 }
@@ -1773,6 +1773,16 @@ state.page = page;
     const _nav = navId;
     ensurePeriodData({ showLoader:true })
       .then(()=>{ if (state.navId !== _nav || state.page !== "spese") return; renderSpese(); })
+      .catch(e=>toast(e.message));
+  }
+
+  if (page === "statistiche") {
+    const _nav = navId;
+    ensurePeriodData({ showLoader:true })
+      .then(async ()=>{
+        if (state.navId !== _nav || state.page !== "statistiche") return;
+        try { await renderStatistiche(); } catch(e){ toast(e.message); }
+      })
       .catch(e=>toast(e.message));
   }
   if (page === "riepilogo") {
@@ -1944,10 +1954,10 @@ if (goCalendarioTopOspiti){
     });
   }
 
-  // HOME: guadagni (placeholder)
+  // HOME: statistiche (ex guadagni)
   const goG = $("#goGuadagni");
   if (goG){
-    bindFastTap(goG, () => { toast("Guadagni: in arrivo"); });
+    bindFastTap(goG, () => { hideLauncher(); showPage("statistiche"); });
   }
 
 
@@ -2534,6 +2544,267 @@ function drawPie(canvasId, slices){
   ctx.font = "950 14px system-ui";
   ctx.fillText(euro(total), cx, cy+14);
 }
+
+
+/* ============================
+   STATISTICHE (ex Guadagni)
+============================ */
+
+const STATS_COLORS = {
+  cash: "#2b7cb4",
+  elec: "#7ac0db",
+  receipt: "#c9772b",
+  dark: "#1f2937",
+};
+
+function setupStatistiche(){
+  // Tabs interne
+  const wrap = document.getElementById("statsTabs");
+  if (wrap){
+    wrap.querySelectorAll(".stats-tab").forEach(btn => {
+      btn.addEventListener("click", () => {
+        const tab = btn.getAttribute("data-tab") || "overview";
+        setStatsTab(tab);
+        if (state.page === "statistiche") {
+          try { renderStatistiche(); } catch(_) {}
+        }
+      });
+    });
+  }
+
+  // Report buttons
+  const bM = document.getElementById("btnRepMese");
+  const bT = document.getElementById("btnRepTrim");
+  const bA = document.getElementById("btnRepAnno");
+  if (bM) bM.addEventListener("click", () => { showStatsReport("mese"); });
+  if (bT) bT.addEventListener("click", () => { showStatsReport("trimestre"); });
+  if (bA) bA.addEventListener("click", () => { showStatsReport("anno"); });
+
+  // Default
+  if (!state.statsTab) state.statsTab = "overview";
+  try { setStatsTab(state.statsTab); } catch(_) {}
+}
+
+function setStatsTab(tab){
+  state.statsTab = tab;
+  const wrap = document.getElementById("statsTabs");
+  if (wrap){
+    wrap.querySelectorAll(".stats-tab").forEach(b => {
+      const on = (b.getAttribute("data-tab") || "") === tab;
+      b.classList.toggle("is-active", on);
+    });
+  }
+  document.querySelectorAll("#page-statistiche .stats-panel").forEach(p => p.hidden = true);
+  const panel = document.getElementById("statsPanel-" + tab);
+  if (panel) panel.hidden = false;
+}
+
+function monthKey(iso){
+  const s = String(iso || "").trim();
+  if (!s) return null;
+  const d = s.slice(0,10);
+  if (d.length !== 10) return null;
+  return d.slice(0,7);
+}
+
+function inRangeISO(iso, from, to){
+  const d = String(iso || "").slice(0,10);
+  if (!d) return false;
+  return (d >= from && d <= to);
+}
+
+function payBucket(typeRaw, receiptFlag){
+  if (truthy(receiptFlag)) return "receipt";
+  const t = String(typeRaw || "contante").toLowerCase();
+  return t.includes("elet") ? "elec" : "cash";
+}
+
+function drawPieLegend(canvasId, legendId, slices){
+  drawPie(canvasId, slices);
+  const leg = document.getElementById(legendId);
+  if (!leg) return;
+  leg.innerHTML = "";
+  const total = slices.reduce((a,s)=>a+Math.max(0,Number(s.value||0)),0) || 0;
+  for (const s of slices){
+    const v = Math.max(0,Number(s.value||0));
+    const pct = total > 0 ? (v/total*100) : 0;
+    const row = document.createElement("div");
+    row.className = "legrow";
+    row.innerHTML = `
+      <div class="legleft">
+        <div class="dot" style="background:${s.color}"></div>
+        <div class="legname">${escapeHtml(s.label)}</div>
+      </div>
+      <div class="legright">${pct.toFixed(1)}% · ${euro(v)}</div>
+    `;
+    leg.appendChild(row);
+  }
+}
+
+async function renderStatistiche(){
+  // Carica dati ospiti (tutto), poi filtra in client: compatibile col backend GAS attuale
+  let ospiti = [];
+  try {
+    ospiti = await cachedGet("ospiti", {}, { showLoader:false, ttlMs: 15*1000, force:false });
+  } catch(_) { ospiti = []; }
+
+  const { from, to } = state.period || { from:"", to:"" };
+  const guests = Array.isArray(ospiti) ? ospiti.filter(o => inRangeISO(__parseDateFlexibleToISO(o.check_in || o.checkIn), from, to)) : [];
+
+  let fatturatoTot = 0;
+  let incassatoTot = 0;
+
+  let cashTot = 0;
+  let elecTot = 0;
+  let receiptTot = 0;
+
+  const monthly = {};
+
+  for (const g of guests){
+    const tot = Number(g.importo_prenotazione ?? g.importo_prenota ?? g.importo_prenotazione_importo ?? g.importo_prenota_importo ?? g.importo_prenota) || Number(g.importo_prenotazione) || 0;
+    fatturatoTot += tot;
+
+    const dep = Number(g.acconto_importo || 0) || 0;
+    const sal = Number(g.saldo_pagato ?? g.saldoPagato ?? g.saldo ?? 0) || 0;
+    const inc = dep + sal;
+    incassatoTot += inc;
+
+    // Bucket pagamenti: contanti / elettronico / ricevuta (partizione)
+    const depB = payBucket(g.acconto_tipo || g.depositType, g.acconto_ricevuta);
+    const salB = payBucket(g.saldo_tipo || g.saldoTipo || g.saldoType, g.saldo_ricevuta);
+
+    const add = (b, v) => {
+      if (!v) return;
+      if (b === "receipt") receiptTot += v;
+      else if (b === "elec") elecTot += v;
+      else cashTot += v;
+    };
+    add(depB, dep);
+    add(salB, sal);
+
+    const mk = monthKey(__parseDateFlexibleToISO(g.check_in || g.checkIn));
+    if (mk){
+      monthly[mk] = (monthly[mk] || 0) + tot;
+    }
+  }
+
+  // IVA: scaricare dalle spese (report)
+  const r = state.report || null;
+  const ivaScaricare = Number(r?.totals?.ivaDetraibile || 0) || 0;
+  // IVA da versare: placeholder (dipende dalla logica fatture/aliquote delle entrate)
+  const ivaVersare = Number(r?.totals?.ivaDaVersare || 0) || 0;
+
+  // KPI Panoramica
+  const kFT = document.getElementById("kpiFatturatoTot"); if (kFT) kFT.textContent = euro(fatturatoTot);
+  const kIT = document.getElementById("kpiIncassatoTot"); if (kIT) kIT.textContent = euro(incassatoTot);
+  const kIV = document.getElementById("kpiIvaVersare"); if (kIV) kIV.textContent = euro(ivaVersare);
+  const kIS = document.getElementById("kpiIvaScaricare"); if (kIS) kIS.textContent = euro(ivaScaricare);
+
+  // KPI Pagamenti
+  const kC = document.getElementById("kpiCash"); if (kC) kC.textContent = euro(cashTot);
+  const kE = document.getElementById("kpiElec"); if (kE) kE.textContent = euro(elecTot);
+  const kR = document.getElementById("kpiReceipt"); if (kR) kR.textContent = euro(receiptTot);
+
+  // KPI Spese (da report)
+  const totSp = Number(r?.totals?.importoLordo || 0) || 0;
+  const impSp = Number(r?.totals?.imponibile || 0) || 0;
+  const ivaDet = Number(r?.totals?.ivaDetraibile || 0) || 0;
+  const kST = document.getElementById("kpiSpeseTot"); if (kST) kST.textContent = euro(totSp);
+  const kSI = document.getElementById("kpiSpeseIvaDet"); if (kSI) kSI.textContent = euro(ivaDet);
+  const kSP = document.getElementById("kpiSpeseImp"); if (kSP) kSP.textContent = euro(impSp);
+
+  // KPI Fatturato (mese corrente + media)
+  const thisMonth = todayISO().slice(0,7);
+  const fm = Number(monthly[thisMonth] || 0) || 0;
+  const avg = guests.length ? (fatturatoTot / guests.length) : 0;
+  const kFM = document.getElementById("kpiFatturatoMese"); if (kFM) kFM.textContent = euro(fm);
+  const kMP = document.getElementById("kpiMediaPren"); if (kMP) kMP.textContent = euro(avg);
+
+  // IVA (debito/credito/saldo) — per ora: debito = ivaVersare, credito = ivaScaricare
+  const kDeb = document.getElementById("kpiIvaDebito"); if (kDeb) kDeb.textContent = euro(ivaVersare);
+  const kCre = document.getElementById("kpiIvaCredito"); if (kCre) kCre.textContent = euro(ivaScaricare);
+  const saldoIva = ivaVersare - ivaScaricare;
+  const kSal = document.getElementById("kpiSaldoIva"); if (kSal) kSal.textContent = euro(saldoIva);
+
+  // Tabelle mese per mese
+  const table = document.getElementById("statsMonthlyTable");
+  if (table){
+    const keys = Object.keys(monthly).sort();
+    if (!keys.length){
+      table.innerHTML = '<div style="font-size:13px; opacity:.75; padding:8px 2px;">Nessun dato nel periodo.</div>';
+    } else {
+      table.innerHTML = '<div class="stats-table">' + keys.map(k => {
+        return `<div class="st-row"><div class="st-m">${k}</div><div class="st-v">${euro(monthly[k])}</div></div>`;
+      }).join('') + '</div>';
+    }
+  }
+
+  // Grafici: Pagamenti
+  const paySlices = [
+    { key:"cash", label:"Contanti", value: cashTot, color: STATS_COLORS.cash },
+    { key:"elec", label:"Elettronico", value: elecTot, color: STATS_COLORS.elec },
+    { key:"receipt", label:"Ricevuta", value: receiptTot, color: STATS_COLORS.receipt },
+  ];
+  drawPieLegend("statsPayPie", "statsPayLegend", paySlices);
+  drawPieLegend("statsPayPie2", "statsPayLegend2", paySlices);
+
+  // Grafici: Spese per categoria
+  const by = r?.byCategoria || {};
+  const order = ["CONTANTI","TASSA_SOGGIORNO","IVA_22","IVA_10","IVA_4"];
+  const spSlices = order.map(k => ({
+    key: k,
+    label: categoriaLabel(k),
+    value: Number(by[k]?.importoLordo || 0),
+    color: COLORS[k] || STATS_COLORS.dark
+  }));
+  drawPieLegend("statsSpesePie", "statsSpeseLegend", spSlices);
+  drawPieLegend("statsSpesePie2", "statsSpeseLegend2", spSlices);
+
+  // Grafico: Fatturato mesi (donut)
+  const monthKeys = Object.keys(monthly).sort();
+  const monthSlices = monthKeys.map((k, i) => ({
+    key: k,
+    label: k,
+    value: Number(monthly[k] || 0),
+    color: (i % 2 ? STATS_COLORS.elec : STATS_COLORS.cash)
+  }));
+  drawPieLegend("statsMonthPie", "statsMonthLegend", monthSlices);
+
+  // Grafico: IVA
+  const ivaSlices = [
+    { key:"deb", label:"Debito", value: ivaVersare, color: STATS_COLORS.receipt },
+    { key:"cre", label:"Credito", value: ivaScaricare, color: STATS_COLORS.elec },
+  ];
+  drawPieLegend("statsIvaPie", "statsIvaLegend", ivaSlices);
+}
+
+function showStatsReport(mode){
+  const out = document.getElementById("statsReportOut");
+  if (!out) return;
+  out.hidden = false;
+  const { from, to } = state.period || { from:"", to:"" };
+  const lines = [];
+  lines.push("Report statistiche");
+  lines.push(`Periodo: ${from} → ${to}`);
+  lines.push("");
+  const get = (id) => (document.getElementById(id)?.textContent || "—").trim();
+  lines.push(`Fatturato totale: ${get("kpiFatturatoTot")}`);
+  lines.push(`Incassato totale: ${get("kpiIncassatoTot")}`);
+  lines.push(`Contanti: ${get("kpiCash")}`);
+  lines.push(`Elettronico: ${get("kpiElec")}`);
+  lines.push(`Ricevuta: ${get("kpiReceipt")}`);
+  lines.push("");
+  lines.push(`Spese totali: ${get("kpiSpeseTot")}`);
+  lines.push(`IVA detraibile: ${get("kpiSpeseIvaDet")}`);
+  lines.push("");
+  lines.push(`IVA a debito: ${get("kpiIvaDebito")}`);
+  lines.push(`IVA a credito: ${get("kpiIvaCredito")}`);
+  lines.push(`Saldo IVA: ${get("kpiSaldoIva")}`);
+  lines.push("");
+  lines.push(`Tipo: ${mode}`);
+  out.textContent = lines.join("\n");
+}
+
 
 /* Helpers */
 function hexToRgba(hex, a){
