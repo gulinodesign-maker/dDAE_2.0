@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.028";
+const BUILD_VERSION = "dDAE_2.029";
 
 
 function __parseBuildVersion(v){
@@ -3552,17 +3552,17 @@ function buildRoomsStackHTML(guestId, roomsArr){
     .filter(n => isFinite(n) && n>=1 && n<=6)))
     .sort((a,b)=>a-b);
 
-  // Sempre ritorna un container .rooms-stack (serve per layout in sola lettura)
+  // Layout orizzontale: pallino stanza sopra, pallini letti sotto centrati
   if (!arr.length){
-    return `<div class="rooms-stack" aria-label="Stanze e letti">
-      <div class="room-row">
+    return `<div class="rooms-stack rooms-stack--grid" aria-label="Stanze e letti">
+      <div class="room-cell">
         <span class="room-dot-badge is-empty" aria-label="Nessuna stanza">—</span>
         <div class="bed-dots" aria-label="Letti"><span class="bed-dot bed-dot-empty" aria-label="Nessun letto"></span></div>
       </div>
     </div>`;
   }
 
-  return `<div class="rooms-stack" aria-label="Stanze e letti">` + arr.map((n) => {
+  return `<div class="rooms-stack rooms-stack--grid" aria-label="Stanze e letti">` + arr.map((n) => {
     const key = `${guestId}:${n}`;
     const info = (state.stanzeByKey && state.stanzeByKey[key]) ? state.stanzeByKey[key] : { letto_m: 0, letto_s: 0, culla: 0 };
     const lettoM = Number(info.letto_m || 0) || 0;
@@ -3574,7 +3574,7 @@ function buildRoomsStackHTML(guestId, roomsArr){
     for (let i = 0; i < lettoS; i++) dots += `<span class="bed-dot bed-dot-s" aria-label="Letto singolo"></span>`;
     if (culla > 0) dots += `<span class="bed-dot bed-dot-c" aria-label="Culla"></span>`;
 
-    return `<div class="room-row">
+    return `<div class="room-cell" aria-label="Stanza ${n}">
       <span class="room-dot-badge room-${n}">${n}</span>
       <div class="bed-dots" aria-label="Letti">${dots || `<span class="bed-dot bed-dot-empty" aria-label="Nessun letto"></span>`}</div>
     </div>`;
@@ -3612,6 +3612,15 @@ function renderRoomsReadOnly(ospite){
     }catch(_){ return 0; }
   }
 
+  function dateTabsHTML(ci, co){
+    const inTxt  = ci ? (formatShortDateIT(ci) || ci) : "—";
+    const outTxt = co ? (formatShortDateIT(co) || co) : "—";
+    return `<div class="rooms-ro-dates" aria-label="Date soggiorno">
+      <div class="ro-date-pill" aria-label="Check-in"><span class="ro-date-lbl">Check-in</span><span class="ro-date-val">${escapeHtml(inTxt)}</span></div>
+      <div class="ro-date-pill" aria-label="Check-out"><span class="ro-date-lbl">Check-out</span><span class="ro-date-val">${escapeHtml(outTxt)}</span></div>
+    </div>`;
+  }
+
   const segs = [];
   if ((rooms1 && rooms1.length) || ci1 || co1 || mar1){
     segs.push({ rooms: rooms1, ci: ci1, co: co1, mar: mar1 });
@@ -3625,7 +3634,7 @@ function renderRoomsReadOnly(ospite){
     return;
   }
 
-  const segHtml = segs.map(seg => {
+  const segHtml = segs.map((seg) => {
     const stackHTML = buildRoomsStackHTML(guestId, seg.rooms || []);
     const nights = nightsFor(seg.ci, seg.co);
 
@@ -3644,21 +3653,20 @@ function renderRoomsReadOnly(ospite){
 
     const mDot = seg.mar ? `<span class="marriage-dot" aria-label="Matrimonio">M</span>` : "";
 
-    const rightHTML = (mDot || pillHTML)
-      ? `<div class="stay-right">${mDot}${pillHTML}</div>`
-      : "";
+    const metaHTML = (mDot || pillHTML)
+      ? `<div class="rooms-ro-meta">${mDot}${pillHTML}</div>`
+      : ``;
 
-    return `<div class="rooms-readonly-wrap rooms-readonly-seg">
-      ${stackHTML}
-      ${rightHTML}
+    return `<div class="rooms-readonly-seg">
+      ${dateTabsHTML(seg.ci, seg.co)}
+      <div class="rooms-ro-rooms">${stackHTML}</div>
+      ${metaHTML}
     </div>`;
   }).join('<div class="rooms-readonly-divider"></div>');
 
-  if (segs.length === 1){
-    ro.innerHTML = segHtml;
-  } else {
-    ro.innerHTML = `<div class="rooms-readonly-multi">${segHtml}</div>`;
-  }
+  ro.innerHTML = (segs.length === 1)
+    ? segHtml
+    : `<div class="rooms-readonly-multi">${segHtml}</div>`;
 }
 
 function updateOspiteHdActions(){
@@ -3712,6 +3720,17 @@ function setGuestFormViewOnly(isView, ospite){
   const picker = document.getElementById("roomsPicker");
   if (picker) picker.hidden = !!isView;
 
+  // In sola lettura: nascondi le righe date (le mostriamo come tab dentro roomsReadOnly)
+  try{
+    const ci = document.getElementById("guestCheckIn");
+    const row1 = ci ? ci.closest(".field.two-col") : null;
+    if (row1) row1.style.display = isView ? "none" : "";
+
+    const ci2 = document.getElementById("guestCheckIn2");
+    const row2 = ci2 ? ci2.closest(".field.two-col") : null;
+    if (row2) row2.style.display = isView ? "none" : "";
+  }catch(_){ }
+
   const ro = document.getElementById("roomsReadOnly");
   if (ro) {
     ro.hidden = !isView;
@@ -3722,6 +3741,7 @@ function setGuestFormViewOnly(isView, ospite){
   // Aggiorna i pallini in testata in base alla modalità corrente
   try { updateOspiteHdActions(); } catch (_) {}
 }
+
 
 function enterGuestViewMode(ospite){
   // Riempiamo la maschera usando la stessa logica dell'edit, poi blocchiamo tutto in sola lettura

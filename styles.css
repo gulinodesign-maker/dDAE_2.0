@@ -41,7 +41,7 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.028"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.029"),
     radial-gradient(900px 600px at 10% 0%, rgba(43,124,180,0.10), transparent 62%),
     radial-gradient(800px 520px at 90% 8%, rgba(201,119,43,0.10), transparent 64%),
     radial-gradient(900px 700px at 20% 100%, rgba(111,183,214,0.10), transparent 62%),
@@ -777,7 +777,7 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.028"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.029"),
     radial-gradient(900px 650px at 12% 8%, rgba(43,124,180,0.18), transparent 62%),
     radial-gradient(820px 560px at 92% 14%, rgba(201,119,43,0.16), transparent 62%),
     radial-gradient(900px 700px at 18% 96%, rgba(111,183,214,0.16), transparent 62%),
@@ -1528,7 +1528,7 @@ body::before{
 }
 
 
-/* dDAE_2.028 — Seconda prenotazione nella scheda ospite */
+/* dDAE_2.029 — Seconda prenotazione nella scheda ospite */
 #page-ospite .rooms-split{
   margin-top: 8px;
 }
@@ -1576,6 +1576,78 @@ body::before{
   height: 1px;
   background: rgba(15,23,42,0.12);
   margin: 0 -9px;
+}
+
+
+/* dDAE_2.029 — Scheda ospite (sola lettura): stanze orizzontali + letti sotto + date per gruppo */
+.rooms-readonly-seg{
+  display:flex;
+  flex-direction:column;
+  gap: 10px;
+}
+.rooms-ro-dates{
+  display:flex;
+  gap: 10px;
+  align-items:center;
+}
+.ro-date-pill{
+  flex: 1 1 0;
+  height: 42px;
+  border-radius: 16px;
+  border: 1px solid var(--border);
+  background: rgba(255,255,255,0.70);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  box-shadow: 0 10px 26px rgba(15,23,42,0.10);
+  display:flex;
+  flex-direction:column;
+  justify-content:center;
+  padding: 6px 10px;
+  min-width: 0;
+}
+.ro-date-lbl{
+  font-size: 10px;
+  font-weight: 950;
+  opacity: 0.62;
+  line-height: 1;
+}
+.ro-date-val{
+  font-size: 12px;
+  font-weight: 950;
+  line-height: 1.1;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+.rooms-ro-rooms{
+  padding-top: 2px;
+}
+.rooms-ro-meta{
+  display:flex;
+  align-items:center;
+  gap: 10px;
+}
+
+/* Griglia orizzontale per stanze in sola lettura */
+.rooms-stack.rooms-stack--grid{
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 12px;
+}
+.rooms-stack--grid .room-cell{
+  display:flex;
+  flex-direction:column;
+  align-items:center;
+  gap: 6px;
+  min-width: 34px;
+}
+.rooms-stack--grid .bed-dots{
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  gap: 4px;
+  min-height: 10px;
 }
 
 #page-ospite .room-dot{
@@ -2348,14 +2420,14 @@ body[data-page="ospiti"] .guest-card .actions {
 .stay-pill{
   padding: 8px 12px;
   border-radius: 999px;
-  background: var(--brand-orange);
+  background: var(--p3);
   color: rgba(255,255,255,0.98);
   display:flex;
   align-items:center;
   gap:8px;
   font-weight: 950;
   font-size: 12px;
-  border: 1px solid var(--brand-orange-2);
+  border: 1px solid rgba(255,255,255,0.22);
   box-shadow: 0 8px 18px rgba(15,23,42,0.10);
   flex: 0 0 auto;
   white-space: nowrap;
@@ -2392,14 +2464,14 @@ body[data-page="ospiti"] .guest-card .actions {
   width: 34px;
   height: 34px;
   border-radius: 999px;
-  background: var(--brand-orange);
+  background: var(--p3);
   color: rgba(255,255,255,0.98);
   display:flex;
   align-items:center;
   justify-content:center;
   font-weight: 950;
   font-size: 13px;
-  border: 1px solid var(--brand-orange-2);
+  border: 1px solid rgba(255,255,255,0.22);
   box-shadow: 0 8px 18px rgba(15,23,42,0.10);
   flex: 0 0 auto;
 }
