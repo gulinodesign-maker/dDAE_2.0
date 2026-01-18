@@ -41,7 +41,7 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.021"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.022"),
     radial-gradient(900px 600px at 10% 0%, rgba(43,124,180,0.10), transparent 62%),
     radial-gradient(800px 520px at 90% 8%, rgba(201,119,43,0.10), transparent 64%),
     radial-gradient(900px 700px at 20% 100%, rgba(111,183,214,0.10), transparent 62%),
@@ -775,7 +775,7 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.021"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.022"),
     radial-gradient(900px 650px at 12% 8%, rgba(43,124,180,0.18), transparent 62%),
     radial-gradient(820px 560px at 92% 14%, rgba(201,119,43,0.16), transparent 62%),
     radial-gradient(900px 700px at 18% 96%, rgba(111,183,214,0.16), transparent 62%),
@@ -2263,11 +2263,11 @@ body[data-page="ospiti"] .guest-card .actions {
 
 /* Colori stanza coerenti (palette) */
 .room-dot-badge.room-1{ background: rgba(43,124,180,0.92); border-color: rgba(43,124,180,0.55); }
-.room-dot-badge.room-2{ background: rgba(77,156,197,0.92); border-color: rgba(77,156,197,0.55); }
-.room-dot-badge.room-3{ background: rgba(111,183,214,0.92); border-color: rgba(111,183,214,0.55); color: rgba(15,23,42,0.92); }
-.room-dot-badge.room-4{ background: rgba(150,191,199,0.92); border-color: rgba(150,191,199,0.55); color: rgba(15,23,42,0.92); }
-.room-dot-badge.room-5{ background: rgba(207,148,88,0.92); border-color: rgba(207,148,88,0.55); }
-.room-dot-badge.room-6{ background: rgba(201,119,43,0.92); border-color: rgba(201,119,43,0.55); }
+.room-dot-badge.room-2{ background: rgba(111,183,214,0.92); border-color: rgba(111,183,214,0.55); color: rgba(15,23,42,0.92); }
+.room-dot-badge.room-3{ background: rgba(191,190,169,0.92); border-color: rgba(191,190,169,0.55); color: rgba(15,23,42,0.92); }
+.room-dot-badge.room-4{ background: rgba(214,178,118,0.92); border-color: rgba(214,178,118,0.55); color: rgba(15,23,42,0.92); }
+.room-dot-badge.room-5{ background: rgba(242,156,80,0.92); border-color: rgba(242,156,80,0.55); }
+.room-dot-badge.room-6{ background: rgba(229,114,49,0.92); border-color: rgba(229,114,49,0.55); }
 
 
 
@@ -2684,11 +2684,11 @@ body[data-page="ospiti"] .guest-card .actions {
   --cal-gap: 4px;
   /* Palette stanze: rosso → indaco in versione pastello */
   --room1: rgba(43, 124, 180, .55); /* #2B7CB4 */
-  --room2: rgba(77, 156, 197, .55); /* #4D9CC5 */
-  --room3: rgba(111, 183, 214, .55); /* #6FB7D6 */
-  --room4: rgba(150, 191, 199, .55); /* #96BFC7 */
-  --room5: rgba(207, 148, 88, .55); /* #CF9458 */
-  --room6: rgba(201, 119, 43, .55); /* #C9772B */
+  --room2: rgba(111, 183, 214, .55); /* #6FB7D6 */
+  --room3: rgba(191, 190, 169, .55); /* #BFBEA9 */
+  --room4: rgba(214, 178, 118, .55); /* #D6B276 */
+  --room5: rgba(242, 156, 80, .55);  /* #F29C50 */
+  --room6: rgba(229, 114, 49, .55);  /* #E57231 */
 }
 
 .calendar-page .cal-nav{
@@ -3535,11 +3535,11 @@ grid-template-rows: 34px repeat(7, 54px);
 
 /* Colori stanze 1..6 */
 .clean-grid .cell.room.r1{ color: #2b7cb4; }
-.clean-grid .cell.room.r2{ color: #4d9cc5; }
-.clean-grid .cell.room.r3{ color: #6fb7d6; }
-.clean-grid .cell.room.r4{ color: #96bfc7; }
-.clean-grid .cell.room.r5{ color: #cf9458; }
-.clean-grid .cell.room.r6{ color: #c9772b; }
+.clean-grid .cell.room.r2{ color: #6fb7d6; }
+.clean-grid .cell.room.r3{ color: #bfbea9; }
+.clean-grid .cell.room.r4{ color: #d6b276; }
+.clean-grid .cell.room.r5{ color: #f29c50; }
+.clean-grid .cell.room.r6{ color: #e57231; }
 
 /* Mobile: evita che i testi si rompano */
 @media (max-width: 420px){
@@ -3579,11 +3579,11 @@ grid-template-rows: 34px repeat(7, 54px);
 
 /* Mapping colori stanze -> sfondo */
 .clean-grid .cell.slot[data-room="1"]::before{ background: rgba(43,124,180,1); }       /* #2B7CB4 */
-.clean-grid .cell.slot[data-room="2"]::before{ background: rgba(77,156,197,1); }     /* #4D9CC5 */
-.clean-grid .cell.slot[data-room="3"]::before{ background: rgba(111,183,214,1); }     /* #6FB7D6 */
-.clean-grid .cell.slot[data-room="4"]::before{ background: rgba(150,191,199,1); }     /* #96BFC7 */
-.clean-grid .cell.slot[data-room="5"]::before{ background: rgba(207,148,88,1); }    /* #CF9458 */
-.clean-grid .cell.slot[data-room="6"]::before{ background: rgba(201,119,43,1); }     /* #C9772B */
+.clean-grid .cell.slot[data-room="2"]::before{ background: rgba(111,183,214,1); }       /* #6FB7D6 */
+.clean-grid .cell.slot[data-room="3"]::before{ background: rgba(191,190,169,1); }       /* #BFBEA9 */
+.clean-grid .cell.slot[data-room="4"]::before{ background: rgba(214,178,118,1); }       /* #D6B276 */
+.clean-grid .cell.slot[data-room="5"]::before{ background: rgba(242,156,80,1); }       /* #F29C50 */
+.clean-grid .cell.slot[data-room="6"]::before{ background: rgba(229,114,49,1); }       /* #E57231 */
 .clean-grid .cell.slot[data-room="RES"]::before{ background: rgba(120,120,120,1); opacity:.14; } /* grigio */
 
 /* Bordo leggermente più marcato per distinguere le celle */
