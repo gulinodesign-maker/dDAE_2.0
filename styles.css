@@ -41,7 +41,7 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.028"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.030"),
     radial-gradient(900px 600px at 10% 0%, rgba(43,124,180,0.10), transparent 62%),
     radial-gradient(800px 520px at 90% 8%, rgba(201,119,43,0.10), transparent 64%),
     radial-gradient(900px 700px at 20% 100%, rgba(111,183,214,0.10), transparent 62%),
@@ -777,7 +777,7 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.028"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.030"),
     radial-gradient(900px 650px at 12% 8%, rgba(43,124,180,0.18), transparent 62%),
     radial-gradient(820px 560px at 92% 14%, rgba(201,119,43,0.16), transparent 62%),
     radial-gradient(900px 700px at 18% 96%, rgba(111,183,214,0.16), transparent 62%),
@@ -3289,6 +3289,53 @@ body[data-page="ospiti"] .guest-card .actions {
 
 #roomsReadOnly{
   margin-top:10px;
+}
+
+/* Multi-gruppo (sola lettura): blocchi aggiuntivi sotto il primo gruppo */
+.rooms-readonly-extra{
+  margin-top: 12px;
+}
+.rooms-readonly-extra .ro-group{
+  margin-top: 12px;
+  padding-top: 12px;
+  border-top: 1px solid rgba(0,0,0,0.80);
+}
+.rooms-readonly-extra .ro-grid{
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-top: 10px;
+}
+.rooms-readonly-extra .ro-grid:first-child{ margin-top: 0; }
+.rooms-readonly-extra .ro-box{
+  padding: 10px 12px;
+  border-radius: 16px;
+  background: rgba(255,255,255,0.18);
+  border: 1px solid rgba(0,0,0,0.20);
+}
+.rooms-readonly-extra .ro-lbl{
+  font-size: 12px;
+  font-weight: 800;
+  opacity: 0.72;
+  margin-bottom: 4px;
+}
+.rooms-readonly-extra .ro-val{
+  font-size: 14px;
+  font-weight: 900;
+  letter-spacing: 0.2px;
+}
+.rooms-readonly-extra .ro-rooms{
+  display: flex;
+  align-items: flex-start;
+  justify-content: space-between;
+  gap: 10px;
+  margin-top: 10px;
+}
+.rooms-readonly-extra .ro-rooms-right{
+  display: flex;
+  align-items: center;
+  justify-content: flex-end;
+  min-width: 28px;
 }
 
 

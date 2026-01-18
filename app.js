@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.028";
+const BUILD_VERSION = "dDAE_2.030";
 
 
 function __parseBuildVersion(v){
@@ -2253,6 +2253,75 @@ function guestIdOf(g){
   return String(g?.id ?? g?.ID ?? g?.ospite_id ?? g?.ospiteId ?? g?.guest_id ?? g?.guestId ?? "").trim();
 }
 
+function baseGuestId(id){
+  const s = String(id ?? "").trim();
+  if (!s) return "";
+  const m = s.match(/^(.*)_g(\d+)$/);
+  return m ? (m[1] || "").trim() : s;
+}
+
+function guestGroupIndex(id){
+  const s = String(id ?? "").trim();
+  const m = s.match(/_g(\d+)$/);
+  return m ? (parseInt(m[1], 10) || 0) : 0;
+}
+
+function aggregateGuestsByBaseId(items){
+  const list = Array.isArray(items) ? items : [];
+  const map = new Map();
+  let fallbackN = 0;
+
+  for (const it of list){
+    const rawId = guestIdOf(it);
+    let baseId = baseGuestId(rawId);
+    if (!baseId){
+      // fallback: se manca id, non possiamo aggregare in modo affidabile
+      baseId = `__noid_${++fallbackN}`;
+    }
+    if (!map.has(baseId)) map.set(baseId, []);
+    map.get(baseId).push(it);
+  }
+
+  const out = [];
+  for (const [baseId, groups] of map.entries()){
+    const sorted = groups.slice().sort((a,b) => {
+      const ai = guestGroupIndex(guestIdOf(a));
+      const bi = guestGroupIndex(guestIdOf(b));
+      if (ai !== bi) return ai - bi;
+      // tie-break: created_at
+      const at = parseDateTs(a?.created_at ?? a?.createdAt ?? "");
+      const bt = parseDateTs(b?.created_at ?? b?.createdAt ?? "");
+      if (at != null && bt != null) return at - bt;
+      if (at != null) return -1;
+      if (bt != null) return 1;
+      return 0;
+    });
+
+    let main = sorted.find(x => guestIdOf(x) === baseId) || sorted[0];
+    // Oggetto aggregato: usa i campi del main (gruppo 0) e conserva tutti i gruppi
+    const agg = Object.assign({}, main);
+    agg.id = baseId;
+    agg._groups = sorted;
+
+    // Sorting/filtri: arrivo = il check-in minimo tra i gruppi
+    let minISO = "";
+    let minTs = null;
+    for (const g of sorted){
+      const ci = String(g?.check_in ?? g?.checkIn ?? "").trim();
+      const ts = parseDateTs(ci);
+      if (ts == null) continue;
+      if (minTs == null || ts < minTs){
+        minTs = ts;
+        minISO = ci.slice(0,10);
+      }
+    }
+    if (minISO) agg._arrivoSort = minISO;
+
+    out.push(agg);
+  }
+  return out;
+}
+
 function parseDateTs(v){
   const s = String(v ?? "").trim();
   if (!s) return null;
@@ -2300,8 +2369,8 @@ function sortGuestsList(items){
       const bb = Number(b._insNo) || 1e18;
       return (aa - bb) * dir;
     }
-    const ta = parseDateTs(a.check_in ?? a.checkIn);
-    const tb = parseDateTs(b.check_in ?? b.checkIn);
+    const ta = parseDateTs((a._arrivoSort ?? a.check_in ?? a.checkIn));
+    const tb = parseDateTs((b._arrivoSort ?? b.check_in ?? b.checkIn));
     if (ta == null && tb == null) return 0;
     if (ta == null) return 1;
     if (tb == null) return -1;
@@ -3588,8 +3657,13 @@ function renderRoomsReadOnly(ospite){
   const ro = document.getElementById("roomsReadOnly");
   if (!ro) return;
 
-  const guestId = _guestIdOf(ospite);
-  let roomsArr = _parseRoomsArr(ospite?.stanze);
+  const groups = Array.isArray(ospite?._groups) && ospite._groups.length
+    ? ospite._groups
+    : [ospite];
+
+  const main = groups[0] || ospite;
+  const guestId = _guestIdOf(main);
+  let roomsArr = _parseRoomsArr(main?.stanze);
 
   // fallback: se per qualche motivo non arriva 'stanze' dal backend, usa lo stato locale
   if (!roomsArr.length && state.guestRooms && state.guestRooms.size){
@@ -3602,11 +3676,11 @@ function renderRoomsReadOnly(ospite){
   const stackHTML = buildRoomsStackHTML(guestId, roomsArr);
 
   // Pillola: notti + tassa di soggiorno (solo in sola lettura)
-  const nights = calcStayNights(ospite);
+  const nights = calcStayNights(main);
   let pillHTML = ``;
 
   if (nights != null){
-    const tt = calcTouristTax(ospite, nights);
+    const tt = calcTouristTax(main, nights);
     const nightsLabel = (nights === 1) ? `1 notte` : `${nights} notti`;
     const taxLabel = `Tassa ${formatEUR(tt.total)}`;
     pillHTML = `<span class="stay-pill" aria-label="Pernottamenti e tassa di soggiorno">
@@ -3617,13 +3691,49 @@ function renderRoomsReadOnly(ospite){
   }
 
   // Matrimonio: pallino verde con "m" bianca, a sinistra della pillola (solo in sola lettura)
-  const marriageOn = !!(ospite?.matrimonio);
+  const marriageOn = !!(main?.matrimonio);
 
   const rightHTML = pillHTML
     ? `<div class="stay-right">${marriageOn ? `<span class="marriage-dot" aria-label="Matrimonio">M</span>` : ``}${pillHTML}</div>`
     : ``;
 
-  ro.innerHTML = `<div class="rooms-readonly-wrap">${stackHTML}${rightHTML}</div>`;
+  let extraHTML = "";
+
+  if (groups.length > 1){
+    const blocks = [];
+    for (let i = 1; i < groups.length; i++){
+      const g = groups[i] || {};
+      const gid = _guestIdOf(g);
+      const gRooms = _parseRoomsArr(g?.stanze);
+      const gStack = buildRoomsStackHTML(gid, gRooms);
+
+      const a = Number(g?.adulti ?? g?.adults ?? 0) || 0;
+      const k = Number(g?.bambini_u10 ?? g?.kidsU10 ?? 0) || 0;
+      const ci = formatLongDateIT(g?.check_in || g?.checkIn || "") || "—";
+      const co = formatLongDateIT(g?.check_out || g?.checkOut || "") || "—";
+      const mOn = !!(g?.matrimonio);
+
+      blocks.push(`
+        <div class="ro-group" aria-label="Gruppo prenotazione ${i+1}">
+          <div class="ro-grid" aria-label="Persone">
+            <div class="ro-box"><div class="ro-lbl">Adulti</div><div class="ro-val">${a}</div></div>
+            <div class="ro-box"><div class="ro-lbl">Bambini &lt; 10</div><div class="ro-val">${k}</div></div>
+          </div>
+          <div class="ro-grid" aria-label="Date">
+            <div class="ro-box"><div class="ro-lbl">Check-in</div><div class="ro-val">${escapeHtml(ci)}</div></div>
+            <div class="ro-box"><div class="ro-lbl">Check-out</div><div class="ro-val">${escapeHtml(co)}</div></div>
+          </div>
+          <div class="ro-rooms">
+            <div class="ro-rooms-left">${gStack}</div>
+            <div class="ro-rooms-right">${mOn ? `<span class="marriage-dot" aria-label="Matrimonio">M</span>` : ``}</div>
+          </div>
+        </div>
+      `);
+    }
+    extraHTML = `<div class="rooms-readonly-extra">${blocks.join("")}</div>`;
+  }
+
+  ro.innerHTML = `<div class="rooms-readonly-wrap">${stackHTML}${rightHTML}</div>${extraHTML}`;
 }
 
 function updateOspiteHdActions(){
@@ -3932,10 +4042,20 @@ function setupOspite(){
       // Rosso: elimina (solo in sola lettura o modifica)
       if (btn.hasAttribute("data-guest-del")){
         let gid = null;
+        let idsToDelete = null;
 
         if (mode === "view"){
           if (!item) return;
           gid = guestIdOf(item) || item.id;
+          // Se l'ospite e' aggregato (gruppi _g1, _g2...), elimina TUTTI i gruppi
+          if (Array.isArray(item._groups) && item._groups.length){
+            const set = new Set();
+            item._groups.forEach((g) => {
+              const id = guestIdOf(g) || g?.id;
+              if (id) set.add(String(id));
+            });
+            if (set.size) idsToDelete = Array.from(set);
+          }
         } else if (mode === "edit"){
           gid = state.guestEditId || null;
         }
@@ -3944,7 +4064,13 @@ function setupOspite(){
         if (!confirm("Eliminare definitivamente questo ospite?")) return;
 
         try {
-          await api("ospiti", { method:"DELETE", params:{ id: gid }});
+          if (Array.isArray(idsToDelete) && idsToDelete.length){
+            for (const id of idsToDelete){
+              await api("ospiti", { method:"DELETE", params:{ id }});
+            }
+          } else {
+            await api("ospiti", { method:"DELETE", params:{ id: gid }});
+          }
           toast("Ospite eliminato");
           invalidateApiCache("ospiti|");
           invalidateApiCache("stanze|");
@@ -4399,7 +4525,7 @@ function setupOspite(){
   const ci = document.getElementById("guestCheckIn");
   if (ci && !ci.value) ci.value = iso;
 
-  renderRooms();
+  try { window.__ddae_renderRooms && window.__ddae_renderRooms(); } catch (_) {}
   renderGuestCards();
 }
 
@@ -4418,18 +4544,24 @@ function renderGuestCards(){
 
   const frag = document.createDocumentFragment();
 
-  let items = Array.isArray(state.ospiti) && state.ospiti.length
+  let raw = Array.isArray(state.ospiti) && state.ospiti.length
     ? state.ospiti
     : (Array.isArray(state.guests) ? state.guests : []);
 
-  // Filtro rapido "Oggi": mostra solo ospiti con arrivo (check_in) = oggi
+  // Aggrega i gruppi (_g1, _g2, ...) in un'unica card
+  let items = aggregateGuestsByBaseId(raw);
+
+  // Filtro rapido "Oggi": mostra ospiti se QUALUNQUE gruppo ha arrivo (check_in) = oggi
   if (state.guestTodayOnly){
     const today = todayISO();
-    items = (items || []).filter(g => {
-      const v = (g?.check_in ?? g?.checkIn ?? g?.arrivo ?? g?.arrival ?? g?.guestCheckIn ?? "");
-      const s = String(v).trim();
-      const d = s ? s.slice(0,10) : "";
-      return d === today;
+    items = (items || []).filter(agg => {
+      const groups = Array.isArray(agg?._groups) ? agg._groups : [agg];
+      return groups.some(g => {
+        const v = (g?.check_in ?? g?.checkIn ?? g?.arrivo ?? g?.arrival ?? g?.guestCheckIn ?? "");
+        const s = String(v).trim();
+        const d = s ? s.slice(0,10) : "";
+        return d === today;
+      });
     });
   }
 
