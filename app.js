@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.027";
+const BUILD_VERSION = "dDAE_2.028";
 
 
 function __parseBuildVersion(v){
@@ -3835,7 +3835,7 @@ async function saveGuest(){
     const payload = {
       id,
       nome: name,
-      adulti,
+      adulti: adults,
       bambini_u10: kidsU10,
       check_in: checkIn,
       check_out: checkOut,

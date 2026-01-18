@@ -41,7 +41,7 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.027"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.028"),
     radial-gradient(900px 600px at 10% 0%, rgba(43,124,180,0.10), transparent 62%),
     radial-gradient(800px 520px at 90% 8%, rgba(201,119,43,0.10), transparent 64%),
     radial-gradient(900px 700px at 20% 100%, rgba(111,183,214,0.10), transparent 62%),
@@ -777,7 +777,7 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.027"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.028"),
     radial-gradient(900px 650px at 12% 8%, rgba(43,124,180,0.18), transparent 62%),
     radial-gradient(820px 560px at 92% 14%, rgba(201,119,43,0.16), transparent 62%),
     radial-gradient(900px 700px at 18% 96%, rgba(111,183,214,0.16), transparent 62%),
@@ -5385,6 +5385,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 #page-ospite .name-divider{ margin: 6px 0 12px; }
 
 #page-ospite .guest-group{ width:100%; }
+#page-ospite .guest-group > .field.two-col + .field.two-col{ margin-top: 12px; }
 #page-ospite .group-controls{ display:flex; align-items:center; gap:10px; margin: 12px 0 0; }
 #page-ospite .group-line{ flex:1; height:1px; background: rgba(0,0,0,0.80); border-radius: 1px; }
 #page-ospite .group-btns{ display:flex; gap:8px; align-items:center; }
