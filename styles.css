@@ -41,7 +41,7 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.026"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.027"),
     radial-gradient(900px 600px at 10% 0%, rgba(43,124,180,0.10), transparent 62%),
     radial-gradient(800px 520px at 90% 8%, rgba(201,119,43,0.10), transparent 64%),
     radial-gradient(900px 700px at 20% 100%, rgba(111,183,214,0.10), transparent 62%),
@@ -777,7 +777,7 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.026"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.027"),
     radial-gradient(900px 650px at 12% 8%, rgba(43,124,180,0.18), transparent 62%),
     radial-gradient(820px 560px at 92% 14%, rgba(201,119,43,0.16), transparent 62%),
     radial-gradient(900px 700px at 18% 96%, rgba(111,183,214,0.16), transparent 62%),
@@ -1526,6 +1526,58 @@ body::before{
 #page-ospite .rooms{
   justify-content: center;
 }
+
+
+/* dDAE_2.027 — Seconda prenotazione nella scheda ospite */
+#page-ospite .rooms-split{
+  margin-top: 8px;
+}
+#page-ospite .rooms-split-line{
+  height: 1px;
+  background: rgba(15,23,42,0.16);
+  margin: 0 -9px;
+}
+#page-ospite .rooms-split-action{
+  display:flex;
+  justify-content:flex-end;
+  padding: 6px 0 0;
+  margin-right: -9px;
+}
+#page-ospite .rooms-split-btn{
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  border: 1px solid rgba(15,23,42,0.14);
+  background: rgba(255,255,255,0.68);
+  -webkit-backdrop-filter: blur(12px);
+  backdrop-filter: blur(12px);
+  color: rgba(15,23,42,0.82);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  padding:0;
+  font-size: 18px;
+  font-weight: 950;
+  line-height: 1;
+  box-shadow: 0 8px 18px rgba(15,23,42,0.10);
+}
+#page-ospite .rooms-split-btn:active{ transform: scale(0.98); }
+#page-ospite .guest-split{
+  margin-top: 10px;
+}
+
+/* Sola lettura: due gruppi (stack + pillole) */
+.rooms-readonly-multi{
+  display:flex;
+  flex-direction: column;
+  gap: 12px;
+}
+.rooms-readonly-divider{
+  height: 1px;
+  background: rgba(15,23,42,0.12);
+  margin: 0 -9px;
+}
+
 #page-ospite .room-dot{
   position: relative;
 }
@@ -3284,7 +3336,10 @@ body[data-page="ospiti"] .guest-card .actions {
 }
 
 /* In sola lettura, le stanze diventano una lista "stack" come nel vecchio menù */
-.guest-form-card.is-view #roomsPicker{ display:none !important; }
+.guest-form-card.is-view #roomsPicker,
+.guest-form-card.is-view #roomsPicker2{ display:none !important; }
+.guest-form-card.is-view #roomsSplitControl{ display:none !important; }
+.guest-form-card.is-view #guestSplitSection{ display:none !important; }
 .guest-form-card.is-view #roomsReadOnly{ display:block !important; }
 
 #roomsReadOnly{
