@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.020";
+const BUILD_VERSION = "dDAE_2.022";
 
 
 function __parseBuildVersion(v){
@@ -504,11 +504,11 @@ guestMarriage: false,
 };
 
 const COLORS = {
-  CONTANTI: "#2b7cb4",          // azzurro
-  TASSA_SOGGIORNO: "#d8bd97",   // beige
-  IVA_22: "#c9772b",            // arancio
-  IVA_10: "#7ac0db",            // azzurro chiaro
-  IVA_4: "#1f2937",             // scuro
+  CONTANTI: "#2b7cb4",          // palette
+  TASSA_SOGGIORNO: "#bfbea9",   // palette
+  IVA_22: "#c9772b",            // palette
+  IVA_10: "#6fb7d6",            // palette
+  IVA_4: "#4d9cc5",             // palette
 };
 
 
@@ -2770,13 +2770,13 @@ function openStatPieModal(){
 
   const s = state.statGen || computeStatGen();
   const slices = [
-    { key:"fatturato", label:"Fatturato totale", value:s.fatturatoTotale, color:"#ef4444" },
-    { key:"spese", label:"Spese totali", value:s.speseTotali, color:"#f97316" },
-    { key:"noR", label:"Senza ricevuta", value:s.senzaRicevuta, color:"#f59e0b" },
-    { key:"R", label:"Con ricevuta", value:s.conRicevuta, color:"#84cc16" },
-    { key:"iva", label:"IVA da versare", value:s.ivaDaVersare, color:"#22c55e" },
-    { key:"gua", label:"Guadagno", value:Math.max(0, Number(s.guadagnoTotale || 0)), color:"#3b82f6" },
-    { key:"cash", label:"Cassa", value:s.giacenzaCassa, color:"#6366f1" },
+    { label: "Fatturato totale", value: s.fatturatoTotale, color: "#2b7cb4" },
+    { label: "Spese totali", value: s.speseTotali, color: "#4d9cc5" },
+    { label: "Importo senza ricevuta", value: s.noRicevuta, color: "#6fb7d6" },
+    { label: "Importo con ricevuta", value: s.ricevuta, color: "#96bfc7" },
+    { label: "IVA da versare", value: s.ivaDaVersare, color: "#bfbea9" },
+    { label: "Guadagno totale", value: s.guadagnoTotale, color: "#cf9458" },
+    { label: "Giacenza in cassa", value: s.cassa, color: "#c9772b" },
   ];
 
   drawPie("statPieCanvas", slices);
@@ -3238,7 +3238,7 @@ function buildRoomsStackHTML(guestId, roomsArr){
     if (culla > 0) dots += `<span class="bed-dot bed-dot-c" aria-label="Culla"></span>`;
 
     return `<div class="room-row">
-      <span class="room-dot-badge">${n}</span>
+      <span class="room-dot-badge room-${n}">${n}</span>
       <div class="bed-dots" aria-label="Letti">${dots || `<span class="bed-dot bed-dot-empty" aria-label="Nessun letto"></span>`}</div>
     </div>`;
   }).join("") + `</div>`;
@@ -3852,7 +3852,7 @@ function renderGuestCards(){
           if (culla > 0) dots += `<span class="bed-dot bed-dot-c" aria-label="Culla"></span>`;
 
           return `<div class="room-row">
-            <span class="room-dot-badge" aria-label="Stanza ${n}">${n}</span>
+            <span class="room-dot-badge room-${n}" aria-label="Stanza ${n}">${n}</span>
             <div class="bed-dots" aria-label="Dotazione letti">${dots}</div>
           </div>`;
         }).join("") + `</div>`
