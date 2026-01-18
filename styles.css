@@ -41,7 +41,7 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.031"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.032"),
     radial-gradient(900px 600px at 10% 0%, rgba(43,124,180,0.10), transparent 62%),
     radial-gradient(800px 520px at 90% 8%, rgba(201,119,43,0.10), transparent 64%),
     radial-gradient(900px 700px at 20% 100%, rgba(111,183,214,0.10), transparent 62%),
@@ -777,7 +777,7 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.031"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.032"),
     radial-gradient(900px 650px at 12% 8%, rgba(43,124,180,0.18), transparent 62%),
     radial-gradient(820px 560px at 92% 14%, rgba(201,119,43,0.16), transparent 62%),
     radial-gradient(900px 700px at 18% 96%, rgba(111,183,214,0.16), transparent 62%),
@@ -3286,6 +3286,7 @@ body[data-page="ospiti"] .guest-card .actions {
 /* In sola lettura, le stanze diventano una lista "stack" come nel vecchio menù */
 .guest-form-card.is-view #roomsPicker{ display:none !important; }
 .guest-form-card.is-view #roomsReadOnly{ display:block !important; }
+.guest-form-card.is-view .guest-groups{ display:none !important; }
 
 #roomsReadOnly{
   margin-top:10px;
@@ -3300,25 +3301,30 @@ body[data-page="ospiti"] .guest-card .actions {
   padding-top: 12px;
   border-top: 1px solid rgba(0,0,0,0.80);
 }
+.rooms-readonly-main .ro-grid,
 .rooms-readonly-extra .ro-grid{
   display: grid;
   grid-template-columns: 1fr 1fr;
   gap: 10px;
   margin-top: 10px;
 }
+.rooms-readonly-main .ro-grid:first-child,
 .rooms-readonly-extra .ro-grid:first-child{ margin-top: 0; }
+.rooms-readonly-main .ro-box,
 .rooms-readonly-extra .ro-box{
   padding: 10px 12px;
   border-radius: 16px;
   background: rgba(255,255,255,0.18);
   border: 1px solid rgba(0,0,0,0.20);
 }
+.rooms-readonly-main .ro-lbl,
 .rooms-readonly-extra .ro-lbl{
   font-size: 12px;
   font-weight: 800;
   opacity: 0.72;
   margin-bottom: 4px;
 }
+.rooms-readonly-main .ro-val,
 .rooms-readonly-extra .ro-val{
   font-size: 14px;
   font-weight: 900;
