@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.027";
+const BUILD_VERSION = "dDAE_2.028";
 
 
 function __parseBuildVersion(v){
@@ -3546,8 +3546,23 @@ function _parseRoomsArr(stanzeField){
 }
 
 function buildRoomsStackHTML(guestId, roomsArr){
-  if (!roomsArr || !roomsArr.length) return `<span class="room-dot-badge is-empty" aria-label="Nessuna stanza">—</span>`;
-  return `<div class="rooms-stack" aria-label=" e letti">` + roomsArr.map((n) => {
+  // Normalizza e ordina (1..6)
+  const arr = Array.from(new Set((roomsArr||[])
+    .map(n => parseInt(n,10))
+    .filter(n => isFinite(n) && n>=1 && n<=6)))
+    .sort((a,b)=>a-b);
+
+  // Sempre ritorna un container .rooms-stack (serve per layout in sola lettura)
+  if (!arr.length){
+    return `<div class="rooms-stack" aria-label="Stanze e letti">
+      <div class="room-row">
+        <span class="room-dot-badge is-empty" aria-label="Nessuna stanza">—</span>
+        <div class="bed-dots" aria-label="Letti"><span class="bed-dot bed-dot-empty" aria-label="Nessun letto"></span></div>
+      </div>
+    </div>`;
+  }
+
+  return `<div class="rooms-stack" aria-label="Stanze e letti">` + arr.map((n) => {
     const key = `${guestId}:${n}`;
     const info = (state.stanzeByKey && state.stanzeByKey[key]) ? state.stanzeByKey[key] : { letto_m: 0, letto_s: 0, culla: 0 };
     const lettoM = Number(info.letto_m || 0) || 0;
@@ -3613,16 +3628,29 @@ function renderRoomsReadOnly(ospite){
   const segHtml = segs.map(seg => {
     const stackHTML = buildRoomsStackHTML(guestId, seg.rooms || []);
     const nights = nightsFor(seg.ci, seg.co);
-    const tax = calcTouristTax(ospite, nights);
-    const pill = (nights > 0)
-      ? `<span class="pill">${nights} notti · ${tax}</span>`
-      : `<span class="pill">${tax}</span>`;
 
-    const mDot = seg.mar ? `<span class="dot-marriage" title="Matrimonio">M</span>` : "";
+    // Pillola: notti + tassa di soggiorno (solo in sola lettura)
+    let pillHTML = "";
+    if (nights > 0){
+      const tt = calcTouristTax(ospite, nights);
+      const nightsLabel = (nights === 1) ? `1 notte` : `${nights} notti`;
+      const taxLabel = `Tassa ${formatEUR(tt.total)}`;
+      pillHTML = `<span class="stay-pill" aria-label="Pernottamenti e tassa di soggiorno">
+        <span class="stay-pill__n">${nightsLabel}</span>
+        <span class="stay-pill__sep">•</span>
+        <span class="stay-pill__t">${taxLabel}</span>
+      </span>`;
+    }
+
+    const mDot = seg.mar ? `<span class="marriage-dot" aria-label="Matrimonio">M</span>` : "";
+
+    const rightHTML = (mDot || pillHTML)
+      ? `<div class="stay-right">${mDot}${pillHTML}</div>`
+      : "";
 
     return `<div class="rooms-readonly-wrap rooms-readonly-seg">
-      <div class="rooms-stack">${stackHTML}</div>
-      <div class="pill-wrap">${mDot}${pill}</div>
+      ${stackHTML}
+      ${rightHTML}
     </div>`;
   }).join('<div class="rooms-readonly-divider"></div>');
 
@@ -5252,7 +5280,7 @@ function renderCalendario(){
       cell.setAttribute("aria-label", `Stanza ${r}, ${weekdayShortIT(d)} ${d.getDate()}`);
       cell.dataset.date = dIso;
       cell.dataset.room = String(r);
-      const info = occ.get(`${dIso}:${r}`);
+      const info = occ.get(`${dIso}|${r}`);
       if (!info) {
         // Casella vuota: nessuna azione (evita anche handler globali tipo [data-room])
         cell.addEventListener("click", (ev)=>{
@@ -5269,7 +5297,7 @@ function renderCalendario(){
       }
       if (info) {
         cell.classList.add("has-booking");
-        if (info.lastDay) cell.classList.add("last-day");
+        if (info.isLastDay) cell.classList.add("last-day");
 
         const inner = document.createElement("div");
         inner.className = "cal-cell-inner";
@@ -5322,7 +5350,9 @@ function findCalendarGuestById(id){
 
 function buildWeekOccupancy(weekStart){
   const map = new Map();
-  const guests = Array.isArray(state.ospiti) ? state.ospiti : [];
+  const guests = (state.calendar && Array.isArray(state.calendar.guests))
+    ? state.calendar.guests
+    : (Array.isArray(state.guests) ? state.guests : []);
 
   const weekEnd = new Date(weekStart);
   weekEnd.setDate(weekEnd.getDate() + 7);
