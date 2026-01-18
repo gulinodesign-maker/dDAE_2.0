@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.022";
+const BUILD_VERSION = "dDAE_2.024";
 
 
 function __parseBuildVersion(v){
@@ -1647,7 +1647,7 @@ const lav = e.target.closest && e.target.closest("#goLavanderia") || e.target.cl
     const s1 = e.target.closest && e.target.closest("#goStatGen");
     if (s1){ hideLauncher(); showPage("statgen"); return; }
     const s2 = e.target.closest && e.target.closest("#goStatMensili");
-    if (s2){ hideLauncher(); toast("Incassi mensili: in arrivo"); return; }
+    if (s2){ hideLauncher(); showPage("statmensili"); return; }
     const s3 = e.target.closest && e.target.closest("#goStatSpese");
     if (s3){ hideLauncher(); showPage("statspese"); return; }
     const s4 = e.target.closest && e.target.closest("#goStatPrenotazioni");
@@ -1800,6 +1800,12 @@ state.page = page;
     statGenTopTools.hidden = (page !== "statgen");
   }
 
+  // Top tools (Statistiche → Incassi mensili)
+  const statMensiliTopTools = $("#statMensiliTopTools");
+  if (statMensiliTopTools){
+    statMensiliTopTools.hidden = (page !== "statmensili");
+  }
+
   // Top tools (Statistiche → Spese generali)
   const statSpeseTopTools = $("#statSpeseTopTools");
   if (statSpeseTopTools){
@@ -1856,6 +1862,17 @@ state.page = page;
       .then(()=>{ if (state.navId !== _nav || state.page !== "statgen") return; renderStatGen(); })
       .catch(e=>toast(e.message));
   }
+
+  if (page === "statmensili") {
+    const _nav = navId;
+    Promise.all([
+      ensurePeriodData({ showLoader:true }),
+      loadOspiti({ ...(state.period || {}), force:false }),
+    ])
+      .then(()=>{ if (state.navId !== _nav || state.page !== "statmensili") return; renderStatMensili(); })
+      .catch(e=>toast(e.message));
+  }
+
 
   if (page === "statspese") {
     const _nav = navId;
@@ -2015,7 +2032,7 @@ if (goCalendarioTopOspiti){
   const s1 = $("#goStatGen");
   if (s1){ bindFastTap(s1, () => { hideLauncher(); showPage("statgen"); }); }
   const s2 = $("#goStatMensili");
-  if (s2){ bindFastTap(s2, () => toast("Incassi mensili: in arrivo")); }
+  if (s2){ bindFastTap(s2, () => { hideLauncher(); showPage("statmensili"); }); }
   const s3 = $("#goStatSpese");
   if (s3){ bindFastTap(s3, () => { hideLauncher(); showPage("statspese"); }); }
   const s4 = $("#goStatPrenotazioni");
@@ -2024,6 +2041,10 @@ if (goCalendarioTopOspiti){
   // STATGEN: topbar tools
   const btnBackStats = $("#btnBackStatistiche");
   if (btnBackStats){ bindFastTap(btnBackStats, () => { closeStatPieModal(); showPage("statistiche"); }); }
+  // STATMENSILI: topbar tools
+  const btnBackStatsMensili = $("#btnBackStatisticheMensili");
+  if (btnBackStatsMensili){ bindFastTap(btnBackStatsMensili, () => { showPage("statistiche"); }); }
+
   const btnPie = $("#btnStatPie");
   if (btnPie){ bindFastTap(btnPie, () => { openStatPieModal(); }); }
   const statPieClose = $("#statPieClose");
@@ -2758,6 +2779,135 @@ function renderStatGen(){
   set("sgCassa", s.giacenzaCassa);
 }
 
+
+
+// ===== Statistiche: Incassi mensili =====
+function __hslToHex(h, s, l){
+  h = ((h % 360) + 360) % 360;
+  s = Math.max(0, Math.min(100, s)) / 100;
+  l = Math.max(0, Math.min(100, l)) / 100;
+
+  const c = (1 - Math.abs(2*l - 1)) * s;
+  const hh = h / 60;
+  const x = c * (1 - Math.abs((hh % 2) - 1));
+
+  let r1 = 0, g1 = 0, b1 = 0;
+  if (0 <= hh && hh < 1){ r1 = c; g1 = x; b1 = 0; }
+  else if (1 <= hh && hh < 2){ r1 = x; g1 = c; b1 = 0; }
+  else if (2 <= hh && hh < 3){ r1 = 0; g1 = c; b1 = x; }
+  else if (3 <= hh && hh < 4){ r1 = 0; g1 = x; b1 = c; }
+  else if (4 <= hh && hh < 5){ r1 = x; g1 = 0; b1 = c; }
+  else { r1 = c; g1 = 0; b1 = x; }
+
+  const m = l - c/2;
+  const r = Math.round((r1 + m) * 255);
+  const g = Math.round((g1 + m) * 255);
+  const b = Math.round((b1 + m) * 255);
+  const toHex = (n) => {
+    const v = Math.max(0, Math.min(255, n|0));
+    return v.toString(16).padStart(2, "0");
+  };
+  return `#${toHex(r)}${toHex(g)}${toHex(b)}`;
+}
+
+function __mensiliPalette12(){
+  if (__mensiliPalette12._cache) return __mensiliPalette12._cache;
+  const out = [];
+  const h0 = 0;     // rosso
+  const h1 = 275;   // indaco
+  for (let i = 0; i < 12; i++){
+    const t = (12 === 1) ? 0 : (i / 11);
+    const h = h0 + (h1 - h0) * t;
+    out.push(__hslToHex(h, 86, 55));
+  }
+  __mensiliPalette12._cache = out;
+  return out;
+}
+
+const __MONTHS_IT = [
+  "Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno",
+  "Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"
+];
+
+function computeStatMensili(){
+  const guests = Array.isArray(state.guests) ? state.guests : [];
+  const byMonth = new Array(12).fill(0);
+
+  for (const gg of guests){
+    let iso = "";
+    try{
+      if (typeof __parseDateFlexibleToISO === "function"){
+        iso = __parseDateFlexibleToISO(gg?.check_in ?? gg?.checkIn ?? gg?.arrivo ?? gg?.data_arrivo ?? gg?.checkin ?? "");
+      }
+    }catch(_){ iso = ""; }
+
+    if (!iso){
+      // fallback: prova check-out se manca check-in
+      try{
+        if (typeof __parseDateFlexibleToISO === "function"){
+          iso = __parseDateFlexibleToISO(gg?.check_out ?? gg?.checkOut ?? gg?.partenza ?? gg?.data_partenza ?? "");
+        }
+      }catch(_){ iso = ""; }
+    }
+
+    if (!iso || !/^(\d{4})-(\d{2})-(\d{2})$/.test(iso)) continue;
+    const mm = parseInt(iso.slice(5,7), 10);
+    if (!Number.isFinite(mm) || mm < 1 || mm > 12) continue;
+
+    const dep = Number(gg?.acconto_importo || 0) || 0;
+    const saldo = Number(gg?.saldo_pagato ?? gg?.saldoPagato ?? gg?.saldo ?? 0) || 0;
+    const tot = dep + saldo;
+    if (!isFinite(tot) || tot === 0) continue;
+
+    byMonth[mm - 1] += tot;
+  }
+
+  return { byMonth };
+}
+
+function renderStatMensili(){
+  const wrap = document.getElementById("smList");
+  if (!wrap) return;
+
+  const s = computeStatMensili();
+  state.statMensili = s;
+
+  const months = s.byMonth || new Array(12).fill(0);
+  const max = Math.max(0, ...months.map(v => Number(v || 0)));
+  const colors = __mensiliPalette12();
+
+  wrap.innerHTML = "";
+
+  const fills = [];
+  for (let i = 0; i < 12; i++){
+    const val = Number(months[i] || 0) || 0;
+    const pct = (max > 0) ? Math.max(0, Math.min(100, (val / max) * 100)) : 0;
+
+    const row = document.createElement("div");
+    row.className = "month-row";
+    row.style.setProperty("--mcol", colors[i] || "#ff3b30");
+    row.innerHTML = `
+      <div class="month-head">
+        <div class="month-name">${escapeHtml(__MONTHS_IT[i] || ("Mese " + (i+1)))}</div>
+        <div class="month-val">${euro(val)}</div>
+      </div>
+      <div class="month-bar">
+        <div class="month-fill" style="width:0%"></div>
+      </div>
+    `;
+
+    wrap.appendChild(row);
+    const fill = row.querySelector(".month-fill");
+    if (fill) fills.push({ el: fill, pct });
+  }
+
+  // animazione riempimento
+  requestAnimationFrame(() => {
+    for (const f of fills){
+      try{ f.el.style.width = `${f.pct.toFixed(2)}%`; }catch(_){ }
+    }
+  });
+}
 function openStatPieModal(){
   try{
     if (!state.statGen) state.statGen = computeStatGen();
