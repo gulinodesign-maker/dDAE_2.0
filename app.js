@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.030";
+const BUILD_VERSION = "dDAE_2.031";
 
 
 function __parseBuildVersion(v){
@@ -580,6 +580,9 @@ const state = {
   occupiedRooms: new Set(),
   guestDepositType: "contante",
   guestEditId: null,
+  guestEditBaseId: null,
+  guestOriginalGroupIds: [],
+  guestDeletedGroupIds: [],
   guestMode: "create",
   lettiPerStanza: {},
     bedsDirty: false,
@@ -3490,95 +3493,127 @@ function enterGuestEditMode(ospite){
 
   state.guestMode = "edit";
   try{ updateGuestFormModeClass(); }catch(_){ }
-  state.guestEditId = ospite?.id ?? null;
-  state.guestEditCreatedAt = (ospite?.created_at ?? ospite?.createdAt ?? null);
 
-  const title = document.getElementById("ospiteFormTitle");
-  if (title) title.textContent = "Modifica ospite";
-  const btn = document.getElementById("createGuestCard");
-  if (btn) btn.textContent = "Salva modifiche";
+  // Aggregato: puo' contenere _groups (piu righe ospite)
+  const rawId = guestIdOf(ospite);
+  const baseId = baseGuestId(rawId) || String(ospite?.id || rawId || '').trim();
 
-  document.getElementById("guestName").value = ospite.nome || ospite.name || "";
-  document.getElementById("guestAdults").value = ospite.adulti ?? ospite.adults ?? 0;
-  document.getElementById("guestKidsU10").value = ospite.bambini_u10 ?? ospite.kidsU10 ?? 0;
-  document.getElementById("guestCheckIn").value = formatISODateLocal(ospite.check_in || ospite.checkIn || "") || "";
-  document.getElementById("guestCheckOut").value = formatISODateLocal(ospite.check_out || ospite.checkOut || "") || "";
-  document.getElementById("guestTotal").value = ospite.importo_prenotazione ?? ospite.total ?? 0;
-  document.getElementById("guestBooking").value = ospite.importo_booking ?? ospite.booking ?? 0;
-  document.getElementById("guestDeposit").value = ospite.acconto_importo ?? ospite.deposit ?? 0;
-  document.getElementById("guestSaldo").value = ospite.saldo_pagato ?? ospite.saldoPagato ?? ospite.saldo ?? 0;
+  state.guestEditId = baseId || (ospite?.id ?? null);
+  state.guestEditBaseId = state.guestEditId;
 
+  const groupsRows = (Array.isArray(ospite?._groups) && ospite._groups.length) ? ospite._groups.slice() : [ospite];
+  groupsRows.sort((a,b)=>{
+    const ai = guestGroupIndex(guestIdOf(a));
+    const bi = guestGroupIndex(guestIdOf(b));
+    if (ai != bi) return ai - bi;
+    const at = parseDateTs(a?.created_at ?? a?.createdAt ?? '');
+    const bt = parseDateTs(b?.created_at ?? b?.createdAt ?? '');
+    if (at != null && bt != null) return at - bt;
+    if (at != null) return -1;
+    if (bt != null) return 1;
+    return 0;
+  });
 
-  // Gruppi prenotazione (edit): in modifica gestiamo un solo gruppo
+  const main = groupsRows.find(x => guestIdOf(x) === state.guestEditId) || groupsRows[0] || ospite;
+  state.guestEditCreatedAt = (main?.created_at ?? main?.createdAt ?? null);
+
+  // Reset tracking
+  state.guestDeletedGroupIds = [];
+  state.guestOriginalGroupIds = groupsRows.map(r => guestIdOf(r)).filter(Boolean);
+
+  const title = document.getElementById('ospiteFormTitle');
+  if (title) title.textContent = 'Modifica ospite';
+  const btn = document.getElementById('createGuestCard');
+  if (btn) btn.textContent = 'Salva modifiche';
+
+  // Campi anagrafica/pagamenti (dal gruppo 0/base)
+  document.getElementById('guestName').value = main?.nome || main?.name || '';
+  document.getElementById('guestTotal').value = main?.importo_prenotazione ?? main?.total ?? 0;
+  document.getElementById('guestBooking').value = main?.importo_booking ?? main?.booking ?? 0;
+  document.getElementById('guestDeposit').value = main?.acconto_importo ?? main?.deposit ?? 0;
+  document.getElementById('guestSaldo').value = main?.saldo_pagato ?? main?.saldoPagato ?? main?.saldo ?? 0;
+
+  // Gruppi prenotazione (tutti)
   __ensureGuestGroups();
-  state.guestGroups = [{ rooms: new Set(), marriage: !!(ospite.matrimonio), occupied: new Set(), _availKey: '',
-    adults: parseInt(document.getElementById('guestAdults')?.value || '0',10) || 0,
-    kidsU10: parseInt(document.getElementById('guestKidsU10')?.value || '0',10) || 0,
-    checkIn: (document.getElementById('guestCheckIn')?.value || '').trim(),
-    checkOut: (document.getElementById('guestCheckOut')?.value || '').trim()
-  }];
+  state.guestGroups = groupsRows.map((r) => {
+    const gid = guestIdOf(r);
+    const roomsArr = _parseRoomsArr(r?.stanze ?? r?.rooms ?? r?.stanza ?? '');
+    return {
+      _id: gid,
+      _createdAt: (r?.created_at ?? r?.createdAt ?? null),
+      _isNew: false,
+      rooms: new Set(roomsArr.map(x => parseInt(x,10)).filter(n => isFinite(n))),
+      marriage: !!(r?.matrimonio),
+      occupied: new Set(),
+      _availKey: '',
+      adults: parseInt(r?.adulti ?? r?.adults ?? 0, 10) || 0,
+      kidsU10: parseInt(r?.bambini_u10 ?? r?.kidsU10 ?? 0, 10) || 0,
+      checkIn: formatISODateLocal(r?.check_in ?? r?.checkIn ?? '') || '',
+      checkOut: formatISODateLocal(r?.check_out ?? r?.checkOut ?? '') || ''
+    };
+  });
+
+  // Aliases compat gruppo0
+  if (!state.guestGroups.length) {
+    state.guestGroups = [{ rooms: new Set(), marriage: false, occupied: new Set(), _availKey: '', adults: 0, kidsU10: 0, checkIn: '', checkOut: '' }];
+  }
   state.guestRooms = state.guestGroups[0].rooms;
   state.guestMarriage = !!state.guestGroups[0].marriage;
   state.occupiedRooms = state.guestGroups[0].occupied;
+
+  // Applica valori gruppo0 ai campi principali
+  try{
+    const g0 = state.guestGroups[0];
+    const a0 = document.getElementById('guestAdults');
+    const k0 = document.getElementById('guestKidsU10');
+    const ci0 = document.getElementById('guestCheckIn');
+    const co0 = document.getElementById('guestCheckOut');
+    if (a0) a0.value = String(g0.adults ?? 0);
+    if (k0) k0.value = String(g0.kidsU10 ?? 0);
+    if (ci0) ci0.value = String(g0.checkIn ?? '');
+    if (co0) co0.value = String(g0.checkOut ?? '');
+  }catch(_){ }
+
   const extraG = document.getElementById('guestGroupsExtra');
   if (extraG) extraG.innerHTML = '';
   try { window.__ddae_renderGuestGroups && window.__ddae_renderGuestGroups(); } catch (_) {}
 
-  // matrimonio
-  const mEl = document.getElementById("guestMarriage");
-  if (mEl) mEl.checked = !!(ospite.matrimonio);
-  refreshFloatingLabels();
+  // matrimonio (checkbox legacy)
+  const mEl = document.getElementById('guestMarriage');
+  if (mEl) mEl.checked = !!state.guestMarriage;
+
+  try { refreshFloatingLabels(); } catch (_) {}
   try { updateGuestRemaining(); } catch (_) {}
 
-
   // deposit type (se disponibile)
-  const dt = ospite.acconto_tipo || ospite.depositType || "contante";
+  const dt = main?.acconto_tipo || main?.depositType || 'contante';
   state.guestDepositType = dt;
-  setPayType("depositType", dt);
+  setPayType('depositType', dt);
 
-  const st = ospite.saldo_tipo || ospite.saldoTipo || "contante";
+  const st = main?.saldo_tipo || main?.saldoTipo || 'contante';
   state.guestSaldoType = st;
-  setPayType("saldoType", st);
+  setPayType('saldoType', st);
 
-  // ricevuta fiscale (toggle indipendente)
-  const depRec = truthy(ospite.acconto_ricevuta ?? ospite.accontoRicevuta ?? ospite.ricevuta_acconto ?? ospite.ricevutaAcconto ?? ospite.acconto_ricevutain);
-  const saldoRec = truthy(ospite.saldo_ricevuta ?? ospite.saldoRicevuta ?? ospite.ricevuta_saldo ?? ospite.ricevutaSaldo ?? ospite.saldo_ricevutain);
+  // ricevuta fiscale
+  const depRec = truthy(main?.acconto_ricevuta ?? main?.accontoRicevuta ?? main?.ricevuta_acconto ?? main?.ricevutaAcconto ?? main?.acconto_ricevutain);
+  const saldoRec = truthy(main?.saldo_ricevuta ?? main?.saldoRicevuta ?? main?.ricevuta_saldo ?? main?.ricevutaSaldo ?? main?.saldo_ricevutain);
   state.guestDepositReceipt = depRec;
   state.guestSaldoReceipt = saldoRec;
-  setPayReceipt("depositType", depRec);
-  setPayReceipt("saldoType", saldoRec);
-
-
+  setPayReceipt('depositType', depRec);
+  setPayReceipt('saldoType', saldoRec);
 
   // registrazioni PS/ISTAT
-  const psReg = truthy(ospite.ps_registrato ?? ospite.psRegistrato);
-  const istatReg = truthy(ospite.istat_registrato ?? ospite.istatRegistrato);
+  const psReg = truthy(main?.ps_registrato ?? main?.psRegistrato);
+  const istatReg = truthy(main?.istat_registrato ?? main?.istatRegistrato);
   state.guestPSRegistered = psReg;
   state.guestISTATRegistered = istatReg;
-  setRegFlags("regTags", psReg, istatReg);
-  // stanze: backend non espone GET stanze; se in futuro arrivano su ospite.stanze li applichiamo
-  try {
-    if (ospite.stanze) {
-      const rooms = Array.isArray(ospite.stanze) ? ospite.stanze : String(ospite.stanze).split(",").map(x=>x.trim()).filter(Boolean);
-      state.guestRooms = new Set(rooms.map(x=>parseInt(x,10)).filter(n=>isFinite(n)));
-      document.querySelectorAll("#roomsPicker .room-dot").forEach(btn => {
-        const n = parseInt(btn.getAttribute("data-room"), 10);
-        const on = state.guestRooms.has(n);
-        btn.classList.toggle("selected", on);
-        btn.setAttribute("aria-pressed", on ? "true" : "false");
-      });
-    }
-  } catch (_) {}
+  setRegFlags('regTags', psReg, istatReg);
 
-  // sync gruppo0 rooms
-  try { if (Array.isArray(state.guestGroups) && state.guestGroups[0]) state.guestGroups[0].rooms = state.guestRooms; } catch (_) {}
-
-  // --- FIX A+B (dDAE): preserva la configurazione letti esistente e non riscrivere "stanze" se non è cambiata ---
+  // --- Preserva configurazione letti (solo per le stanze del gruppo 0) ---
   try {
     state.bedsDirty = false;
 
-    // Ricostruisci lettiPerStanza dai dati già salvati sul foglio "stanze" (state.stanzeByKey)
-    const gid = String(guestIdOf(ospite) || ospite?.id || "").trim();
+    const gid = String(state.guestEditId || '').trim();
     const next = {};
     const roomsNow = Array.from(state.guestRooms || []).map(n=>parseInt(n,10)).filter(n=>isFinite(n));
     for (const rn of roomsNow){
@@ -3588,30 +3623,27 @@ function enterGuestEditMode(ospite){
         matrimoniale: !!(d.letto_m),
         singoli: parseInt(d.letto_s || 0, 10) || 0,
         culla: !!(d.culla),
-        note: ""
+        note: ''
       };
     }
     state.lettiPerStanza = next;
 
-    // Snapshot originale per evitare riscritture inutili su salvataggio
     state.stanzeSnapshotOriginal = JSON.stringify(buildArrayFromState());
   } catch (_) {}
 
   try { updateOspiteHdActions(); } catch (_) {}
 
-  // ✅ FIX dDAE: entrando in modifica con date gia' valorizzate, ricalcola subito disponibilita' stanze.
-  // In iOS/Safari PWA gli handler input/change dei campi date possono non partire finche' l'utente non li tocca.
-  // refreshRoomsAvailability/renderRooms sono definiti in setupOspite: li esponiamo su window e li richiamiamo qui.
+  // Ricalcola subito disponibilita' stanze per tutti i gruppi
   try {
-    state._roomsAvailKey = "";
     const run = () => {
-      try { window.__ddae_renderRooms && window.__ddae_renderRooms(); } catch (_) {}
-      try { window.__ddae_refreshRoomsAvailability && window.__ddae_refreshRoomsAvailability(); } catch (_) {}
+      try { window.__ddae_renderGuestGroups && window.__ddae_renderGuestGroups(); } catch (_) {}
+      try { window.__ddae_refreshAllGuestRooms && window.__ddae_refreshAllGuestRooms(); } catch (_) {}
     };
     setTimeout(run, 50);
     setTimeout(run, 180);
   } catch (_) {}
 }
+
 
 function _guestIdOf(item){
   return String(item?.id || item?.ID || item?.ospite_id || item?.ospiteId || item?.guest_id || item?.guestId || "").trim();
@@ -3821,7 +3853,14 @@ function buildArrayFromRoomsSet(ospiteId, roomsSet){
   roomsNow.sort((a,b)=>a-b);
 
   for (const rn of roomsNow){
-    const cfg = (state.lettiPerStanza && state.lettiPerStanza[String(rn)]) ? state.lettiPerStanza[String(rn)] : {};
+    const key = `${ospiteId}:${String(rn)}`;
+    const d = (state.stanzeByKey && state.stanzeByKey[key]) ? state.stanzeByKey[key] : null;
+    const cfg = d ? {
+      matrimoniale: !!(d.letto_m),
+      singoli: parseInt(d.letto_s || 0, 10) || 0,
+      culla: !!(d.culla),
+      note: (d.note || '').toString()
+    } : ((state.lettiPerStanza && state.lettiPerStanza[String(rn)]) ? state.lettiPerStanza[String(rn)] : {});
     arr.push({
       ospite_id: ospiteId,
       stanza_num: rn,
@@ -3850,24 +3889,34 @@ async function saveGuest(){
 
   const isEdit = state.guestMode === 'edit';
 
-  // In modifica: un solo gruppo (0)
+  // EDIT: gruppi multipli (ogni gruppo = riga ospite)
   if (isEdit){
-    if (!state.guestEditId) return toast('ID ospite mancante');
+    const baseId = String(state.guestEditId || '').trim();
+    if (!baseId) return toast('ID ospite mancante');
 
-    const adults = parseInt(document.getElementById('guestAdults')?.value || '0', 10) || 0;
-    const kidsU10 = parseInt(document.getElementById('guestKidsU10')?.value || '0', 10) || 0;
-    const checkIn = document.getElementById('guestCheckIn')?.value || '';
-    const checkOut = document.getElementById('guestCheckOut')?.value || '';
+    const original = new Set(Array.isArray(state.guestOriginalGroupIds) ? state.guestOriginalGroupIds : []);
 
-    const rooms = Array.from(state.guestRooms || []).map(n=>parseInt(n,10)).filter(n=>isFinite(n)).sort((a,b)=>a-b);
+    // calcola suffisso massimo esistente
+    let maxSuffix = 0;
+    try{
+      for (const oid of original){
+        const m = String(oid||'').match(/_g([0-9]+)$/);
+        if (m && m[1]){
+          const n = parseInt(m[1], 10) || 0;
+          if (n > maxSuffix) maxSuffix = n;
+        }
+      }
+    }catch(_){ }
+    let nextSuffix = maxSuffix + 1;
 
-    const payload = {
-      id: state.guestEditId,
+    const deleted = new Set(Array.isArray(state.guestDeletedGroupIds) ? state.guestDeletedGroupIds : []);
+
+    // assicura che gruppo0 sia sempre il base
+    if (state.guestGroups && state.guestGroups[0]) state.guestGroups[0]._id = baseId;
+
+    // valida nome e pagamenti
+    const payloadCommon = {
       nome: name,
-      adulti: adults,
-      bambini_u10: kidsU10,
-      check_in: checkIn,
-      check_out: checkOut,
       importo_prenotazione: total,
       importo_booking: booking,
       acconto_importo: deposit,
@@ -3877,31 +3926,94 @@ async function saveGuest(){
       acconto_ricevuta: !!state.guestDepositReceipt,
       saldo_ricevuta: !!state.guestSaldoReceipt,
       saldo_ricevutain: !!state.guestSaldoReceipt,
-      matrimonio: !!(state.guestMarriage),
       ps_registrato: state.guestPSRegistered ? '1' : '',
-      istat_registrato: state.guestISTATRegistered ? '1' : '',
-      stanze: rooms.join(',')
+      istat_registrato: state.guestISTATRegistered ? '1' : ''
     };
 
-    // preserva la data di inserimento (non deve cambiare con le modifiche)
-    const ca = state.guestEditCreatedAt;
-    if (ca){ payload.createdAt = ca; payload.created_at = ca; }
+    // salva/crea ogni gruppo
+    for (let gi = 0; gi < (state.guestGroups || []).length; gi++){
+      const g = state.guestGroups[gi] || {};
 
-    await api('ospiti', { method:'PUT', body: payload });
+      const adults = parseInt(g.adults || 0, 10) || 0;
+      const kidsU10 = parseInt(g.kidsU10 || 0, 10) || 0;
+      const checkIn = String(g.checkIn || '').trim();
+      const checkOut = String(g.checkOut || '').trim();
+      const roomsSet = (g.rooms instanceof Set) ? g.rooms : new Set();
 
-    const ospiteId = payload.id;
-    const stanze = buildArrayFromState();
+      const isEmpty = (!checkIn && !checkOut && roomsSet.size === 0 && adults === 0 && kidsU10 === 0);
+      if (isEmpty){
+        const idEmpty = String(g._id || '').trim();
+        if (idEmpty && idEmpty !== baseId) deleted.add(idEmpty);
+        if (gi === 0) return toast('Compila almeno il primo gruppo');
+        continue;
+      }
 
-    let shouldSave = true;
-    try {
-      const snapNow = JSON.stringify(stanze);
-      const snapOrig = state.stanzeSnapshotOriginal || '';
-      shouldSave = (snapNow !== snapOrig);
-    } catch (_) { shouldSave = true; }
+      if (!checkIn || !checkOut || checkOut <= checkIn){
+        toast('Controlla check-in e check-out');
+        return;
+      }
 
-    if (shouldSave){
-      try { await api('stanze', { method:'POST', body: { ospite_id: ospiteId, stanze } }); } catch (_) {}
+      const rooms = Array.from(roomsSet).map(n=>parseInt(n,10)).filter(n=>isFinite(n)).sort((a,b)=>a-b);
+
+      let id = String(g._id || '').trim();
+      if (gi === 0){
+        id = baseId;
+      } else if (!id){
+        id = `${baseId}_g${nextSuffix++}`;
+        g._id = id;
+        g._isNew = true;
+      }
+
+      const payload = {
+        id,
+        nome: name,
+        adulti: adults,
+        bambini_u10: kidsU10,
+        check_in: checkIn,
+        check_out: checkOut,
+        matrimonio: !!g.marriage,
+        ps_registrato: '',
+        istat_registrato: '',
+        stanze: rooms.join(',')
+      };
+
+      if (id === baseId){
+        Object.assign(payload, payloadCommon);
+      } else {
+        payload.importo_prenotazione = 0;
+        payload.importo_booking = 0;
+        payload.acconto_importo = 0;
+        payload.acconto_tipo = depositType;
+        payload.saldo_pagato = 0;
+        payload.saldo_tipo = saldoTipo;
+        payload.acconto_ricevuta = false;
+        payload.saldo_ricevuta = false;
+        payload.saldo_ricevutain = false;
+        payload.ps_registrato = '';
+        payload.istat_registrato = '';
+      }
+
+      const ca = g._createdAt || (id === baseId ? state.guestEditCreatedAt : null);
+      if (ca){ payload.createdAt = ca; payload.created_at = ca; }
+
+      const method = (id === baseId || original.has(id)) ? 'PUT' : 'POST';
+      await api('ospiti', { method, body: payload });
+
+      // Aggiorna foglio stanze per questo gruppo (preserva config se esiste)
+      try {
+        const stanze = buildArrayFromRoomsSet(id, roomsSet);
+        await api('stanze', { method:'POST', body: { ospite_id: id, stanze } });
+      } catch (_) {}
     }
+
+    // elimina gruppi rimossi (solo extra)
+    try{
+      for (const id of Array.from(deleted)){
+        const rid = String(id || '').trim();
+        if (!rid || rid === baseId) continue;
+        try{ await api('ospiti', { method:'DELETE', params:{ id: rid }}); }catch(_){ }
+      }
+    }catch(_){ }
 
     try{ invalidateApiCache('ospiti|'); }catch(_){ }
     try{ invalidateApiCache('stanze|'); }catch(_){ }
@@ -4182,7 +4294,7 @@ function setupOspite(){
       const gi = parseInt(ctrl.getAttribute('data-gi') || '0', 10) || 0;
       const minus = ctrl.querySelector('[data-action="remove"]');
       const plus = ctrl.querySelector('[data-action="add"]');
-      const canEdit = (state.guestMode === 'create');
+      const canEdit = (state.guestMode === 'create' || state.guestMode === 'edit');
       if (!canEdit){
         if (minus) minus.hidden = true;
         if (plus) plus.hidden = true;
@@ -4302,8 +4414,12 @@ function setupOspite(){
 
       for (const row of rows){
         if (editId){
+          const base = baseGuestId(editId);
           const gid = guestIdOf(row);
-          if (gid && gid === editId) continue;
+          if (gid){
+            const gbase = baseGuestId(gid);
+            if ((base && gbase && gbase === base) || gid === editId) continue;
+          }
         }
         const rci = String(row.check_in ?? row.checkIn ?? row.checkin ?? '').slice(0,10);
         const rco = String(row.check_out ?? row.checkOut ?? row.checkout ?? '').slice(0,10);
@@ -4369,19 +4485,45 @@ function setupOspite(){
 
     const action = btn.getAttribute('data-action');
     if (action){
-      if (state.guestMode !== 'create') return;
+      const can = (state.guestMode === 'create' || state.guestMode === 'edit');
+      if (!can) return;
       const gi = parseInt(btn.getAttribute('data-gi') || '0', 10) || 0;
       __syncGuestGroupsFromDom();
 
       if (action === 'add'){
-        state.guestGroups.push({ rooms: new Set(), marriage: false, occupied: new Set(), _availKey: '', adults: 0, kidsU10: 0, checkIn: '', checkOut: '' });
+        state.guestGroups.push({
+          _id: null,
+          _createdAt: null,
+          _isNew: (state.guestMode === 'edit'),
+          rooms: new Set(),
+          marriage: false,
+          occupied: new Set(),
+          _availKey: '',
+          adults: 0,
+          kidsU10: 0,
+          checkIn: '',
+          checkOut: ''
+        });
         __renderGuestGroups();
         __refreshAllGuestRoomsAvailability();
       }
       if (action === 'remove'){
         if (gi <= 0) return;
         if (state.guestGroups.length <= 1) return;
-        // rimuove gruppo
+
+        // In edit: traccia l'eliminazione del gruppo (riga ospite)
+        try{
+          if (state.guestMode === 'edit'){
+            const g = state.guestGroups[gi];
+            const id = String(g && g._id || '').trim();
+            if (id){
+              if (!Array.isArray(state.guestDeletedGroupIds)) state.guestDeletedGroupIds = [];
+              state.guestDeletedGroupIds.push(id);
+            }
+          }
+        }catch(_){ }
+
+        // rimuove gruppo e pulisce letti per stanze non piu' selezionate
         try{
           const g = state.guestGroups[gi];
           if (g && g.rooms){
@@ -4390,6 +4532,7 @@ function setupOspite(){
             }
           }
         }catch(_){ }
+
         state.guestGroups.splice(gi, 1);
         __renderGuestGroups();
         __refreshAllGuestRoomsAvailability();
