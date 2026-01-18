@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.028";
+const BUILD_VERSION = "dDAE_2.026";
 
 
 function __parseBuildVersion(v){
@@ -3439,21 +3439,8 @@ function _parseRoomsArr(stanzeField){
 }
 
 function buildRoomsStackHTML(guestId, roomsArr){
-  // dDAE_2.028 — Ospiti (sola lettura): pallini stanze in orizzontale, letti sotto ogni stanza
-  if (!roomsArr || !roomsArr.length) {
-    return `
-      <div class="rooms-ro" aria-label="Stanze e letti">
-        <div class="rooms-ro-grid" aria-label="Stanze selezionate">
-          <div class="room-col">
-            <span class="room-dot-badge is-empty" aria-label="Nessuna stanza">—</span>
-            <div class="bed-dots bed-dots-under" aria-label="Letti"></div>
-          </div>
-        </div>
-      </div>
-    `;
-  }
-
-  const cols = roomsArr.map((n) => {
+  if (!roomsArr || !roomsArr.length) return `<span class="room-dot-badge is-empty" aria-label="Nessuna stanza">—</span>`;
+  return `<div class="rooms-stack" aria-label=" e letti">` + roomsArr.map((n) => {
     const key = `${guestId}:${n}`;
     const info = (state.stanzeByKey && state.stanzeByKey[key]) ? state.stanzeByKey[key] : { letto_m: 0, letto_s: 0, culla: 0 };
     const lettoM = Number(info.letto_m || 0) || 0;
@@ -3465,21 +3452,11 @@ function buildRoomsStackHTML(guestId, roomsArr){
     for (let i = 0; i < lettoS; i++) dots += `<span class="bed-dot bed-dot-s" aria-label="Letto singolo"></span>`;
     if (culla > 0) dots += `<span class="bed-dot bed-dot-c" aria-label="Culla"></span>`;
 
-    return `
-      <div class="room-col" aria-label="Stanza ${n}">
-        <span class="room-dot-badge room-${n}">${n}</span>
-        <div class="bed-dots bed-dots-under" aria-label="Letti">${dots || ``}</div>
-      </div>
-    `;
-  }).join("");
-
-  return `
-    <div class="rooms-ro" aria-label="Stanze e letti">
-      <div class="rooms-ro-grid" aria-label="Stanze selezionate">
-        ${cols}
-      </div>
-    </div>
-  `;
+    return `<div class="room-row">
+      <span class="room-dot-badge room-${n}">${n}</span>
+      <div class="bed-dots" aria-label="Letti">${dots || `<span class="bed-dot bed-dot-empty" aria-label="Nessun letto"></span>`}</div>
+    </div>`;
+  }).join("") + `</div>`;
 }
 
 function renderRoomsReadOnly(ospite){
@@ -3499,28 +3476,30 @@ function renderRoomsReadOnly(ospite){
 
   const stackHTML = buildRoomsStackHTML(guestId, roomsArr);
 
-  // dDAE_2.028 — Riga sotto: pill azzurra "M" (tassa soggiorno) + totale notti, centrati
+  // Pillola: notti + tassa di soggiorno (solo in sola lettura)
   const nights = calcStayNights(ospite);
-  let bottomHTML = ``;
+  let pillHTML = ``;
+
   if (nights != null){
     const tt = calcTouristTax(ospite, nights);
     const nightsLabel = (nights === 1) ? `1 notte` : `${nights} notti`;
-    const taxLabel = `${formatEUR(tt.total)}`;
-
-    bottomHTML = `
-      <div class="rooms-ro-bottom" aria-label="Tassa e notti">
-        <span class="tax-pill-azure" aria-label="Tassa di soggiorno">
-          <span class="tax-pill-azure__m">M</span>
-          <span class="tax-pill-azure__v">${taxLabel}</span>
-        </span>
-        <span class="nights-pill" aria-label="Totale notti">${nightsLabel}</span>
-      </div>
-    `;
+    const taxLabel = `Tassa ${formatEUR(tt.total)}`;
+    pillHTML = `<span class="stay-pill" aria-label="Pernottamenti e tassa di soggiorno">
+      <span class="stay-pill__n">${nightsLabel}</span>
+      <span class="stay-pill__sep">•</span>
+      <span class="stay-pill__t">${taxLabel}</span>
+    </span>`;
   }
 
-  ro.innerHTML = `<div class="rooms-readonly-wrap rooms-readonly-centered">${stackHTML}${bottomHTML}</div>`;
-}
+  // Matrimonio: pallino verde con "m" bianca, a sinistra della pillola (solo in sola lettura)
+  const marriageOn = !!(ospite?.matrimonio);
 
+  const rightHTML = pillHTML
+    ? `<div class="stay-right">${marriageOn ? `<span class="marriage-dot" aria-label="Matrimonio">M</span>` : ``}${pillHTML}</div>`
+    : ``;
+
+  ro.innerHTML = `<div class="rooms-readonly-wrap">${stackHTML}${rightHTML}</div>`;
+}
 
 function updateOspiteHdActions(){
   const hdActions = document.getElementById("ospiteHdActions");
