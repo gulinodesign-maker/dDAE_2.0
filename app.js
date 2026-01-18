@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.024";
+const BUILD_VERSION = "dDAE_2.025";
 
 
 function __parseBuildVersion(v){
@@ -1851,6 +1851,7 @@ state.page = page;
   if (page === "statistiche") {
     try{ closeStatPieModal(); }catch(_){ }
     try{ closeStatSpesePieModal(); }catch(_){ }
+    try{ closeStatMensiliPieModal(); }catch(_){ }
   }
 
   if (page === "statgen") {
@@ -2043,7 +2044,21 @@ if (goCalendarioTopOspiti){
   if (btnBackStats){ bindFastTap(btnBackStats, () => { closeStatPieModal(); showPage("statistiche"); }); }
   // STATMENSILI: topbar tools
   const btnBackStatsMensili = $("#btnBackStatisticheMensili");
-  if (btnBackStatsMensili){ bindFastTap(btnBackStatsMensili, () => { showPage("statistiche"); }); }
+  if (btnBackStatsMensili){ bindFastTap(btnBackStatsMensili, () => { closeStatMensiliPieModal(); showPage("statistiche"); }); }
+
+  const btnPieMensili = $("#btnStatMensiliPie");
+  if (btnPieMensili){ bindFastTap(btnPieMensili, () => { openStatMensiliPieModal(); }); }
+  const statMensiliPieClose = $("#statMensiliPieClose");
+  if (statMensiliPieClose){ bindFastTap(statMensiliPieClose, () => closeStatMensiliPieModal()); }
+  const statMensiliPieModal = $("#statMensiliPieModal");
+  if (statMensiliPieModal){
+    statMensiliPieModal.addEventListener("click", (e)=>{
+      if (e.target === statMensiliPieModal) closeStatMensiliPieModal();
+    });
+  }
+
+
+
 
   const btnPie = $("#btnStatPie");
   if (btnPie){ bindFastTap(btnPie, () => { openStatPieModal(); }); }
@@ -2959,6 +2974,56 @@ function closeStatPieModal(){
   m.setAttribute("aria-hidden", "true");
 }
 
+
+
+function openStatMensiliPieModal(){
+  try{
+    if (!state.statMensili) state.statMensili = computeStatMensili();
+  }catch(_){ state.statMensili = state.statMensili || null; }
+
+  const m = document.getElementById("statMensiliPieModal");
+  if (!m) return;
+  m.hidden = false;
+  m.setAttribute("aria-hidden", "false");
+
+  const s = state.statMensili || computeStatMensili();
+  const months = (s.byMonth && Array.isArray(s.byMonth)) ? s.byMonth : new Array(12).fill(0);
+  const colors = __mensiliPalette12();
+  const slices = months.map((v,i)=>({
+    label: __MONTHS_IT[i] || ("Mese " + (i+1)),
+    value: Number(v || 0) || 0,
+    color: colors[i] || "#2b7cb4"
+  }));
+
+  drawPie("statMensiliPieCanvas", slices);
+
+  const leg = document.getElementById("statMensiliPieLegend");
+  if (leg){
+    const total = slices.reduce((a,x)=>a+Math.max(0,Number(x.value||0)),0);
+    leg.innerHTML = "";
+    slices.forEach((sl)=>{
+      const v = Math.max(0, Number(sl.value || 0));
+      const pct = total > 0 ? (v/total*100) : 0;
+      const row = document.createElement("div");
+      row.className = "legrow";
+      row.innerHTML = `
+        <div class="legleft">
+          <div class="dot" style="background:${sl.color}"></div>
+          <div class="legname">${escapeHtml(sl.label)}</div>
+        </div>
+        <div class="legright">${pct.toFixed(1)}% · ${euro(v)}</div>
+      `;
+      leg.appendChild(row);
+    });
+  }
+}
+
+function closeStatMensiliPieModal(){
+  const m = document.getElementById("statMensiliPieModal");
+  if (!m) return;
+  m.hidden = true;
+  m.setAttribute("aria-hidden", "true");
+}
 
 function computeStatSpese(){
   const r = state.report || null;
