@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.026";
+const BUILD_VERSION = "dDAE_2.027";
 
 
 function __parseBuildVersion(v){
@@ -296,19 +296,37 @@ function __captureUiState(){
       saldoType: state.guestSaldoType || "contante",
       depositReceipt: !!state.guestDepositReceipt,
       saldoReceipt: !!state.guestSaldoReceipt,
-      marriage: !!state.guestMarriage,
-      rooms: Array.from(state.guestRooms || []),
+      groups: (() => {
+        const groups = [];
+        try {
+          __ensureGuestGroups();
+          const n = (Array.isArray(state.guestGroups) && state.guestGroups.length) ? state.guestGroups.length : 1;
+          for (let gi = 0; gi < n; gi++){
+            const g = (state.guestGroups && state.guestGroups[gi]) ? state.guestGroups[gi] : {};
+            const adultsId = (gi === 0) ? 'guestAdults' : `guestAdults_g${gi}`;
+            const kidsId = (gi === 0) ? 'guestKidsU10' : `guestKidsU10_g${gi}`;
+            const ciId = (gi === 0) ? 'guestCheckIn' : `guestCheckIn_g${gi}`;
+            const coId = (gi === 0) ? 'guestCheckOut' : `guestCheckOut_g${gi}`;
+            const rooms = (gi === 0) ? (state.guestRooms || new Set()) : (g.rooms || new Set());
+            groups.push({
+              adults: __captureFormValue(adultsId),
+              kidsU10: __captureFormValue(kidsId),
+              checkIn: __captureFormValue(ciId),
+              checkOut: __captureFormValue(coId),
+              marriage: (gi === 0) ? !!state.guestMarriage : !!g.marriage,
+              rooms: Array.from(rooms || [])
+            });
+          }
+        } catch (_) {}
+        return groups;
+      })(),
       lettiPerStanza: state.lettiPerStanza || {},
       form: {
-        guestName: __captureFormValue("guestName"),
-        guestAdults: __captureFormValue("guestAdults"),
-        guestKidsU10: __captureFormValue("guestKidsU10"),
-        guestCheckIn: __captureFormValue("guestCheckIn"),
-        guestCheckOut: __captureFormValue("guestCheckOut"),
-        guestTotal: __captureFormValue("guestTotal"),
-        guestBooking: __captureFormValue("guestBooking"),
-        guestDeposit: __captureFormValue("guestDeposit"),
-        guestSaldo: __captureFormValue("guestSaldo"),
+        guestName: __captureFormValue('guestName'),
+        guestTotal: __captureFormValue('guestTotal'),
+        guestBooking: __captureFormValue('guestBooking'),
+        guestDeposit: __captureFormValue('guestDeposit'),
+        guestSaldo: __captureFormValue('guestSaldo')
       }
     } : null,
     calendar: {
@@ -345,36 +363,43 @@ function __applyUiState(restore){
       state.guestSaldoType = restore.guest.saldoType || state.guestSaldoType;
       state.guestDepositReceipt = !!restore.guest.depositReceipt;
       state.guestSaldoReceipt = !!restore.guest.saldoReceipt;
-      state.guestMarriage = !!restore.guest.marriage;
 
-      // stanze selezionate
+      // gruppi prenotazione (restore)
       try {
-        state.guestRooms = new Set((restore.guest.rooms || []).map(n=>parseInt(n,10)).filter(n=>isFinite(n)));
+        const rg = restore.guest.groups;
+        if (Array.isArray(rg) && rg.length){
+          state.guestGroups = rg.map((gg, gi)=>({
+            rooms: new Set((gg.rooms || []).map(n=>parseInt(n,10)).filter(n=>isFinite(n))),
+            marriage: !!gg.marriage,
+            occupied: new Set(),
+            _availKey: '',
+            adults: parseInt(gg.adults || 0,10) || 0,
+            kidsU10: parseInt(gg.kidsU10 || 0,10) || 0,
+            checkIn: (gg.checkIn || '').trim(),
+            checkOut: (gg.checkOut || '').trim()
+          }));
+          state.guestRooms = state.guestGroups[0].rooms;
+          state.guestMarriage = !!state.guestGroups[0].marriage;
+        } else {
+          state.guestMarriage = !!restore.guest.marriage;
+          state.guestRooms = new Set((restore.guest.rooms || []).map(n=>parseInt(n,10)).filter(n=>isFinite(n)));
+          state.guestGroups = [{ rooms: state.guestRooms, marriage: state.guestMarriage, occupied: new Set(), _availKey: '' }];
+        }
         state.lettiPerStanza = restore.guest.lettiPerStanza || {};
       } catch (_) {}
 
       // campi form
       const f = restore.guest.form || {};
       __applyFormValue("guestName", f.guestName);
-      __applyFormValue("guestAdults", f.guestAdults);
-      __applyFormValue("guestKidsU10", f.guestKidsU10);
-      __applyFormValue("guestCheckIn", f.guestCheckIn);
-      __applyFormValue("guestCheckOut", f.guestCheckOut);
       __applyFormValue("guestTotal", f.guestTotal);
       __applyFormValue("guestBooking", f.guestBooking);
       __applyFormValue("guestDeposit", f.guestDeposit);
       __applyFormValue("guestSaldo", f.guestSaldo);
+      try { __applyGuestGroupsToDom(); } catch (_) {}
       try { updateGuestRemaining(); } catch (_) {}
-
-      // UI rooms + pills
-      try {
-        document.querySelectorAll("#roomsPicker .room-dot").forEach(btn => {
-          const n = parseInt(btn.getAttribute("data-room"), 10);
-          const on = state.guestRooms.has(n);
-          btn.classList.toggle("selected", on);
-          btn.setAttribute("aria-pressed", on ? "true" : "false");
-        });
-      } catch (_) {}
+      // UI groups + rooms + pills
+      try { window.__ddae_renderGuestGroups && window.__ddae_renderGuestGroups(); } catch (_) {}
+      try { window.__ddae_refreshAllGuestRooms && window.__ddae_refreshAllGuestRooms(); } catch (_) {}
       try { setPayType("depositType", state.guestDepositType); } catch (_) {}
       try { setPayType("saldoType", state.guestSaldoType); } catch (_) {}
       try { setPayReceipt("depositType", state.guestDepositReceipt); } catch (_) {}
@@ -394,11 +419,82 @@ const $ = (sel) => document.querySelector(sel);
 
 function setMarriage(on){
   state.guestMarriage = !!on;
+  try { if (Array.isArray(state.guestGroups) && state.guestGroups[0]) state.guestGroups[0].marriage = state.guestMarriage; } catch (_) {}
   const btn = document.getElementById("roomMarriage");
   if (!btn) return;
   btn.classList.toggle("selected", state.guestMarriage);
   btn.setAttribute("aria-pressed", state.guestMarriage ? "true" : "false");
 }
+
+function __groupId(base, gi){
+  return (gi === 0) ? base : `${base}_g${gi}`;
+}
+
+function __ensureGuestGroups(){
+  try {
+    if (!Array.isArray(state.guestGroups) || !state.guestGroups.length){
+      state.guestGroups = [{ rooms: new Set(), marriage: !!state.guestMarriage, occupied: new Set(), _availKey: "" }];
+    }
+    state.guestGroups = state.guestGroups.map((g) => {
+      const rooms = (g && g.rooms instanceof Set) ? g.rooms : new Set((g && g.rooms ? g.rooms : []).map(n=>parseInt(n,10)).filter(n=>isFinite(n)));
+      const occupied = (g && g.occupied instanceof Set) ? g.occupied : new Set((g && g.occupied ? g.occupied : []).map(n=>parseInt(n,10)).filter(n=>isFinite(n)));
+      return {
+        adults: (g && typeof g.adults === "number") ? g.adults : null,
+        kidsU10: (g && typeof g.kidsU10 === "number") ? g.kidsU10 : null,
+        checkIn: (g && typeof g.checkIn === "string") ? g.checkIn : null,
+        checkOut: (g && typeof g.checkOut === "string") ? g.checkOut : null,
+        rooms,
+        marriage: !!(g && g.marriage),
+        occupied,
+        _availKey: (g && typeof g._availKey === "string") ? g._availKey : ""
+      };
+    });
+    // alias compat: gruppo 0
+    state.guestRooms = state.guestGroups[0].rooms;
+    state.guestMarriage = !!state.guestGroups[0].marriage;
+    state.occupiedRooms = state.guestGroups[0].occupied;
+  } catch (_) {
+    state.guestGroups = [{ rooms: new Set(), marriage: false, occupied: new Set(), _availKey: "" }];
+    state.guestRooms = state.guestGroups[0].rooms;
+    state.guestMarriage = false;
+    state.occupiedRooms = state.guestGroups[0].occupied;
+  }
+}
+
+function __syncGuestGroupsFromDom(){
+  __ensureGuestGroups();
+  for (let gi=0; gi<state.guestGroups.length; gi++){
+    const g = state.guestGroups[gi];
+    const adultsEl = document.getElementById(__groupId("guestAdults", gi));
+    const kidsEl = document.getElementById(__groupId("guestKidsU10", gi));
+    const ciEl = document.getElementById(__groupId("guestCheckIn", gi));
+    const coEl = document.getElementById(__groupId("guestCheckOut", gi));
+    if (adultsEl) g.adults = parseInt(adultsEl.value || "0", 10) || 0;
+    if (kidsEl) g.kidsU10 = parseInt(kidsEl.value || "0", 10) || 0;
+    if (ciEl) g.checkIn = (ciEl.value || "").trim();
+    if (coEl) g.checkOut = (coEl.value || "").trim();
+  }
+  state.guestRooms = state.guestGroups[0].rooms;
+  state.guestMarriage = !!state.guestGroups[0].marriage;
+}
+
+function __applyGuestGroupsToDom(){
+  __ensureGuestGroups();
+  try { window.__ddae_renderGuestGroups && window.__ddae_renderGuestGroups(); } catch (_) {}
+  for (let gi=0; gi<state.guestGroups.length; gi++){
+    const g = state.guestGroups[gi] || {};
+    const adultsEl = document.getElementById(__groupId("guestAdults", gi));
+    const kidsEl = document.getElementById(__groupId("guestKidsU10", gi));
+    const ciEl = document.getElementById(__groupId("guestCheckIn", gi));
+    const coEl = document.getElementById(__groupId("guestCheckOut", gi));
+    if (adultsEl && g.adults != null) adultsEl.value = String(g.adults);
+    if (kidsEl && g.kidsU10 != null) kidsEl.value = String(g.kidsU10);
+    if (ciEl && g.checkIn != null) ciEl.value = String(g.checkIn);
+    if (coEl && g.checkOut != null) coEl.value = String(g.checkOut);
+  }
+  try { refreshFloatingLabels(); } catch (_) {}
+}
+
 
 
 function setPayType(containerId, type){
@@ -480,6 +576,8 @@ const state = {
   stanzeRows: [],
   stanzeByKey: {},
   guestRooms: new Set(),
+  guestGroups: [],
+  occupiedRooms: new Set(),
   guestDepositType: "contante",
   guestEditId: null,
   guestMode: "create",
@@ -3273,12 +3371,20 @@ function enterGuestCreateMode(){
   const ci = document.getElementById("guestCheckIn");
   if (ci) ci.value = todayISO();
 
-  setMarriage(false);
-  state.guestRooms = state.guestRooms || new Set();
-  state.guestRooms.clear();
+  // Gruppi prenotazione (create): 1 gruppo base
+  __ensureGuestGroups();
+  state.guestGroups = [{ rooms: new Set(), marriage: false, occupied: new Set(), _availKey: '', adults: 0, kidsU10: 0, checkIn: (document.getElementById('guestCheckIn')?.value || todayISO()), checkOut: '' }];
+  state.guestRooms = state.guestGroups[0].rooms;
+  state.guestMarriage = false;
+  state.occupiedRooms = state.guestGroups[0].occupied;
+  const extra = document.getElementById('guestGroupsExtra');
+  if (extra) extra.innerHTML = '';
+  try { window.__ddae_renderGuestGroups && window.__ddae_renderGuestGroups(); } catch (_) {}
+  try { window.__ddae_refreshAllGuestRooms && window.__ddae_refreshAllGuestRooms(); } catch (_) {}
+
   state.lettiPerStanza = {};
   state.bedsDirty = false;
-  state.stanzeSnapshotOriginal = "";
+  state.stanzeSnapshotOriginal = '';
 
   // Pagamenti (pillole): default contanti + ricevuta OFF
   state.guestDepositType = "contante";
@@ -3333,6 +3439,22 @@ function enterGuestEditMode(ospite){
   document.getElementById("guestDeposit").value = ospite.acconto_importo ?? ospite.deposit ?? 0;
   document.getElementById("guestSaldo").value = ospite.saldo_pagato ?? ospite.saldoPagato ?? ospite.saldo ?? 0;
 
+
+  // Gruppi prenotazione (edit): in modifica gestiamo un solo gruppo
+  __ensureGuestGroups();
+  state.guestGroups = [{ rooms: new Set(), marriage: !!(ospite.matrimonio), occupied: new Set(), _availKey: '',
+    adults: parseInt(document.getElementById('guestAdults')?.value || '0',10) || 0,
+    kidsU10: parseInt(document.getElementById('guestKidsU10')?.value || '0',10) || 0,
+    checkIn: (document.getElementById('guestCheckIn')?.value || '').trim(),
+    checkOut: (document.getElementById('guestCheckOut')?.value || '').trim()
+  }];
+  state.guestRooms = state.guestGroups[0].rooms;
+  state.guestMarriage = !!state.guestGroups[0].marriage;
+  state.occupiedRooms = state.guestGroups[0].occupied;
+  const extraG = document.getElementById('guestGroupsExtra');
+  if (extraG) extraG.innerHTML = '';
+  try { window.__ddae_renderGuestGroups && window.__ddae_renderGuestGroups(); } catch (_) {}
+
   // matrimonio
   const mEl = document.getElementById("guestMarriage");
   if (mEl) mEl.checked = !!(ospite.matrimonio);
@@ -3378,6 +3500,9 @@ function enterGuestEditMode(ospite){
       });
     }
   } catch (_) {}
+
+  // sync gruppo0 rooms
+  try { if (Array.isArray(state.guestGroups) && state.guestGroups[0]) state.guestGroups[0].rooms = state.guestRooms; } catch (_) {}
 
   // --- FIX A+B (dDAE): preserva la configurazione letti esistente e non riscrivere "stanze" se non è cambiata ---
   try {
@@ -3578,96 +3703,195 @@ function enterGuestViewMode(ospite){
 }
 
 
+
+
+function buildArrayFromRoomsSet(ospiteId, roomsSet){
+  const arr = [];
+  const roomsNow = Array.from(roomsSet || []).map(n => parseInt(n,10)).filter(n => isFinite(n));
+  roomsNow.sort((a,b)=>a-b);
+
+  for (const rn of roomsNow){
+    const cfg = (state.lettiPerStanza && state.lettiPerStanza[String(rn)]) ? state.lettiPerStanza[String(rn)] : {};
+    arr.push({
+      ospite_id: ospiteId,
+      stanza_num: rn,
+      letto_m: cfg.matrimoniale ? 1 : 0,
+      letto_s: parseInt(cfg.singoli || 0, 10) || 0,
+      culla: cfg.culla ? 1 : 0,
+      note: cfg.note || ""
+    });
+  }
+  return arr;
+}
 async function saveGuest(){
-  const name = (document.getElementById("guestName")?.value || "").trim();
-  const adults = parseInt(document.getElementById("guestAdults")?.value || "0", 10) || 0;
-  const kidsU10 = parseInt(document.getElementById("guestKidsU10")?.value || "0", 10) || 0;
-  const checkIn = document.getElementById("guestCheckIn")?.value || "";
-  const checkOut = document.getElementById("guestCheckOut")?.value || "";
-  const total = parseFloat(document.getElementById("guestTotal")?.value || "0") || 0;
-  const booking = parseFloat(document.getElementById("guestBooking")?.value || "0") || 0;
-  const deposit = parseFloat(document.getElementById("guestDeposit")?.value || "0") || 0;
-  const saldoPagato = parseFloat(document.getElementById("guestSaldo")?.value || "0") || 0;
-  const saldoTipo = state.guestSaldoType || "contante";
-  const rooms = Array.from(state.guestRooms || []).sort((a,b)=>a-b);
-  const depositType = state.guestDepositType || "contante";
-  const matrimonio = !!(state.guestMarriage);
-if (!name) return toast("Inserisci il nome");
-  const payload = {
-    nome: name,
-    adulti: adults,
-    bambini_u10: kidsU10,
-    check_in: checkIn,
-    check_out: checkOut,
-    importo_prenotazione: total,
-    importo_booking: booking,
-    acconto_importo: deposit,
-    acconto_tipo: depositType,
-    saldo_pagato: saldoPagato,
-    saldo_tipo: saldoTipo,
-    acconto_ricevuta: !!state.guestDepositReceipt,
-    saldo_ricevuta: !!state.guestSaldoReceipt,
-    saldo_ricevutain: !!state.guestSaldoReceipt,
-    matrimonio,
-    ps_registrato: state.guestPSRegistered ? "1" : "",
-    istat_registrato: state.guestISTATRegistered ? "1" : "",
-    stanze: rooms.join(",")
-  };
+  __ensureGuestGroups();
+  __syncGuestGroupsFromDom();
 
+  const name = (document.getElementById('guestName')?.value || '').trim();
+  if (!name) return toast('Inserisci il nome');
 
+  const total = parseFloat(document.getElementById('guestTotal')?.value || '0') || 0;
+  const booking = parseFloat(document.getElementById('guestBooking')?.value || '0') || 0;
+  const deposit = parseFloat(document.getElementById('guestDeposit')?.value || '0') || 0;
+  const saldoPagato = parseFloat(document.getElementById('guestSaldo')?.value || '0') || 0;
 
-  const isEdit = state.guestMode === "edit";
+  const depositType = state.guestDepositType || 'contante';
+  const saldoTipo = state.guestSaldoType || 'contante';
+
+  const isEdit = state.guestMode === 'edit';
+
+  // In modifica: un solo gruppo (0)
   if (isEdit){
-    if (!state.guestEditId) return toast("ID ospite mancante");
-    payload.id = state.guestEditId;
+    if (!state.guestEditId) return toast('ID ospite mancante');
+
+    const adults = parseInt(document.getElementById('guestAdults')?.value || '0', 10) || 0;
+    const kidsU10 = parseInt(document.getElementById('guestKidsU10')?.value || '0', 10) || 0;
+    const checkIn = document.getElementById('guestCheckIn')?.value || '';
+    const checkOut = document.getElementById('guestCheckOut')?.value || '';
+
+    const rooms = Array.from(state.guestRooms || []).map(n=>parseInt(n,10)).filter(n=>isFinite(n)).sort((a,b)=>a-b);
+
+    const payload = {
+      id: state.guestEditId,
+      nome: name,
+      adulti: adults,
+      bambini_u10: kidsU10,
+      check_in: checkIn,
+      check_out: checkOut,
+      importo_prenotazione: total,
+      importo_booking: booking,
+      acconto_importo: deposit,
+      acconto_tipo: depositType,
+      saldo_pagato: saldoPagato,
+      saldo_tipo: saldoTipo,
+      acconto_ricevuta: !!state.guestDepositReceipt,
+      saldo_ricevuta: !!state.guestSaldoReceipt,
+      saldo_ricevutain: !!state.guestSaldoReceipt,
+      matrimonio: !!(state.guestMarriage),
+      ps_registrato: state.guestPSRegistered ? '1' : '',
+      istat_registrato: state.guestISTATRegistered ? '1' : '',
+      stanze: rooms.join(',')
+    };
+
     // preserva la data di inserimento (non deve cambiare con le modifiche)
     const ca = state.guestEditCreatedAt;
-    if (ca){
-      payload.createdAt = ca;
-      payload.created_at = ca;
-    }
-  }
+    if (ca){ payload.createdAt = ca; payload.created_at = ca; }
 
-  
-  else {
-    // CREATE: genera subito un ID stabile, così possiamo salvare le stanze al primo tentativo
-    payload.id = payload.id || genId("o");
-  }
-// CREATE vs UPDATE (backend GAS: POST=create, PUT=update)
-  const method = isEdit ? "PUT" : "POST";
-  const res = await api("ospiti", { method, body: payload });
+    await api('ospiti', { method:'PUT', body: payload });
 
-  // stanze: backend gestisce POST e sovrascrive (deleteWhere + append)
-  const ospiteId = payload.id;
-  const stanze = buildArrayFromState();
+    const ospiteId = payload.id;
+    const stanze = buildArrayFromState();
 
-  let shouldSave = true;
-  if (isEdit){
+    let shouldSave = true;
     try {
       const snapNow = JSON.stringify(stanze);
-      const snapOrig = state.stanzeSnapshotOriginal || "";
+      const snapOrig = state.stanzeSnapshotOriginal || '';
       shouldSave = (snapNow !== snapOrig);
-    } catch (_) {
-      shouldSave = true;
+    } catch (_) { shouldSave = true; }
+
+    if (shouldSave){
+      try { await api('stanze', { method:'POST', body: { ospite_id: ospiteId, stanze } }); } catch (_) {}
     }
+
+    try{ invalidateApiCache('ospiti|'); }catch(_){ }
+    try{ invalidateApiCache('stanze|'); }catch(_){ }
+    try{ if (state.calendar){ state.calendar.ready = false; state.calendar.rangeKey = ''; } }catch(_){ }
+
+    await loadOspiti({ ...(state.period || {}), force:true });
+    toast('Modifiche salvate');
+
+    try { enterGuestCreateMode(); } catch (_) {}
+    showPage('ospiti');
+    return;
   }
 
-  if (shouldSave){
-    try { await api("stanze", { method:"POST", body: { ospite_id: ospiteId, stanze } }); } catch (_) {}
+  // CREATE: gruppi multipli -> piu righe ospite con stesso nome
+  const baseId = genId('o');
+
+  let created = 0;
+
+  for (let gi = 0; gi < state.guestGroups.length; gi++){
+    const g = state.guestGroups[gi] || {};
+
+    const adults = parseInt(g.adults || 0, 10) || 0;
+    const kidsU10 = parseInt(g.kidsU10 || 0, 10) || 0;
+    const checkIn = String(g.checkIn || '').trim();
+    const checkOut = String(g.checkOut || '').trim();
+    const roomsSet = (g.rooms instanceof Set) ? g.rooms : new Set();
+
+    // Skip gruppo vuoto
+    const isEmpty = (!checkIn && !checkOut && roomsSet.size === 0 && adults === 0 && kidsU10 === 0);
+    if (isEmpty) continue;
+
+    if (!checkIn || !checkOut || checkOut <= checkIn){
+      toast('Controlla check-in e check-out');
+      return;
+    }
+
+    const rooms = Array.from(roomsSet).map(n=>parseInt(n,10)).filter(n=>isFinite(n)).sort((a,b)=>a-b);
+
+    const id = (gi === 0) ? baseId : `${baseId}_g${gi}`;
+
+    const payload = {
+      id,
+      nome: name,
+      adulti,
+      bambini_u10: kidsU10,
+      check_in: checkIn,
+      check_out: checkOut,
+      matrimonio: !!g.marriage,
+      stanze: rooms.join(',')
+    };
+
+    // Campi persona/pagamento solo sul primo gruppo (per evitare doppio conteggio)
+    if (gi === 0){
+      payload.importo_prenotazione = total;
+      payload.importo_booking = booking;
+      payload.acconto_importo = deposit;
+      payload.acconto_tipo = depositType;
+      payload.saldo_pagato = saldoPagato;
+      payload.saldo_tipo = saldoTipo;
+      payload.acconto_ricevuta = !!state.guestDepositReceipt;
+      payload.saldo_ricevuta = !!state.guestSaldoReceipt;
+      payload.saldo_ricevutain = !!state.guestSaldoReceipt;
+      payload.ps_registrato = state.guestPSRegistered ? '1' : '';
+      payload.istat_registrato = state.guestISTATRegistered ? '1' : '';
+    } else {
+      payload.importo_prenotazione = 0;
+      payload.importo_booking = 0;
+      payload.acconto_importo = 0;
+      payload.acconto_tipo = depositType;
+      payload.saldo_pagato = 0;
+      payload.saldo_tipo = saldoTipo;
+      payload.acconto_ricevuta = false;
+      payload.saldo_ricevuta = false;
+      payload.saldo_ricevutain = false;
+      payload.ps_registrato = '';
+      payload.istat_registrato = '';
+    }
+
+    await api('ospiti', { method:'POST', body: payload });
+
+    const stanze = buildArrayFromRoomsSet(id, roomsSet);
+    try { await api('stanze', { method:'POST', body: { ospite_id: id, stanze } }); } catch (_) {}
+
+    created++;
   }
 
-  // Invalida cache in-memory (ospiti/stanze) e forza refresh Calendario.
-  // Questo evita che il calendario rimanga "stale" finche' non riavvii la PWA.
-  try{ invalidateApiCache("ospiti|"); }catch(_){ }
-  try{ invalidateApiCache("stanze|"); }catch(_){ }
-  try{ if (state.calendar){ state.calendar.ready = false; state.calendar.rangeKey = ""; } }catch(_){ }
+  if (!created){
+    toast('Compila almeno un gruppo');
+    return;
+  }
+
+  try{ invalidateApiCache('ospiti|'); }catch(_){ }
+  try{ invalidateApiCache('stanze|'); }catch(_){ }
+  try{ if (state.calendar){ state.calendar.ready = false; state.calendar.rangeKey = ''; } }catch(_){ }
 
   await loadOspiti({ ...(state.period || {}), force:true });
-  toast(isEdit ? "Modifiche salvate" : "Ospite creato");
+  toast('Ospite creato');
 
-  // Dopo salvataggio: torna sempre alla lista ospiti
   try { enterGuestCreateMode(); } catch (_) {}
-  showPage("ospiti");
+  showPage('ospiti');
 }
 
 function setupOspite(){
@@ -3735,155 +3959,379 @@ function setupOspite(){
     });
 }
 
-  const roomsWrap = document.getElementById("roomsPicker");
-  const roomsOut = null; // removed UI string output
 
-  function _getGuestDateRange(){
+
+  const guestGroupsWrap = document.getElementById("guestGroups");
+  const guestGroupsExtra = document.getElementById("guestGroupsExtra");
+
+  function __getGuestDateRangeForGroup(gi){
     try{
-      const ci = (document.getElementById("guestCheckIn")?.value || "").trim();
-      const co = (document.getElementById("guestCheckOut")?.value || "").trim();
+      const ci = (document.getElementById(__groupId("guestCheckIn", gi))?.value || "").trim();
+      const co = (document.getElementById(__groupId("guestCheckOut", gi))?.value || "").trim();
       if (!ci || !co) return null;
-      // Date ISO YYYY-MM-DD: confronto lessicografico ok
       if (co <= ci) return null;
       return { ci, co };
     }catch(_){ return null; }
   }
 
-  async function refreshRoomsAvailability(){
-    // Regola: nessuna stanza selezionabile senza intervallo date valido
-    const range = _getGuestDateRange();
-
-    const editId = String(state.guestEditId || "").trim();
-
-    // reset/lock
-    if (!range){
-      state.occupiedRooms = new Set();
-      state._roomsAvailKey = "";
-      // se l'utente non ha ancora inserito date, non deve poter selezionare stanze
-      if (state.guestRooms && state.guestRooms.size){
-        state.guestRooms.clear();
-        if (state.lettiPerStanza) state.lettiPerStanza = {};
-      }
-      renderRooms();
-      return;
+  function __isRoomSelectedAnywhere(room){
+    __ensureGuestGroups();
+    const n = parseInt(room, 10);
+    if (!isFinite(n)) return false;
+    for (const g of state.guestGroups){
+      try{ if (g && g.rooms && g.rooms.has(n)) return true; }catch(_){ }
     }
-
-    const key = `${range.ci}|${range.co}|${editId}`;
-    if (state._roomsAvailKey === key && state.occupiedRooms instanceof Set) {
-      renderRooms();
-      return;
-    }
-    state._roomsAvailKey = key;
-
-    let rows = [];
-    try{
-      const data = await cachedGet("ospiti", {}, { showLoader:false, ttlMs: 15000 });
-      rows = Array.isArray(data) ? data : [];
-    }catch(_){ rows = []; }
-
-    const occ = new Set();
-
-    for (const g of rows){
-      // In MODIFICA: ignora l'ospite corrente (altrimenti le sue stanze risultano occupate e diventano rosse)
-      if (editId){
-        const gid = guestIdOf(g);
-        if (gid && gid === editId) continue;
-      }
-
-      const gi = String(g.check_in ?? g.checkIn ?? g.checkin ?? "").slice(0,10);
-      const go = String(g.check_out ?? g.checkOut ?? g.checkout ?? "").slice(0,10);
-      if (!gi || !go) continue;
-
-      // overlap: [gi,go) interseca [ci,co)
-      if (!(gi < range.co && go > range.ci)) continue;
-
-      const roomsArr = _parseRoomsArr(g.stanze ?? g.rooms ?? g.stanza ?? "");
-      roomsArr.forEach(r => occ.add(r));
-    }
-
-    state.occupiedRooms = occ;
-
-    // Se l'utente aveva selezionato stanze che ora risultano occupate, le togliamo
-    let removed = false;
-    try{
-      for (const r of Array.from(state.guestRooms || [])){
-        if (occ.has(r)){
-          state.guestRooms.delete(r);
-          if (state.lettiPerStanza) delete state.lettiPerStanza[String(r)];
-          removed = true;
-        }
-      }
-    }catch(_){}
-
-    if (removed){
-      try{ toast("Alcune stanze non sono disponibili"); }catch(_){}
-    }
-
-    renderRooms();
+    return false;
   }
 
-  function renderRooms(){
-    const range = _getGuestDateRange();
+  function __renderGuestGroups(){
+    __ensureGuestGroups();
+    if (guestGroupsExtra){
+      let html = '';
+      for (let gi = 1; gi < state.guestGroups.length; gi++){
+        html += `
+  <div class="guest-group" data-gi="${gi}" id="guestGroup${gi}">
+    <div class="field two-col">
+      <div class="subfield field float">
+        <input id="guestAdults_g${gi}" inputmode="numeric" min="0" placeholder=" " step="1" type="number"/>
+        <label for="guestAdults_g${gi}">Adulti</label>
+      </div>
+      <div class="subfield field float">
+        <input id="guestKidsU10_g${gi}" inputmode="numeric" min="0" placeholder=" " step="1" type="number"/>
+        <label for="guestKidsU10_g${gi}">Bambini &lt; 10</label>
+      </div>
+    </div>
+    <div class="field two-col">
+      <div class="subfield field float">
+        <input id="guestCheckIn_g${gi}" type="date"/>
+        <label for="guestCheckIn_g${gi}">Check-in</label>
+      </div>
+      <div class="subfield field float">
+        <input id="guestCheckOut_g${gi}" type="date"/>
+        <label for="guestCheckOut_g${gi}">Check-out</label>
+      </div>
+    </div>
+    <div class="field">
+      <label>Stanze</label>
+      <div aria-label="Seleziona stanze" class="rooms" id="roomsPicker_g${gi}" role="group">
+        <button aria-pressed="false" class="room-dot" data-room="1" type="button">1</button>
+        <button aria-pressed="false" class="room-dot" data-room="2" type="button">2</button>
+        <button aria-pressed="false" class="room-dot" data-room="3" type="button">3</button>
+        <button aria-pressed="false" class="room-dot" data-room="4" type="button">4</button>
+        <button aria-pressed="false" class="room-dot" data-room="5" type="button">5</button>
+        <button aria-pressed="false" class="room-dot" data-room="6" type="button">6</button>
+        <button aria-pressed="false" class="room-dot room-dot-marriage" id="roomMarriage_g${gi}" title="Matrimonio" type="button">M</button>
+      </div>
+    </div>
+    <div class="group-controls" data-gi="${gi}">
+      <div class="group-line" aria-hidden="true"></div>
+      <div class="group-btns" role="group" aria-label="Gestione gruppi">
+        <button type="button" class="group-btn group-btn-minus" data-action="remove" data-gi="${gi}" aria-label="Rimuovi gruppo">-</button>
+        <button type="button" class="group-btn group-btn-plus" data-action="add" data-gi="${gi}" aria-label="Aggiungi gruppo">+</button>
+      </div>
+    </div>
+  </div>`;
+      }
+      guestGroupsExtra.innerHTML = html;
+    }
+
+    // Applica valori salvati (extra groups)
+    for (let gi = 1; gi < (state.guestGroups || []).length; gi++){
+      const g = state.guestGroups[gi] || {};
+      const aEl = document.getElementById(__groupId("guestAdults", gi));
+      const kEl = document.getElementById(__groupId("guestKidsU10", gi));
+      const ciEl = document.getElementById(__groupId("guestCheckIn", gi));
+      const coEl = document.getElementById(__groupId("guestCheckOut", gi));
+      if (aEl && g.adults != null) aEl.value = String(g.adults);
+      if (kEl && g.kidsU10 != null) kEl.value = String(g.kidsU10);
+      if (ciEl && g.checkIn != null) ciEl.value = String(g.checkIn);
+      if (coEl && g.checkOut != null) coEl.value = String(g.checkOut);
+    }
+
+    try { refreshFloatingLabels(); } catch (_) {}
+
+    // Bottoni +/-
+    const n = (state.guestGroups || []).length;
+    guestGroupsWrap?.querySelectorAll('.group-controls').forEach(ctrl => {
+      const gi = parseInt(ctrl.getAttribute('data-gi') || '0', 10) || 0;
+      const minus = ctrl.querySelector('[data-action="remove"]');
+      const plus = ctrl.querySelector('[data-action="add"]');
+      const canEdit = (state.guestMode === 'create');
+      if (!canEdit){
+        if (minus) minus.hidden = true;
+        if (plus) plus.hidden = true;
+        return;
+      }
+      if (minus) minus.hidden = (gi === 0) || (n <= 1);
+      if (plus) plus.hidden = (gi !== n - 1);
+    });
+
+    // Render rooms state
+    for (let gi = 0; gi < n; gi++){
+      __renderRoomsForGroup(gi);
+    }
+  }
+
+  function __renderRoomsForGroup(gi){
+    __ensureGuestGroups();
+    const picker = document.getElementById(__groupId('roomsPicker', gi));
+    if (!picker) return;
+    const g = state.guestGroups[gi] || {};
+    const range = __getGuestDateRangeForGroup(gi);
     const locked = !range;
-    const occSet = (state.occupiedRooms instanceof Set) ? state.occupiedRooms : new Set();
+    const occSet = (g.occupied instanceof Set) ? g.occupied : new Set();
 
-    roomsWrap?.querySelectorAll(".room-dot").forEach(btn => {
-      // Il pallino "M" non è una stanza numerata
-      if (btn.id === "roomMarriage") return;
+    picker.querySelectorAll('.room-dot').forEach(btn => {
+      if (btn.id === __groupId('roomMarriage', gi)) return;
+      const n = parseInt(btn.getAttribute('data-room') || '0', 10);
+      const on = !!(g.rooms && g.rooms.has(n));
+      const occ = (!locked) && occSet.has(n);
 
-      const n = parseInt(btn.getAttribute("data-room"), 10);
-      const on = state.guestRooms.has(n);
-      const occ = !locked && occSet.has(n);
-
-      btn.classList.toggle("selected", on);
-      btn.classList.toggle("occupied", occ);
+      btn.classList.toggle('selected', on);
+      btn.classList.toggle('occupied', occ);
 
       const dis = locked || occ;
       btn.disabled = !!dis;
-      btn.setAttribute("aria-disabled", dis ? "true" : "false");
-      btn.setAttribute("aria-pressed", on ? "true" : "false");
+      btn.setAttribute('aria-disabled', dis ? 'true' : 'false');
+      btn.setAttribute('aria-pressed', on ? 'true' : 'false');
     });
 
-    // matrimonio dot (rimane gestibile come flag)
-    setMarriage(state.guestMarriage);
+    // matrimonio
+    const mBtn = document.getElementById(__groupId('roomMarriage', gi));
+    if (mBtn){
+      mBtn.classList.toggle('selected', !!g.marriage);
+      mBtn.setAttribute('aria-pressed', g.marriage ? 'true' : 'false');
+    }
   }
 
-  // Espone le funzioni (scope setupOspite) per poterle richiamare da enterGuestEditMode
-  // senza dipendere dall'evento input/change dei campi date (iOS/Safari PWA).
-  try {
-    window.__ddae_refreshRoomsAvailability = refreshRoomsAvailability;
-    window.__ddae_renderRooms = renderRooms;
-  } catch (_) {}
+  async function __refreshAllGuestRoomsAvailability(){
+    __ensureGuestGroups();
+    __syncGuestGroupsFromDom();
 
-  roomsWrap?.addEventListener("click", (e) => {
-    const b = e.target.closest(".room-dot");
-    if (!b) return;
+    const editId = String(state.guestEditId || '').trim();
 
-    // Matrimonio: flag separato
-    if (b.id === "roomMarriage") { setMarriage(!state.guestMarriage); return; }
+    // Se manca un range valido, blocca selezione (per singolo gruppo) e pulisce stanze
+    for (let gi = 0; gi < state.guestGroups.length; gi++){
+      const range = __getGuestDateRangeForGroup(gi);
+      if (!range){
+        const g = state.guestGroups[gi];
+        g.occupied = new Set();
+        g._availKey = '';
+        if (g.rooms && g.rooms.size){
+          for (const r of Array.from(g.rooms)){
+            g.rooms.delete(r);
+            if (state.lettiPerStanza && !__isRoomSelectedAnywhere(r)) delete state.lettiPerStanza[String(r)];
+          }
+        }
+      }
+    }
 
-    const range = _getGuestDateRange();
+    // Fetch ospiti una sola volta
+    let rows = [];
+    try{
+      const data = await cachedGet('ospiti', {}, { showLoader:false, ttlMs:15000 });
+      rows = Array.isArray(data) ? data : [];
+    }catch(_){ rows = []; }
+
+    const ranges = [];
+    for (let gi = 0; gi < state.guestGroups.length; gi++){
+      ranges[gi] = __getGuestDateRangeForGroup(gi);
+    }
+
+    // Risolvi conflitti interni: se due gruppi si sovrappongono e hanno la stessa stanza, rimuovi dalla piu recente (indice maggiore)
+    for (let i=0;i<state.guestGroups.length;i++){
+      for (let j=i+1;j<state.guestGroups.length;j++){
+        const ri = ranges[i];
+        const rj = ranges[j];
+        if (!ri || !rj) continue;
+        if (!(ri.ci < rj.co && ri.co > rj.ci)) continue;
+        const giRooms = state.guestGroups[i].rooms;
+        const gjRooms = state.guestGroups[j].rooms;
+        if (!(giRooms instanceof Set) || !(gjRooms instanceof Set)) continue;
+        for (const room of Array.from(gjRooms)){
+          if (giRooms.has(room)){
+            gjRooms.delete(room);
+            if (state.lettiPerStanza && !__isRoomSelectedAnywhere(room)) delete state.lettiPerStanza[String(room)];
+            try{ toast('Stanza gia selezionata in un altro gruppo'); }catch(_){ }
+          }
+        }
+      }
+    }
+
+    // Occupazione esterna + interna
+    for (let gi = 0; gi < state.guestGroups.length; gi++){
+      const range = ranges[gi];
+      const g = state.guestGroups[gi];
+      if (!range){
+        g.occupied = new Set();
+        continue;
+      }
+      const key = `${range.ci}|${range.co}|${editId}`;
+      if (g._availKey === key && g.occupied instanceof Set){
+        continue;
+      }
+      g._availKey = key;
+
+      const occ = new Set();
+
+      for (const row of rows){
+        if (editId){
+          const gid = guestIdOf(row);
+          if (gid && gid === editId) continue;
+        }
+        const rci = String(row.check_in ?? row.checkIn ?? row.checkin ?? '').slice(0,10);
+        const rco = String(row.check_out ?? row.checkOut ?? row.checkout ?? '').slice(0,10);
+        if (!rci || !rco) continue;
+        if (!(rci < range.co && rco > range.ci)) continue;
+        const roomsArr = _parseRoomsArr(row.stanze ?? row.rooms ?? row.stanza ?? '');
+        roomsArr.forEach(r => occ.add(r));
+      }
+
+      // interno
+      for (let other = 0; other < state.guestGroups.length; other++){
+        if (other === gi) continue;
+        const ro = ranges[other];
+        if (!ro) continue;
+        if (!(ro.ci < range.co && ro.co > range.ci)) continue;
+        try{
+          for (const r of Array.from(state.guestGroups[other].rooms || [])) occ.add(r);
+        }catch(_){ }
+      }
+
+      g.occupied = occ;
+
+      // Selezioni non disponibili
+      let removed = false;
+      try{
+        for (const r of Array.from(g.rooms || [])){
+          if (occ.has(r)){
+            g.rooms.delete(r);
+            if (state.lettiPerStanza && !__isRoomSelectedAnywhere(r)) delete state.lettiPerStanza[String(r)];
+            removed = true;
+          }
+        }
+      }catch(_){ }
+      if (removed){
+        try{ toast('Alcune stanze non sono disponibili'); }catch(_){ }
+      }
+    }
+
+    // alias compat gruppo0
+    state.guestRooms = state.guestGroups[0].rooms;
+    state.guestMarriage = !!state.guestGroups[0].marriage;
+    state.occupiedRooms = state.guestGroups[0].occupied;
+
+    __renderGuestGroups();
+  }
+
+  // Esposizione (compat e controlli)
+  try{
+    window.__ddae_renderGuestGroups = __renderGuestGroups;
+    window.__ddae_refreshAllGuestRooms = __refreshAllGuestRoomsAvailability;
+    window.__ddae_refreshRoomsAvailability = () => __refreshAllGuestRoomsAvailability();
+    window.__ddae_renderRooms = () => __renderRoomsForGroup(0);
+  }catch(_){ }
+
+  // Inizializza
+  try{ __renderGuestGroups(); }catch(_){ }
+  try{ __refreshAllGuestRoomsAvailability(); }catch(_){ }
+
+  // Event delegation: click stanze e controlli gruppi
+  guestGroupsWrap?.addEventListener('click', (e) => {
+    const btn = e.target.closest('button');
+    if (!btn) return;
+
+    const action = btn.getAttribute('data-action');
+    if (action){
+      if (state.guestMode !== 'create') return;
+      const gi = parseInt(btn.getAttribute('data-gi') || '0', 10) || 0;
+      __syncGuestGroupsFromDom();
+
+      if (action === 'add'){
+        state.guestGroups.push({ rooms: new Set(), marriage: false, occupied: new Set(), _availKey: '', adults: 0, kidsU10: 0, checkIn: '', checkOut: '' });
+        __renderGuestGroups();
+        __refreshAllGuestRoomsAvailability();
+      }
+      if (action === 'remove'){
+        if (gi <= 0) return;
+        if (state.guestGroups.length <= 1) return;
+        // rimuove gruppo
+        try{
+          const g = state.guestGroups[gi];
+          if (g && g.rooms){
+            for (const r of Array.from(g.rooms)){
+              if (state.lettiPerStanza && !__isRoomSelectedAnywhere(r)) delete state.lettiPerStanza[String(r)];
+            }
+          }
+        }catch(_){ }
+        state.guestGroups.splice(gi, 1);
+        __renderGuestGroups();
+        __refreshAllGuestRoomsAvailability();
+      }
+      return;
+    }
+
+    // room dot
+    const dot = btn.closest('.room-dot');
+    if (!dot) return;
+    const groupEl = dot.closest('.guest-group');
+    const gi = parseInt(groupEl?.getAttribute('data-gi') || '0', 10) || 0;
+
+    __ensureGuestGroups();
+
+    // matrimonio
+    if (dot.id === __groupId('roomMarriage', gi)){
+      const g = state.guestGroups[gi];
+      g.marriage = !g.marriage;
+      if (gi === 0) state.guestMarriage = g.marriage;
+      __renderRoomsForGroup(gi);
+      return;
+    }
+
+    const range = __getGuestDateRangeForGroup(gi);
     if (!range){
-      try{ toast("Seleziona prima check-in e check-out"); }catch(_){}
+      try{ toast('Seleziona prima check-in e check-out'); }catch(_){ }
       return;
     }
 
-    // Se occupata (rossa) => popup
-    if (b.classList.contains("occupied") || b.disabled){
-      try{ toast("Stanza occupata"); }catch(_){}
+    if (dot.classList.contains('occupied') || dot.disabled){
+      try{ toast('Stanza occupata'); }catch(_){ }
       return;
     }
 
-    const n = parseInt(b.getAttribute("data-room"), 10);
-    if (state.guestRooms.has(n)) {
-      state.guestRooms.delete(n);
-      if (state.lettiPerStanza) delete state.lettiPerStanza[String(n)];
+    const n = parseInt(dot.getAttribute('data-room') || '0', 10);
+    const g = state.guestGroups[gi];
+    if (!(g.rooms instanceof Set)) g.rooms = new Set();
+
+    if (g.rooms.has(n)){
+      g.rooms.delete(n);
+      if (state.lettiPerStanza && !__isRoomSelectedAnywhere(n)) delete state.lettiPerStanza[String(n)];
     } else {
-      state.guestRooms.add(n);
+      g.rooms.add(n);
     }
-    renderRooms();
+
+    // alias gruppo0
+    state.guestRooms = state.guestGroups[0].rooms;
+    state.guestMarriage = !!state.guestGroups[0].marriage;
+
+    __refreshAllGuestRoomsAvailability();
   });
 
+  // input date: aggiorna disponibilita
+  guestGroupsWrap?.addEventListener('input', (e) => {
+    const el = e.target;
+    if (!el || !el.id) return;
+    if (el.id.startsWith('guestCheckIn') || el.id.startsWith('guestCheckOut')){
+      __refreshAllGuestRoomsAvailability();
+    }
+  });
+  guestGroupsWrap?.addEventListener('change', (e) => {
+    const el = e.target;
+    if (!el || !el.id) return;
+    if (el.id.startsWith('guestCheckIn') || el.id.startsWith('guestCheckOut')){
+      __refreshAllGuestRoomsAvailability();
+    }
+  });
   function bindPayPill(containerId, kind){
     const wrap = document.getElementById(containerId);
     if (!wrap) return;
@@ -3938,16 +4386,6 @@ function setupOspite(){
     el.addEventListener("change", () => { try { updateGuestRemaining(); } catch (_) {} });
   });
   try { updateGuestRemaining(); } catch (_) {}
-
-
-  // ✅ Stanze: blocca selezione finché non c'è un intervallo date valido + segna stanze occupate (rosso)
-  ["guestCheckIn","guestCheckOut"].forEach((id) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.addEventListener("input", () => { try { refreshRoomsAvailability(); } catch (_) {} });
-    el.addEventListener("change", () => { try { refreshRoomsAvailability(); } catch (_) {} });
-  });
-  try { refreshRoomsAvailability(); } catch (_) {}
 
 
   const btnCreate = document.getElementById("createGuestCard");
