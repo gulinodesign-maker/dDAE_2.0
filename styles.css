@@ -6,11 +6,23 @@
   --bg: #ffffff;
   --text: #0f172a;
   --black: #0b0f16;
+  --p1: #2B7CB4;
+  --p2: #4D9CC5;
+  --p3: #6FB7D6;
+  --p4: #96BFC7;
+  --p5: #BFBEA9;
+  --p6: #D6B286;
+  --p7: #CF9458;
+  --p8: #C9772B;
 
-  --blue: #2b7cb4;
-  --blue2: #7ac0db;
-  --orange: #c9772b;
-  --beige: #d8bd97;
+  --blue: var(--p1);
+  --blue2: var(--p3);
+  --orange: var(--p8);
+  --beige: var(--p5);
+  --sand: var(--p6);
+  --tan: var(--p7);
+  --teal: var(--p4);
+  --sky: var(--p2);
   --dark: #1f2937;
 
   --glass: rgba(255,255,255,0.68);
@@ -29,11 +41,11 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.020"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.021"),
     radial-gradient(900px 600px at 10% 0%, rgba(43,124,180,0.10), transparent 62%),
     radial-gradient(800px 520px at 90% 8%, rgba(201,119,43,0.10), transparent 64%),
-    radial-gradient(900px 700px at 20% 100%, rgba(122,192,219,0.10), transparent 62%),
-    radial-gradient(900px 700px at 90% 100%, rgba(216,189,151,0.14), transparent 62%),
+    radial-gradient(900px 700px at 20% 100%, rgba(111,183,214,0.10), transparent 62%),
+    radial-gradient(900px 700px at 90% 100%, rgba(214,178,134,0.14), transparent 62%),
     linear-gradient(to bottom, rgba(255,255,255,0.06), rgba(255,255,255,0.12));
   background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
   background-position: center, 10% 0%, 90% 8%, 20% 100%, 90% 100%, center;
@@ -396,7 +408,7 @@ input[type="date"]{
   padding: 4px 8px;
   border-radius: 999px;
   border: 1px solid var(--border);
-  background: rgba(216,189,151,0.40);
+  background: rgba(214,178,134,0.40);
   font-size: 12px;
 }
 .mini{
@@ -763,11 +775,11 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.020"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.021"),
     radial-gradient(900px 650px at 12% 8%, rgba(43,124,180,0.18), transparent 62%),
     radial-gradient(820px 560px at 92% 14%, rgba(201,119,43,0.16), transparent 62%),
-    radial-gradient(900px 700px at 18% 96%, rgba(122,192,219,0.16), transparent 62%),
-    radial-gradient(900px 700px at 92% 92%, rgba(216,189,151,0.18), transparent 62%),
+    radial-gradient(900px 700px at 18% 96%, rgba(111,183,214,0.16), transparent 62%),
+    radial-gradient(900px 700px at 92% 92%, rgba(214,178,134,0.18), transparent 62%),
     linear-gradient(to bottom, rgba(255,255,255,0.05), rgba(255,255,255,0.10));
   background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
   background-position: center, 12% 8%, 92% 14%, 18% 96%, 92% 92%, center;
@@ -1791,7 +1803,7 @@ body::before{
   position:absolute;
   left:0; right:0; bottom:-1px;
   height: 3px;
-  background: linear-gradient(90deg, rgba(122,192,219,0.0), rgba(122,192,219,0.85), rgba(43,124,180,0.92), rgba(201,119,43,0.85), rgba(122,192,219,0.0));
+  background: linear-gradient(90deg, rgba(111,183,214,0.0), rgba(111,183,214,0.85), rgba(43,124,180,0.92), rgba(201,119,43,0.85), rgba(111,183,214,0.0));
   opacity: 0.55;
   pointer-events:none;
 }
@@ -2249,6 +2261,15 @@ body[data-page="ospiti"] .guest-card .actions {
 }
 
 
+/* Colori stanza coerenti (palette) */
+.room-dot-badge.room-1{ background: rgba(43,124,180,0.92); border-color: rgba(43,124,180,0.55); }
+.room-dot-badge.room-2{ background: rgba(77,156,197,0.92); border-color: rgba(77,156,197,0.55); }
+.room-dot-badge.room-3{ background: rgba(111,183,214,0.92); border-color: rgba(111,183,214,0.55); color: rgba(15,23,42,0.92); }
+.room-dot-badge.room-4{ background: rgba(150,191,199,0.92); border-color: rgba(150,191,199,0.55); color: rgba(15,23,42,0.92); }
+.room-dot-badge.room-5{ background: rgba(207,148,88,0.92); border-color: rgba(207,148,88,0.55); }
+.room-dot-badge.room-6{ background: rgba(201,119,43,0.92); border-color: rgba(201,119,43,0.55); }
+
+
 
 
 /* dDAE_2.019 — Ospiti: pallini letti accanto alla stanza (stack per stanza) */
@@ -2662,12 +2683,12 @@ body[data-page="ospiti"] .guest-card .actions {
   --cal-room-w: clamp(34px, 10vw, 52px);
   --cal-gap: 4px;
   /* Palette stanze: rosso → indaco in versione pastello */
-  --room1: rgba(255, 163, 173, .55); /* rosso pastello */
-  --room2: rgba(255, 204, 153, .55); /* arancio pastello */
-  --room3: rgba(255, 242, 173, .55); /* giallo pastello */
-  --room4: rgba(186, 231, 199, .55); /* verde pastello */
-  --room5: rgba(186, 216, 255, .55); /* azzurro pastello */
-  --room6: rgba(203, 195, 255, .55); /* indaco pastello */
+  --room1: rgba(43, 124, 180, .55); /* #2B7CB4 */
+  --room2: rgba(77, 156, 197, .55); /* #4D9CC5 */
+  --room3: rgba(111, 183, 214, .55); /* #6FB7D6 */
+  --room4: rgba(150, 191, 199, .55); /* #96BFC7 */
+  --room5: rgba(207, 148, 88, .55); /* #CF9458 */
+  --room6: rgba(201, 119, 43, .55); /* #C9772B */
 }
 
 .calendar-page .cal-nav{
@@ -3070,7 +3091,7 @@ body[data-page="ospiti"] .guest-card .actions {
 #page-ospiti .guest-filter-row-2 button,
 #page-ospiti .guest-search-btn,
 #page-ospiti .guest-searches button{
-  background: rgba(122,192,219,0.20) !important;
+  background: rgba(111,183,214,0.20) !important;
   color: #000 !important;
   font-weight: 700 !important;
   border: 1px solid rgba(0,0,0,0.12);
@@ -3380,18 +3401,18 @@ body.perf-lite *::after{
 }
 
 /* Mapping colori (ispirati allo screenshot) */
-.item.spesa-bg-contanti::before{ background: rgba(46,125,183,1); }        /* blu */
-.item.spesa-bg-tassa::before{ background: rgba(215,185,139,1); }          /* beige */
-.item.spesa-bg-iva22::before{ background: rgba(199,119,45,1); }           /* arancio */
-.item.spesa-bg-iva10::before{ background: rgba(107,183,201,1); }          /* azzurro */
-.item.spesa-bg-iva4::before{ background: rgba(28,36,48,1); opacity:.16; } /* scuro più leggero */
+.item.spesa-bg-contanti::before{ background: rgba(43,124,180,1); }        /* blu */
+.item.spesa-bg-tassa::before{ background: rgba(191,190,169,1); }          /* beige */
+.item.spesa-bg-iva22::before{ background: rgba(201,119,43,1); }           /* arancio */
+.item.spesa-bg-iva10::before{ background: rgba(111,183,214,1); }          /* azzurro */
+.item.spesa-bg-iva4::before{ background: rgba(77,156,197,1); } /* scuro più leggero */
 
 /* Bordo leggermente colorato */
-.item.spesa-bg-contanti{ border-color: rgba(46,125,183,.22) !important; }
-.item.spesa-bg-tassa{ border-color: rgba(215,185,139,.22) !important; }
-.item.spesa-bg-iva22{ border-color: rgba(199,119,45,.22) !important; }
-.item.spesa-bg-iva10{ border-color: rgba(107,183,201,.22) !important; }
-.item.spesa-bg-iva4{ border-color: rgba(28,36,48,.20) !important; }
+.item.spesa-bg-contanti{ border-color: rgba(43,124,180,.22) !important; }
+.item.spesa-bg-tassa{ border-color: rgba(191,190,169,.22) !important; }
+.item.spesa-bg-iva22{ border-color: rgba(201,119,43,.22) !important; }
+.item.spesa-bg-iva10{ border-color: rgba(111,183,214,.22) !important; }
+.item.spesa-bg-iva4{ border-color: rgba(77,156,197,.22) !important; }
 
 
 /* dDAE — Spese: due tab (Periodo + Ordina) affiancati */
@@ -3513,12 +3534,12 @@ grid-template-rows: 34px repeat(7, 54px);
 }
 
 /* Colori stanze 1..6 */
-.clean-grid .cell.room.r1{ color: #d00000; }
-.clean-grid .cell.room.r2{ color: #ff7a00; }
-.clean-grid .cell.room.r3{ color: #ffb400; }
-.clean-grid .cell.room.r4{ color: #1e8e3e; }
-.clean-grid .cell.room.r5{ color: #1a73e8; }
-.clean-grid .cell.room.r6{ color: #4b2aad; }
+.clean-grid .cell.room.r1{ color: #2b7cb4; }
+.clean-grid .cell.room.r2{ color: #4d9cc5; }
+.clean-grid .cell.room.r3{ color: #6fb7d6; }
+.clean-grid .cell.room.r4{ color: #96bfc7; }
+.clean-grid .cell.room.r5{ color: #cf9458; }
+.clean-grid .cell.room.r6{ color: #c9772b; }
 
 /* Mobile: evita che i testi si rompano */
 @media (max-width: 420px){
@@ -3557,12 +3578,12 @@ grid-template-rows: 34px repeat(7, 54px);
 }
 
 /* Mapping colori stanze -> sfondo */
-.clean-grid .cell.slot[data-room="1"]::before{ background: rgba(208,0,0,1); }       /* rosso */
-.clean-grid .cell.slot[data-room="2"]::before{ background: rgba(255,122,0,1); }     /* arancio */
-.clean-grid .cell.slot[data-room="3"]::before{ background: rgba(255,180,0,1); }     /* giallo */
-.clean-grid .cell.slot[data-room="4"]::before{ background: rgba(30,142,62,1); }     /* verde */
-.clean-grid .cell.slot[data-room="5"]::before{ background: rgba(26,115,232,1); }    /* azzurro */
-.clean-grid .cell.slot[data-room="6"]::before{ background: rgba(75,42,173,1); }     /* indaco */
+.clean-grid .cell.slot[data-room="1"]::before{ background: rgba(43,124,180,1); }       /* #2B7CB4 */
+.clean-grid .cell.slot[data-room="2"]::before{ background: rgba(77,156,197,1); }     /* #4D9CC5 */
+.clean-grid .cell.slot[data-room="3"]::before{ background: rgba(111,183,214,1); }     /* #6FB7D6 */
+.clean-grid .cell.slot[data-room="4"]::before{ background: rgba(150,191,199,1); }     /* #96BFC7 */
+.clean-grid .cell.slot[data-room="5"]::before{ background: rgba(207,148,88,1); }    /* #CF9458 */
+.clean-grid .cell.slot[data-room="6"]::before{ background: rgba(201,119,43,1); }     /* #C9772B */
 .clean-grid .cell.slot[data-room="RES"]::before{ background: rgba(120,120,120,1); opacity:.14; } /* grigio */
 
 /* Bordo leggermente più marcato per distinguere le celle */
@@ -3989,7 +4010,7 @@ grid-template-rows: 34px repeat(7, 54px);
 .laundry-table th{
   font-weight: 950;
   color: var(--text);
-  background: rgba(216,189,151,0.28);
+  background: rgba(214,178,134,0.28);
 }
 
 .laundry-table tr td:last-child{ font-weight: 950; }
@@ -4271,7 +4292,7 @@ grid-template-rows: 34px repeat(7, 54px);
   margin: 10px 0 12px;
   font-weight: 750;
   font-size: 28px;
-  color: rgba(122,192,219,0.95);
+  color: rgba(111,183,214,0.95);
   letter-spacing: -0.01em;
 }
 
@@ -4397,7 +4418,7 @@ grid-template-rows: 34px repeat(7, 54px);
   margin: 10px 0 12px;
   font-weight: 750;
   font-size: 28px;
-  color: rgba(122,192,219,0.95);
+  color: rgba(111,183,214,0.95);
   letter-spacing: -0.01em;
 }
 
@@ -4695,7 +4716,7 @@ grid-template-rows: 34px repeat(7, 54px);
 }
 #page-ospite .guest-form-card.is-create{ background: rgba(201,119,43,0.20) !important; }
 #page-ospite .guest-form-card.is-edit{ background: rgba(148,163,184,0.20) !important; }
-#page-ospite .guest-form-card.is-view{ background: rgba(122,192,219,0.20) !important; }
+#page-ospite .guest-form-card.is-view{ background: rgba(111,183,214,0.20) !important; }
 
 
 
@@ -5043,7 +5064,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 }
 
 /* colori: azzurro / grigio / arancione (40% opacita') */
-.settings-btn-save{ background: rgba(122,192,219,0.40); }
+.settings-btn-save{ background: rgba(111,183,214,0.40); }
 .settings-btn-reload{ background: rgba(31,41,55,0.40); }
 .settings-btn-delete{ background: rgba(220,38,38,0.40); }
 .settings-btn-logout{ background: rgba(201,119,43,0.40); }
@@ -5077,11 +5098,11 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 
 /* Conteggio generale: voci piu' leggibili (60%) */
 #page-statgen .stat-row::before{
-  opacity: 0.60;
+  opacity: 0.75;
 }
 
 #page-statspese .stat-row::before{
-  opacity: 0.60;
+  opacity: 0.75;
 }
 
 /* Statistiche: icone stile Home (sfondo bianco) ma quadrate */
@@ -5143,7 +5164,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 
 .stats-page .home-grid{
   margin-top: 6px;
-  grid-template-columns: repeat(4, minmax(0, 1fr));
+  grid-template-columns: repeat(2, minmax(0, 1fr));
   gap: 12px;
 }
 
