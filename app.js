@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.025";
+const BUILD_VERSION = "dDAE_2.026";
 
 
 function __parseBuildVersion(v){
