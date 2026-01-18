@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.031";
+const BUILD_VERSION = "dDAE_2.032";
 
 
 function __parseBuildVersion(v){
@@ -3450,7 +3450,7 @@ function enterGuestCreateMode(){
   state.guestMarriage = false;
   state.occupiedRooms = state.guestGroups[0].occupied;
   const extra = document.getElementById('guestGroupsExtra');
-  if (extra) extra.innerHTML = '';
+  if (extra){ extra.hidden = false; extra.innerHTML = ''; }
   try { window.__ddae_renderGuestGroups && window.__ddae_renderGuestGroups(); } catch (_) {}
   try { window.__ddae_refreshAllGuestRooms && window.__ddae_refreshAllGuestRooms(); } catch (_) {}
 
@@ -3575,7 +3575,7 @@ function enterGuestEditMode(ospite){
   }catch(_){ }
 
   const extraG = document.getElementById('guestGroupsExtra');
-  if (extraG) extraG.innerHTML = '';
+  if (extraG){ extraG.hidden = false; extraG.innerHTML = ''; }
   try { window.__ddae_renderGuestGroups && window.__ddae_renderGuestGroups(); } catch (_) {}
 
   // matrimonio (checkbox legacy)
@@ -3824,6 +3824,13 @@ function setGuestFormViewOnly(isView, ospite){
     ro.hidden = !isView;
     if (isView) renderRoomsReadOnly(ospite);
     else ro.innerHTML = "";
+  }
+
+
+  const extra = document.getElementById("guestGroupsExtra");
+  if (extra){
+    extra.hidden = !!isView;
+    if (isView) extra.innerHTML = "";
   }
 
   // Aggiorna i pallini in testata in base alla modalità corrente
