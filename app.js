@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.032";
+const BUILD_VERSION = "dDAE_2.033";
 
 
 function __parseBuildVersion(v){
@@ -3708,13 +3708,24 @@ function renderRoomsReadOnly(ospite){
   const stackHTML = buildRoomsStackHTML(guestId, roomsArr);
 
   // Pillola: notti + tassa di soggiorno (solo in sola lettura)
+  // NOTA: con gruppi multipli, la tassa va calcolata su OGNI gruppo (righe ospite) e sommata.
   const nights = calcStayNights(main);
   let pillHTML = ``;
 
+  // Somma tassa su tutti i gruppi disponibili
+  let taxSum = 0;
+  try{
+    for (const g of (groups || [])){
+      const nn = calcStayNights(g);
+      if (nn == null) continue;
+      const ttg = calcTouristTax(g, nn);
+      taxSum += Number(ttg?.total || 0) || 0;
+    }
+  }catch(_){ taxSum = 0; }
+
   if (nights != null){
-    const tt = calcTouristTax(main, nights);
     const nightsLabel = (nights === 1) ? `1 notte` : `${nights} notti`;
-    const taxLabel = `Tassa ${formatEUR(tt.total)}`;
+    const taxLabel = `Tassa ${formatEUR(taxSum)}`;
     pillHTML = `<span class="stay-pill" aria-label="Pernottamenti e tassa di soggiorno">
       <span class="stay-pill__n">${nightsLabel}</span>
       <span class="stay-pill__sep">•</span>
@@ -4302,13 +4313,23 @@ function setupOspite(){
       const minus = ctrl.querySelector('[data-action="remove"]');
       const plus = ctrl.querySelector('[data-action="add"]');
       const canEdit = (state.guestMode === 'create' || state.guestMode === 'edit');
+
       if (!canEdit){
         if (minus) minus.hidden = true;
         if (plus) plus.hidden = true;
         return;
       }
-      if (minus) minus.hidden = (gi === 0) || (n <= 1);
-      if (plus) plus.hidden = (gi !== n - 1);
+
+      // Richiesta: i tasti +/- devono essere presenti anche nel primo gruppo.
+      // - In gi=0: "+" sempre visibile per aggiungere gruppi; "-" visibile solo se esiste almeno 1 gruppo extra.
+      // - Negli altri gruppi: "-" sempre visibile (se n>1); "+" solo nell'ultimo gruppo.
+      if (gi === 0){
+        if (minus) minus.hidden = (n <= 1);
+        if (plus) plus.hidden = false;
+      } else {
+        if (minus) minus.hidden = (n <= 1);
+        if (plus) plus.hidden = (gi !== n - 1);
+      }
     });
 
     // Render rooms state
@@ -4515,13 +4536,25 @@ function setupOspite(){
         __refreshAllGuestRoomsAvailability();
       }
       if (action === 'remove'){
-        if (gi <= 0) return;
         if (state.guestGroups.length <= 1) return;
 
-        // In edit: traccia l'eliminazione del gruppo (riga ospite)
+        // Richiesta: il tasto "-" deve cancellare tutto il gruppo.
+        // In gi=0, "-" rimuove l'ULTIMO gruppo (il gruppo 0 non si elimina mai).
+        let targetGi = gi;
+        if (targetGi === 0) targetGi = state.guestGroups.length - 1;
+        if (targetGi <= 0) return;
+
+        // Snapshot stanze del gruppo da rimuovere (per cleanup dopo la splice)
+        let roomsToCheck = [];
+        try{
+          const g0 = state.guestGroups[targetGi];
+          roomsToCheck = Array.from((g0 && g0.rooms) ? g0.rooms : []);
+        }catch(_){ roomsToCheck = []; }
+
+        // In edit: traccia l'eliminazione del gruppo (riga ospite) per cancellazione a salvataggio
         try{
           if (state.guestMode === 'edit'){
-            const g = state.guestGroups[gi];
+            const g = state.guestGroups[targetGi];
             const id = String(g && g._id || '').trim();
             if (id){
               if (!Array.isArray(state.guestDeletedGroupIds)) state.guestDeletedGroupIds = [];
@@ -4530,17 +4563,16 @@ function setupOspite(){
           }
         }catch(_){ }
 
-        // rimuove gruppo e pulisce letti per stanze non piu' selezionate
+        // Rimuovi il gruppo dallo stato
+        state.guestGroups.splice(targetGi, 1);
+
+        // Cleanup: rimuovi configurazioni letti per stanze che non risultano piu' selezionate da NESSUN gruppo
         try{
-          const g = state.guestGroups[gi];
-          if (g && g.rooms){
-            for (const r of Array.from(g.rooms)){
-              if (state.lettiPerStanza && !__isRoomSelectedAnywhere(r)) delete state.lettiPerStanza[String(r)];
-            }
+          for (const r of roomsToCheck){
+            if (state.lettiPerStanza && !__isRoomSelectedAnywhere(r)) delete state.lettiPerStanza[String(r)];
           }
         }catch(_){ }
 
-        state.guestGroups.splice(gi, 1);
         __renderGuestGroups();
         __refreshAllGuestRoomsAvailability();
       }
