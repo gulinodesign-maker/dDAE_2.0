@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.026";
+const BUILD_VERSION = "dDAE_2.027";
 
 
 function __parseBuildVersion(v){
@@ -479,7 +479,9 @@ const state = {
   guests: [],
   stanzeRows: [],
   stanzeByKey: {},
+  stanzeByGuest: {},
   guestRooms: new Set(),
+  guestStays: [],
   guestDepositType: "contante",
   guestEditId: null,
   guestMode: "create",
@@ -2179,6 +2181,7 @@ function computeInsertionMap(guests){
   });
 
   const map = {};
+  const byGuest = {};
   let n = 1;
   for (const x of arr){
     if (!x.id) continue;
@@ -2303,11 +2306,13 @@ async function load({ showLoader=true } = {}){
         state.stanzeRows = rows0;
         // ricostruisci indicizzazione
         const map0 = {};
+        const byGuest0 = {};
         for (const r of rows0){
           const gid = String(r.ospite_id ?? r.ospiteId ?? r.guest_id ?? r.guestId ?? "").trim();
           const sn = String(r.stanza_num ?? r.stanzaNum ?? r.room_number ?? r.roomNumber ?? r.stanza ?? r.room ?? "").trim();
           if (!gid || !sn) continue;
           const key = `${gid}:${sn}`;
+          (byGuest0[gid] = byGuest0[gid] || []).push(r);
           map0[key] = {
             letto_m: Number(r.letto_m ?? r.lettoM ?? 0) || 0,
             letto_s: Number(r.letto_s ?? r.lettoS ?? 0) || 0,
@@ -2315,6 +2320,7 @@ async function load({ showLoader=true } = {}){
           };
         }
         state.stanzeByKey = map0;
+        state.stanzeByGuest = byGuest0;
       } catch(_){}
     }
   }
@@ -2324,11 +2330,13 @@ async function load({ showLoader=true } = {}){
 
   // indicizza per ospite_id + stanza_num
   const map = {};
+  const byGuest = {};
   for (const r of rows){
     const gid = String(r.ospite_id ?? r.ospiteId ?? r.guest_id ?? r.guestId ?? "").trim();
     const sn = String(r.stanza_num ?? r.stanzaNum ?? r.room_number ?? r.roomNumber ?? r.stanza ?? r.room ?? "").trim();
     if (!gid || !sn) continue;
     const key = `${gid}:${sn}`;
+    (byGuest[gid] = byGuest[gid] || []).push(r);
     map[key] = {
       letto_m: Number(r.letto_m ?? r.lettoM ?? 0) || 0,
       letto_s: Number(r.letto_s ?? r.lettoS ?? 0) || 0,
@@ -2336,6 +2344,7 @@ async function load({ showLoader=true } = {}){
     };
   }
   state.stanzeByKey = map;
+  state.stanzeByGuest = byGuest;
   __lsSet("stanze", rows);
 }
 
@@ -3269,44 +3278,45 @@ function enterGuestCreateMode(){
   const fields = ["guestName","guestAdults","guestKidsU10","guestCheckOut","guestTotal","guestBooking","guestDeposit","guestSaldo","guestRemaining"];
   fields.forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
   try { updateGuestRemaining(); } catch (_) {}
-
-  const ci = document.getElementById("guestCheckIn");
-  if (ci) ci.value = todayISO();
-
   setMarriage(false);
+
+  // Soggiorni (multi-stanze)
+  state.guestStays = [];
   state.guestRooms = state.guestRooms || new Set();
   state.guestRooms.clear();
   state.lettiPerStanza = {};
   state.bedsDirty = false;
   state.stanzeSnapshotOriginal = "";
 
+  // Crea un soggiorno di default
+  try {
+    if (window.__ddae_addStay) window.__ddae_addStay();
+    else state.guestStays = [{ id: genId("stay"), stanza_num: 1, check_in: todayISO(), check_out: addDaysISO(todayISO(),1), matrimoniale:false, singoli:0, culla:false, note:"" }];
+  } catch (_) {
+    state.guestStays = [{ id: genId("stay"), stanza_num: 1, check_in: todayISO(), check_out: addDaysISO(todayISO(),1), matrimoniale:false, singoli:0, culla:false, note:"" }];
+  }
+  try { window.__ddae_renderStaysEditor && window.__ddae_renderStaysEditor(); } catch (_) {}
+
   // Pagamenti (pillole): default contanti + ricevuta OFF
   state.guestDepositType = "contante";
   state.guestSaldoType = "contante";
   state.guestDepositReceipt = false;
   state.guestSaldoReceipt = false;
-
   setPayType("depositType", state.guestDepositType);
   setPayType("saldoType", state.guestSaldoType);
   setPayReceipt("depositType", state.guestDepositReceipt);
   setPayReceipt("saldoType", state.guestSaldoReceipt);
 
-
   // Registrazioni (PS/ISTAT): default OFF
   state.guestPSRegistered = false;
   state.guestISTATRegistered = false;
   setRegFlags("regTags", state.guestPSRegistered, state.guestISTATRegistered);
-  // refresh rooms UI if present
-  try {
-    document.querySelectorAll("#roomsPicker .room-dot").forEach(btn => {
-      btn.classList.remove("selected");
-      btn.setAttribute("aria-pressed", "false");
-    });
-  } catch (_) {}
+
   try { updateOspiteHdActions(); } catch (_) {}
 
-  // (Create mode) nulla da fare sulle stanze: la disponibilita' si aggiorna quando l'utente inserisce le date.
+  // (Create mode) la disponibilita' stanze e' valutata per ciascun soggiorno.
 }
+
 
 function enterGuestEditMode(ospite){
   setGuestFormViewOnly(false);
@@ -3365,59 +3375,54 @@ function enterGuestEditMode(ospite){
   state.guestPSRegistered = psReg;
   state.guestISTATRegistered = istatReg;
   setRegFlags("regTags", psReg, istatReg);
-  // stanze: backend non espone GET stanze; se in futuro arrivano su ospite.stanze li applichiamo
+  // Soggiorni: ricostruisci dalla tabella 'stanze' (se presente) oppure dal campo stanze dell'ospite
   try {
-    if (ospite.stanze) {
+    const gid = String(guestIdOf(ospite) || ospite?.id || "").trim();
+    const rows = (state.stanzeByGuest && gid && Array.isArray(state.stanzeByGuest[gid])) ? state.stanzeByGuest[gid] : [];
+    const ci0 = formatISODateLocal(ospite.check_in || ospite.checkIn || "") || "";
+    const co0 = formatISODateLocal(ospite.check_out || ospite.checkOut || "") || "";
+    const stays = [];
+    if (rows && rows.length){
+      for (const r of rows){
+        const rn = parseInt(r.stanza_num ?? r.stanzaNum ?? r.room ?? r.stanza, 10);
+        if (!isFinite(rn) || rn<=0) continue;
+        const rci = formatISODateLocal(r.check_in ?? r.checkIn ?? "") || ci0 || todayISO();
+        const rco = formatISODateLocal(r.check_out ?? r.checkOut ?? "") || co0 || addDaysISO(rci,1);
+        stays.push({
+          id: genId("stay"),
+          stanza_num: rn,
+          check_in: rci,
+          check_out: (rco && rco > rci) ? rco : addDaysISO(rci,1),
+          matrimoniale: !!(r.letto_m ?? r.lettoM),
+          singoli: parseInt(r.letto_s ?? r.lettoS ?? 0,10)||0,
+          culla: !!(r.culla),
+          note: String(r.note || "")
+        });
+      }
+    } else if (ospite.stanze) {
       const rooms = Array.isArray(ospite.stanze) ? ospite.stanze : String(ospite.stanze).split(",").map(x=>x.trim()).filter(Boolean);
-      state.guestRooms = new Set(rooms.map(x=>parseInt(x,10)).filter(n=>isFinite(n)));
-      document.querySelectorAll("#roomsPicker .room-dot").forEach(btn => {
-        const n = parseInt(btn.getAttribute("data-room"), 10);
-        const on = state.guestRooms.has(n);
-        btn.classList.toggle("selected", on);
-        btn.setAttribute("aria-pressed", on ? "true" : "false");
-      });
+      for (const x of rooms){
+        const rn = parseInt(x,10);
+        if (!isFinite(rn) || rn<=0) continue;
+        const rci = ci0 || todayISO();
+        const rco = (co0 && co0 > rci) ? co0 : addDaysISO(rci,1);
+        stays.push({ id: genId("stay"), stanza_num: rn, check_in: rci, check_out: rco, matrimoniale:false, singoli:0, culla:false, note:"" });
+      }
     }
+    state.guestStays = stays.length ? stays : [{ id: genId("stay"), stanza_num: 1, check_in: (ci0 || todayISO()), check_out: (co0 && co0 > (ci0||todayISO())) ? co0 : addDaysISO(ci0||todayISO(),1), matrimoniale:false, singoli:0, culla:false, note:"" }];
+    state.bedsDirty = false;
+    state.stanzeSnapshotOriginal = JSON.stringify(buildArrayFromState());
+    try { window.__ddae_renderStaysEditor && window.__ddae_renderStaysEditor(); } catch (_) {}
   } catch (_) {}
-
-  // --- FIX A+B (dDAE): preserva la configurazione letti esistente e non riscrivere "stanze" se non è cambiata ---
+  // --- dDAE stays: snapshot per evitare riscritture inutili ---
   try {
     state.bedsDirty = false;
-
-    // Ricostruisci lettiPerStanza dai dati già salvati sul foglio "stanze" (state.stanzeByKey)
-    const gid = String(guestIdOf(ospite) || ospite?.id || "").trim();
-    const next = {};
-    const roomsNow = Array.from(state.guestRooms || []).map(n=>parseInt(n,10)).filter(n=>isFinite(n));
-    for (const rn of roomsNow){
-      const key = `${gid}:${String(rn)}`;
-      const d = (state.stanzeByKey && state.stanzeByKey[key]) ? state.stanzeByKey[key] : {};
-      next[String(rn)] = {
-        matrimoniale: !!(d.letto_m),
-        singoli: parseInt(d.letto_s || 0, 10) || 0,
-        culla: !!(d.culla),
-        note: ""
-      };
-    }
-    state.lettiPerStanza = next;
-
-    // Snapshot originale per evitare riscritture inutili su salvataggio
     state.stanzeSnapshotOriginal = JSON.stringify(buildArrayFromState());
   } catch (_) {}
 
   try { updateOspiteHdActions(); } catch (_) {}
-
-  // ✅ FIX dDAE: entrando in modifica con date gia' valorizzate, ricalcola subito disponibilita' stanze.
-  // In iOS/Safari PWA gli handler input/change dei campi date possono non partire finche' l'utente non li tocca.
-  // refreshRoomsAvailability/renderRooms sono definiti in setupOspite: li esponiamo su window e li richiamiamo qui.
-  try {
-    state._roomsAvailKey = "";
-    const run = () => {
-      try { window.__ddae_renderRooms && window.__ddae_renderRooms(); } catch (_) {}
-      try { window.__ddae_refreshRoomsAvailability && window.__ddae_refreshRoomsAvailability(); } catch (_) {}
-    };
-    setTimeout(run, 50);
-    setTimeout(run, 180);
-  } catch (_) {}
 }
+
 
 function _guestIdOf(item){
   return String(item?.id || item?.ID || item?.ospite_id || item?.ospiteId || item?.guest_id || item?.guestId || "").trim();
@@ -3549,14 +3554,22 @@ function setGuestFormViewOnly(isView, ospite){
   const btn = document.getElementById("createGuestCard");
   if (btn) btn.hidden = !!isView;
 
-  const picker = document.getElementById("roomsPicker");
-  if (picker) picker.hidden = !!isView;
+  // Soggiorni: in sola lettura mostra lista, altrimenti editor
+  const staysList = document.getElementById("staysList");
+  if (staysList) staysList.hidden = !!isView;
 
-  const ro = document.getElementById("roomsReadOnly");
+  const addBtn = document.getElementById("btnAddStay");
+  if (addBtn) addBtn.hidden = !!isView;
+
+  const ro = document.getElementById("staysReadOnly");
   if (ro) {
     ro.hidden = !isView;
-    if (isView) renderRoomsReadOnly(ospite);
-    else ro.innerHTML = "";
+    if (isView) {
+      try { window.__ddae_renderStaysReadOnly && window.__ddae_renderStaysReadOnly(ospite); } catch (_) {}
+    } else {
+      ro.innerHTML = "";
+      try { window.__ddae_renderStaysEditor && window.__ddae_renderStaysEditor(); } catch (_) {}
+    }
   }
 
   // Aggiorna i pallini in testata in base alla modalità corrente
@@ -3735,154 +3748,428 @@ function setupOspite(){
     });
 }
 
-  const roomsWrap = document.getElementById("roomsPicker");
-  const roomsOut = null; // removed UI string output
 
-  function _getGuestDateRange(){
-    try{
-      const ci = (document.getElementById("guestCheckIn")?.value || "").trim();
-      const co = (document.getElementById("guestCheckOut")?.value || "").trim();
-      if (!ci || !co) return null;
-      // Date ISO YYYY-MM-DD: confronto lessicografico ok
-      if (co <= ci) return null;
-      return { ci, co };
-    }catch(_){ return null; }
+  // --- Soggiorni (multi-stanze con date per stanza) ---
+  const staysField = document.getElementById("staysField");
+  const staysListEl = document.getElementById("staysList");
+  const staysSummaryEl = document.getElementById("staysSummary");
+  const staysReadOnlyEl = document.getElementById("staysReadOnly");
+  const btnAddStay = document.getElementById("btnAddStay");
+  const btnMarriage = document.getElementById("roomMarriage");
+
+  function _stays(){
+    return Array.isArray(state.guestStays) ? state.guestStays : (state.guestStays = []);
   }
 
-  async function refreshRoomsAvailability(){
-    // Regola: nessuna stanza selezionabile senza intervallo date valido
-    const range = _getGuestDateRange();
+  function _isoPlusDays(iso, days){
+    try{
+      const d = new Date(iso + "T00:00:00");
+      if (isNaN(d.getTime())) return todayISO();
+      d.setDate(d.getDate()+days);
+      return d.toISOString().slice(0,10);
+    }catch(_){ return todayISO(); }
+  }
 
-    const editId = String(state.guestEditId || "").trim();
+  function _coerceRoom(n){
+    const x = parseInt(n,10);
+    return (isFinite(x) && x>=1 && x<=6) ? x : 0;
+  }
 
-    // reset/lock
-    if (!range){
-      state.occupiedRooms = new Set();
-      state._roomsAvailKey = "";
-      // se l'utente non ha ancora inserito date, non deve poter selezionare stanze
-      if (state.guestRooms && state.guestRooms.size){
-        state.guestRooms.clear();
-        if (state.lettiPerStanza) state.lettiPerStanza = {};
+  function _normalizeStay(s){
+    const out = {
+      id: String(s?.id || genId("stay")),
+      stanza_num: _coerceRoom(s?.stanza_num ?? s?.stanzaNum ?? s?.room ?? s?.stanza),
+      check_in: String(s?.check_in ?? s?.checkIn ?? s?.ci ?? "").slice(0,10),
+      check_out: String(s?.check_out ?? s?.checkOut ?? s?.co ?? "").slice(0,10),
+      matrimoniale: !!(s?.matrimoniale ?? s?.letto_m ?? s?.lettoM),
+      singoli: parseInt(s?.singoli ?? s?.letto_s ?? s?.lettoS ?? 0,10) || 0,
+      culla: !!(s?.culla),
+      note: String(s?.note || "")
+    };
+    if (!out.check_in) out.check_in = todayISO();
+    if (!out.check_out) out.check_out = _isoPlusDays(out.check_in, 1);
+    if (out.check_out <= out.check_in) out.check_out = _isoPlusDays(out.check_in, 1);
+    out.singoli = Math.max(0, Math.min(3, out.singoli));
+    return out;
+  }
+
+  function _recomputeOverallDates(){
+    const list = _stays().filter(s => s.check_in && s.check_out);
+    if (!list.length){
+      const ci = document.getElementById("guestCheckIn");
+      const co = document.getElementById("guestCheckOut");
+      if (ci) ci.value = "";
+      if (co) co.value = "";
+      return { from:"", to:"" };
+    }
+    const from = list.reduce((m,s)=> (m && m < s.check_in) ? m : s.check_in, "9999-12-31");
+    const to = list.reduce((m,s)=> (m && m > s.check_out) ? m : s.check_out, "0000-01-01");
+    const ci = document.getElementById("guestCheckIn");
+    const co = document.getElementById("guestCheckOut");
+    if (ci) ci.value = from;
+    if (co) co.value = to;
+    try{ refreshFloatingLabels(); }catch(_){ }
+    return { from, to };
+  }
+
+  function _uniqueRoomsFromStays(){
+    const set = new Set();
+    for (const s of _stays()){
+      const r = _coerceRoom(s.stanza_num);
+      if (r) set.add(r);
+    }
+    return Array.from(set).sort((a,b)=>a-b);
+  }
+
+  function _syncDerivedRooms(){
+    // compat: mantiene guestRooms/lettiPerStanza (usati da altre viste) come derivazione dai soggiorni
+    state.guestRooms = state.guestRooms || new Set();
+    state.guestRooms.clear();
+    state.lettiPerStanza = {};
+    for (const s of _stays()){
+      const r = _coerceRoom(s.stanza_num);
+      if (!r) continue;
+      state.guestRooms.add(r);
+      // prima occorrenza per stanza
+      if (!state.lettiPerStanza[String(r)]){
+        state.lettiPerStanza[String(r)] = {
+          matrimoniale: !!s.matrimoniale,
+          singoli: parseInt(s.singoli||0,10)||0,
+          culla: !!s.culla,
+          note: String(s.note||"")
+        };
       }
-      renderRooms();
-      return;
     }
+  }
 
-    const key = `${range.ci}|${range.co}|${editId}`;
-    if (state._roomsAvailKey === key && state.occupiedRooms instanceof Set) {
-      renderRooms();
-      return;
-    }
-    state._roomsAvailKey = key;
-
-    let rows = [];
+  async function _fetchAllGuestsForOcc(){
     try{
       const data = await cachedGet("ospiti", {}, { showLoader:false, ttlMs: 15000 });
-      rows = Array.isArray(data) ? data : [];
-    }catch(_){ rows = []; }
+      return Array.isArray(data) ? data : [];
+    }catch(_){ return []; }
+  }
 
+  function _parseGuestRoomsField(item){
+    try{
+      const st = item?.stanze ?? item?.rooms ?? item?.stanza ?? "";
+      if (Array.isArray(st)) return st.map(x=>parseInt(x,10)).filter(n=>isFinite(n));
+      const s = String(st||"");
+      const m = s.match(/[1-6]/g) || [];
+      return m.map(x=>parseInt(x,10)).filter(n=>isFinite(n));
+    }catch(_){ return []; }
+  }
+
+  function _overlap(a1,a2,b1,b2){
+    // [a1,a2) intersects [b1,b2)
+    return (a1 < b2 && a2 > b1);
+  }
+
+  async function _occupiedRoomsForRange(ci, co){
+    const editId = String(state.guestEditId || "").trim();
+    const rows = await _fetchAllGuestsForOcc();
     const occ = new Set();
-
     for (const g of rows){
-      // In MODIFICA: ignora l'ospite corrente (altrimenti le sue stanze risultano occupate e diventano rosse)
       if (editId){
         const gid = guestIdOf(g);
         if (gid && gid === editId) continue;
       }
-
       const gi = String(g.check_in ?? g.checkIn ?? g.checkin ?? "").slice(0,10);
       const go = String(g.check_out ?? g.checkOut ?? g.checkout ?? "").slice(0,10);
       if (!gi || !go) continue;
-
-      // overlap: [gi,go) interseca [ci,co)
-      if (!(gi < range.co && go > range.ci)) continue;
-
-      const roomsArr = _parseRoomsArr(g.stanze ?? g.rooms ?? g.stanza ?? "");
-      roomsArr.forEach(r => occ.add(r));
+      if (!_overlap(gi,go,ci,co)) continue;
+      _parseGuestRoomsField(g).forEach(r => { if (r>=1 && r<=6) occ.add(r); });
     }
+    return occ;
+  }
 
-    state.occupiedRooms = occ;
-
-    // Se l'utente aveva selezionato stanze che ora risultano occupate, le togliamo
-    let removed = false;
-    try{
-      for (const r of Array.from(state.guestRooms || [])){
-        if (occ.has(r)){
-          state.guestRooms.delete(r);
-          if (state.lettiPerStanza) delete state.lettiPerStanza[String(r)];
-          removed = true;
+  function _selfOverlapBadges(){
+    const list = _stays();
+    const flags = {};
+    for (let i=0;i<list.length;i++){
+      flags[list[i].id] = { overlap:false };
+    }
+    for (let i=0;i<list.length;i++){
+      for (let j=i+1;j<list.length;j++){
+        const a=list[i], b=list[j];
+        if (!a.check_in || !a.check_out || !b.check_in || !b.check_out) continue;
+        if (_overlap(a.check_in,a.check_out,b.check_in,b.check_out)){
+          flags[a.id].overlap = true;
+          flags[b.id].overlap = true;
         }
       }
-    }catch(_){}
+    }
+    return flags;
+  }
 
-    if (removed){
-      try{ toast("Alcune stanze non sono disponibili"); }catch(_){}
+  function _fmtShort(iso){
+    try{
+      const d = new Date(iso+"T00:00:00");
+      if (isNaN(d.getTime())) return iso;
+      return d.toLocaleDateString("it-IT", { day:"2-digit", month:"short" });
+    }catch(_){ return iso; }
+  }
+
+  function _renderStaysSummary(){
+    if (!staysSummaryEl) return;
+    const list = _stays().filter(s=>s.check_in && s.check_out);
+    if (!list.length){ staysSummaryEl.textContent = ""; return; }
+    const { from, to } = _recomputeOverallDates();
+    const n = list.length;
+    const rooms = _uniqueRoomsFromStays();
+    const roomsTxt = rooms.length ? rooms.join(",") : "—";
+    staysSummaryEl.textContent = `Periodo complessivo: ${_fmtShort(from)} → ${_fmtShort(to)}  ·  Soggiorni: ${n}  ·  Stanze: ${roomsTxt}`;
+  }
+
+  async function renderStaysEditor(){
+    if (!staysListEl) return;
+    staysListEl.innerHTML = "";
+
+    const list = _stays();
+    const flags = _selfOverlapBadges();
+
+    // precompute occupied sets by distinct ranges (small)
+    const occCache = {};
+    async function getOcc(ci,co){
+      const k = `${ci}|${co}`;
+      if (occCache[k]) return occCache[k];
+      occCache[k] = await _occupiedRoomsForRange(ci,co);
+      return occCache[k];
     }
 
-    renderRooms();
+    for (const s of list){
+      const stay = _normalizeStay(s);
+      Object.assign(s, stay);
+
+      const card = document.createElement("div");
+      card.className = "stay-card";
+
+      const head = document.createElement("div");
+      head.className = "stay-head";
+
+      const left = document.createElement("div");
+      left.className = "stay-room-chip";
+
+      const sel = document.createElement("select");
+      sel.setAttribute("aria-label","Stanza");
+      sel.innerHTML = `<option value="">Stanza…</option>` + [1,2,3,4,5,6].map(n=>`<option value="${n}">${n}</option>`).join("");
+      sel.value = stay.stanza_num ? String(stay.stanza_num) : "";
+
+      const actions = document.createElement("div");
+      actions.className = "stay-actions";
+      const btnBeds = document.createElement("button");
+      btnBeds.type = "button";
+      btnBeds.className = "btn";
+      btnBeds.textContent = "Letti";
+      btnBeds.setAttribute("data-stay-config", stay.id);
+
+      const btnDel = document.createElement("button");
+      btnDel.type = "button";
+      btnDel.className = "btn";
+      btnDel.textContent = "Elimina";
+      btnDel.setAttribute("data-stay-del", stay.id);
+
+      left.appendChild(sel);
+      actions.appendChild(btnBeds);
+      actions.appendChild(btnDel);
+      head.appendChild(left);
+      head.appendChild(actions);
+
+      const grid = document.createElement("div");
+      grid.className = "stay-grid";
+      grid.innerHTML = `
+        <div class="field float"><input type="date" id="ci_${stay.id}" value="${stay.check_in}"><label>Dal</label></div>
+        <div class="field float"><input type="date" id="co_${stay.id}" value="${stay.check_out}"><label>Al</label></div>
+      `;
+
+      const mini = document.createElement("div");
+      mini.className = "stay-mini";
+      const beds = document.createElement("div");
+      beds.className = "stay-beds";
+      const b1 = document.createElement("span");
+      b1.className = "stay-badge";
+      b1.textContent = stay.matrimoniale ? "M" : "M —";
+      const b2 = document.createElement("span");
+      b2.className = "stay-badge";
+      b2.textContent = `S ${stay.singoli||0}`;
+      const b3 = document.createElement("span");
+      b3.className = "stay-badge";
+      b3.textContent = stay.culla ? "C" : "C —";
+      beds.appendChild(b1); beds.appendChild(b2); beds.appendChild(b3);
+
+      const badges = document.createElement("div");
+      badges.className = "stay-beds";
+      if (flags[stay.id]?.overlap){
+        const x = document.createElement("span");
+        x.className = "stay-badge warn";
+        x.textContent = "Sovrapposto";
+        badges.appendChild(x);
+      }
+
+      mini.appendChild(beds);
+      mini.appendChild(badges);
+
+      const note = document.createElement("div");
+      note.className = "field float";
+      note.innerHTML = `<input type="text" id="nt_${stay.id}" placeholder=" " value="${escapeHtml(stay.note)}"><label>Note</label>`;
+
+      card.appendChild(head);
+      card.appendChild(grid);
+      card.appendChild(mini);
+      card.appendChild(note);
+      staysListEl.appendChild(card);
+
+      // availability
+      (async () => {
+        if (!stay.check_in || !stay.check_out || stay.check_out <= stay.check_in) return;
+        const occ = await getOcc(stay.check_in, stay.check_out);
+        const current = _coerceRoom(stay.stanza_num);
+        // disable occupied options (except current selection)
+        [...sel.options].forEach(opt => {
+          const n = parseInt(opt.value||"0",10);
+          if (!n) return;
+          const dis = occ.has(n) && n !== current;
+          opt.disabled = !!dis;
+        });
+        if (current && occ.has(current)){
+          const bad = document.createElement("span");
+          bad.className = "stay-badge bad";
+          bad.textContent = "Occupata";
+          badges.appendChild(bad);
+        }
+      })();
+
+      // bind changes
+      sel.addEventListener("change", () => {
+        s.stanza_num = _coerceRoom(sel.value);
+        _syncDerivedRooms();
+        _renderStaysSummary();
+      });
+      const ciEl = card.querySelector(`#ci_${stay.id}`);
+      const coEl = card.querySelector(`#co_${stay.id}`);
+      const ntEl = card.querySelector(`#nt_${stay.id}`);
+
+      const onDate = () => {
+        s.check_in = String(ciEl.value||"").slice(0,10);
+        s.check_out = String(coEl.value||"").slice(0,10);
+        if (s.check_in && s.check_out && s.check_out <= s.check_in){
+          s.check_out = _isoPlusDays(s.check_in,1);
+          coEl.value = s.check_out;
+        }
+        _recomputeOverallDates();
+        _renderStaysSummary();
+        renderStaysEditor();
+      };
+      ciEl.addEventListener("change", onDate);
+      coEl.addEventListener("change", onDate);
+      ciEl.addEventListener("input", onDate);
+      coEl.addEventListener("input", onDate);
+
+      ntEl.addEventListener("change", () => { s.note = ntEl.value || ""; _syncDerivedRooms(); });
+      ntEl.addEventListener("input", () => { s.note = ntEl.value || ""; });
+
+      btnDel.addEventListener("click", () => {
+        state.guestStays = _stays().filter(x => x.id !== stay.id);
+        _syncDerivedRooms();
+        _recomputeOverallDates();
+        _renderStaysSummary();
+        renderStaysEditor();
+      });
+    }
+
+    _syncDerivedRooms();
+    _recomputeOverallDates();
+    _renderStaysSummary();
+    try { refreshFloatingLabels(); } catch (_) {}
   }
 
-  function renderRooms(){
-    const range = _getGuestDateRange();
-    const locked = !range;
-    const occSet = (state.occupiedRooms instanceof Set) ? state.occupiedRooms : new Set();
+  function renderStaysReadOnly(ospite){
+    if (!staysReadOnlyEl) return;
+    staysReadOnlyEl.innerHTML = "";
 
-    roomsWrap?.querySelectorAll(".room-dot").forEach(btn => {
-      // Il pallino "M" non è una stanza numerata
-      if (btn.id === "roomMarriage") return;
+    // prefer: stays from state (edit/view already populated)
+    const list = _stays().length ? _stays() : [];
 
-      const n = parseInt(btn.getAttribute("data-room"), 10);
-      const on = state.guestRooms.has(n);
-      const occ = !locked && occSet.has(n);
+    if (!list.length){
+      staysReadOnlyEl.innerHTML = `<div style="opacity:.7;font-size:13px;padding:6px 0;">Nessun soggiorno.</div>`;
+      return;
+    }
 
-      btn.classList.toggle("selected", on);
-      btn.classList.toggle("occupied", occ);
+    const flags = _selfOverlapBadges();
 
-      const dis = locked || occ;
-      btn.disabled = !!dis;
-      btn.setAttribute("aria-disabled", dis ? "true" : "false");
-      btn.setAttribute("aria-pressed", on ? "true" : "false");
-    });
+    for (const s of list){
+      const row = document.createElement("div");
+      row.className = "stay-ro-row";
+      const left = document.createElement("div");
+      left.className = "stay-ro-left";
+      const r = document.createElement("div");
+      r.className = "stay-ro-room";
+      r.textContent = String(_coerceRoom(s.stanza_num) || "—");
+      const d = document.createElement("div");
+      d.className = "stay-ro-dates";
+      d.textContent = `${formatLongDateIT(s.check_in||"").replace(/\s\d{4}$/,'')} → ${formatLongDateIT(s.check_out||"").replace(/\s\d{4}$/,'')}`;
+      left.appendChild(r);
+      left.appendChild(d);
 
-    // matrimonio dot (rimane gestibile come flag)
-    setMarriage(state.guestMarriage);
+      const right = document.createElement("div");
+      right.className = "stay-beds";
+      if (flags[s.id]?.overlap){
+        const x = document.createElement("span");
+        x.className = "stay-badge warn";
+        x.textContent = "Sovrapposto";
+        right.appendChild(x);
+      }
+
+      row.appendChild(left);
+      row.appendChild(right);
+      staysReadOnlyEl.appendChild(row);
+    }
+
+    _renderStaysSummary();
   }
 
-  // Espone le funzioni (scope setupOspite) per poterle richiamare da enterGuestEditMode
-  // senza dipendere dall'evento input/change dei campi date (iOS/Safari PWA).
-  try {
-    window.__ddae_refreshRoomsAvailability = refreshRoomsAvailability;
-    window.__ddae_renderRooms = renderRooms;
-  } catch (_) {}
+  // add stay
+  function addStay(){
+    const list = _stays();
+    const ci = todayISO();
+    const co = _isoPlusDays(ci,1);
+    list.push(_normalizeStay({ id: genId("stay"), stanza_num: 1, check_in: ci, check_out: co, matrimoniale:false, singoli:0, culla:false, note:"" }));
+    state.guestStays = list;
+    _syncDerivedRooms();
+    _recomputeOverallDates();
+    _renderStaysSummary();
+    renderStaysEditor();
+  }
 
-  roomsWrap?.addEventListener("click", (e) => {
-    const b = e.target.closest(".room-dot");
+  if (btnAddStay && !btnAddStay.__bound){
+    btnAddStay.__bound = true;
+    btnAddStay.addEventListener("click", addStay);
+  }
+
+  // matrimonio toggle
+  if (btnMarriage && !btnMarriage.__bound){
+    btnMarriage.__bound = true;
+    btnMarriage.addEventListener("click", () => { setMarriage(!state.guestMarriage); });
+  }
+
+  // Espone per enterGuestEditMode
+  try{
+    window.__ddae_renderStaysEditor = renderStaysEditor;
+    window.__ddae_renderStaysReadOnly = renderStaysReadOnly;
+    window.__ddae_addStay = addStay;
+  }catch(_){ }
+
+  // bind stay config modal opener (Letti)
+  document.addEventListener("click", (e) => {
+    const b = e.target.closest && e.target.closest("[data-stay-config]");
     if (!b) return;
-
-    // Matrimonio: flag separato
-    if (b.id === "roomMarriage") { setMarriage(!state.guestMarriage); return; }
-
-    const range = _getGuestDateRange();
-    if (!range){
-      try{ toast("Seleziona prima check-in e check-out"); }catch(_){}
-      return;
-    }
-
-    // Se occupata (rossa) => popup
-    if (b.classList.contains("occupied") || b.disabled){
-      try{ toast("Stanza occupata"); }catch(_){}
-      return;
-    }
-
-    const n = parseInt(b.getAttribute("data-room"), 10);
-    if (state.guestRooms.has(n)) {
-      state.guestRooms.delete(n);
-      if (state.lettiPerStanza) delete state.lettiPerStanza[String(n)];
-    } else {
-      state.guestRooms.add(n);
-    }
-    renderRooms();
+    const id = b.getAttribute("data-stay-config");
+    if (!id) return;
+    openStayConfig(id);
   });
+
+  // in view mode we hide editor and show read-only (handled by setGuestFormViewOnly)
+
+
 
   function bindPayPill(containerId, kind){
     const wrap = document.getElementById(containerId);
@@ -3939,31 +4226,32 @@ function setupOspite(){
   });
   try { updateGuestRemaining(); } catch (_) {}
 
+  // Init soggiorni UI
+  try{
+    _syncDerivedRooms();
+    _recomputeOverallDates();
+    _renderStaysSummary();
 
-  // ✅ Stanze: blocca selezione finché non c'è un intervallo date valido + segna stanze occupate (rosso)
-  ["guestCheckIn","guestCheckOut"].forEach((id) => {
-    const el = document.getElementById(id);
-    if (!el) return;
-    el.addEventListener("input", () => { try { refreshRoomsAvailability(); } catch (_) {} });
-    el.addEventListener("change", () => { try { refreshRoomsAvailability(); } catch (_) {} });
-  });
-  try { refreshRoomsAvailability(); } catch (_) {}
+    if ((!state.guestStays || !state.guestStays.length) && state.guestMode === 'create'){
+      addStay();
+    } else {
+      if (state.guestMode === 'view'){
+        if (staysListEl) staysListEl.hidden = true;
+        if (btnAddStay) btnAddStay.hidden = true;
+        if (staysReadOnlyEl) staysReadOnlyEl.hidden = false;
+        renderStaysReadOnly(state.guestViewItem);
+      } else {
+        if (staysReadOnlyEl) staysReadOnlyEl.hidden = true;
+        if (staysListEl) staysListEl.hidden = false;
+        if (btnAddStay) btnAddStay.hidden = false;
+        renderStaysEditor();
+      }
+    }
+  }catch(_){ }
 
-
-  const btnCreate = document.getElementById("createGuestCard");
-  btnCreate?.addEventListener("click", async () => {
-    try { await saveGuest(); } catch (e) { toast(e.message || "Errore"); }
-  });
-
-  // Default: check-in oggi (solo UI)
-  const today = new Date();
-  const iso = today.toISOString().slice(0,10);
-  const ci = document.getElementById("guestCheckIn");
-  if (ci && !ci.value) ci.value = iso;
-
-  renderRooms();
   renderGuestCards();
 }
+
 
 function euro(n){
   try { return (Number(n)||0).toLocaleString("it-IT", { style:"currency", currency:"EUR" }); }
@@ -5450,42 +5738,76 @@ try{
 }catch(_){ }
 // ---  helpers (sheet "stanze") ---
 function buildArrayFromState(){
-  const rooms = Array.from(state.guestRooms || []).map(n=>parseInt(n,10)).filter(n=>isFinite(n)).sort((a,b)=>a-b);
-  const lp = state.lettiPerStanza || {};
-  return rooms.map((n)=>{
-    const d = lp[String(n)] || lp[n] || {};
-    return {
-      stanza_num: n,
-      letto_m: !!d.matrimoniale,
-      letto_s: parseInt(d.singoli || 0, 10) || 0,
-      culla: !!d.culla,
-      note: (d.note || "").toString()
-    };
-  });
+  const stays = Array.isArray(state.guestStays) ? state.guestStays : [];
+  // Fallback legacy: guestRooms + lettiPerStanza
+  if (!stays.length){
+    const rooms = Array.from(state.guestRooms || []).map(n=>parseInt(n,10)).filter(n=>isFinite(n)).sort((a,b)=>a-b);
+    const lp = state.lettiPerStanza || {};
+    return rooms.map((n)=>{
+      const d = lp[String(n)] || lp[n] || {};
+      return {
+        stanza_num: n,
+        check_in: (document.getElementById("guestCheckIn")?.value || "").toString().slice(0,10),
+        check_out: (document.getElementById("guestCheckOut")?.value || "").toString().slice(0,10),
+        letto_m: !!d.matrimoniale,
+        letto_s: parseInt(d.singoli || 0, 10) || 0,
+        culla: !!d.culla,
+        note: (d.note || "").toString()
+      };
+    });
+  }
+
+  return stays
+    .map(s => ({
+      id: String(s.id || ""),
+      stanza_num: parseInt(s.stanza_num,10),
+      check_in: (s.check_in || "").toString().slice(0,10),
+      check_out: (s.check_out || "").toString().slice(0,10),
+      letto_m: !!(s.matrimoniale),
+      letto_s: parseInt(s.singoli || 0, 10) || 0,
+      culla: !!(s.culla),
+      note: (s.note || "").toString()
+    }))
+    .filter(r => isFinite(r.stanza_num) && r.stanza_num>=1 && r.stanza_num<=6 && r.check_in && r.check_out && r.check_out > r.check_in)
+    .sort((a,b)=> (a.stanza_num-b.stanza_num) || (a.check_in.localeCompare(b.check_in)) || (a.check_out.localeCompare(b.check_out)) );
 }
 
+
 function applyToState(rows){
+  state.guestStays = [];
   state.guestRooms = state.guestRooms || new Set();
+  state.guestRooms.clear();
   state.lettiPerStanza = {};
   state.bedsDirty = false;
   state.stanzeSnapshotOriginal = "";
-  state.guestRooms.clear();
-  (Array.isArray(rows) ? rows : []).forEach(r=>{
+
+  const list = (Array.isArray(rows) ? rows : []);
+  for (const r of list){
     const n = parseInt(r.stanza_num ?? r.stanzaNum ?? r.room ?? r.stanza, 10);
-    if (!isFinite(n) || n<=0) return;
-    state.guestRooms.add(n);
-    state.lettiPerStanza[String(n)] = {
+    if (!isFinite(n) || n<=0) continue;
+    const ci = formatISODateLocal(r.check_in ?? r.checkIn ?? "") || "";
+    const co = formatISODateLocal(r.check_out ?? r.checkOut ?? "") || "";
+    const stay = {
+      id: genId("stay"),
+      stanza_num: n,
+      check_in: ci,
+      check_out: co,
       matrimoniale: !!(r.letto_m ?? r.lettoM ?? r.matrimoniale),
       singoli: parseInt(r.letto_s ?? r.lettoS ?? r.singoli, 10) || 0,
       culla: !!(r.culla),
       note: (r.note || "").toString()
     };
-  });
+    state.guestStays.push(stay);
+    state.guestRooms.add(n);
+    state.lettiPerStanza[String(n)] = { matrimoniale: !!stay.matrimoniale, singoli: stay.singoli, culla: !!stay.culla, note: stay.note };
+  }
 }
+
 
 // --- Room beds config (non-invasive) ---
 state.lettiPerStanza = state.lettiPerStanza || {};
 let __rc_room = null;
+let __rc_stay = null;
 
 function __rc_renderToggle(el, on){
   el.innerHTML = `<span class="dot ${on?'on':''}"></span>`;
@@ -5504,6 +5826,7 @@ function __rc_renderSingoli(el, n){
 }
 
 function openRoomConfig(room){
+  __rc_stay = null;
   __rc_room = String(room);
   const d = state.lettiPerStanza[__rc_room] || {matrimoniale:false,singoli:0,culla:false};
   document.getElementById('roomConfigTitle').textContent = 'Stanza '+room;
@@ -5513,21 +5836,44 @@ function openRoomConfig(room){
   document.getElementById('roomConfigModal').hidden = false;
 }
 
-document.addEventListener('click', (e)=>{
-  const b = e.target.closest && e.target.closest('[data-room]');
-  if(!b) return;
-  // Le celle del calendario settimanale usano data-room: qui NON deve aprirsi la config stanza
-  if (b.closest && b.closest('#calGrid')) return;
-  openRoomConfig(b.getAttribute('data-room'));
-});
+function openStayConfig(stayId){
+  __rc_room = null;
+  __rc_stay = String(stayId||'');
+  const s = (Array.isArray(state.guestStays)?state.guestStays:[]).find(x=>String(x.id)===__rc_stay) || null;
+  const room = s ? (s.stanza_num||s.stanza||s.room||'') : '';
+  document.getElementById('roomConfigTitle').textContent = 'Letti (Stanza ' + (room||'—') + ')';
+  __rc_renderToggle(document.getElementById('rc_matrimoniale'), !!(s && s.matrimoniale));
+  __rc_renderSingoli(document.getElementById('rc_singoli'), parseInt((s && s.singoli) || 0,10) || 0);
+  __rc_renderToggle(document.getElementById('rc_culla'), !!(s && s.culla));
+  document.getElementById('roomConfigModal').hidden = false;
+}
+
 
 document.getElementById('rc_save')?.addEventListener('click', ()=>{
   const matrimoniale = document.querySelector('#rc_matrimoniale .dot')?.classList.contains('on')||false;
   const culla = document.querySelector('#rc_culla .dot')?.classList.contains('on')||false;
   const singoli = document.querySelectorAll('#rc_singoli .dot.on').length;
-  state.lettiPerStanza[__rc_room] = {matrimoniale, singoli, culla};
+
+  if (__rc_stay){
+    const list = Array.isArray(state.guestStays) ? state.guestStays : [];
+    const s = list.find(x=>String(x.id)===String(__rc_stay));
+    if (s){
+      s.matrimoniale = matrimoniale;
+      s.singoli = singoli;
+      s.culla = culla;
+      // aggiorna anche indicizzazione legacy per badge/lista
+      const rn = parseInt(s.stanza_num||0,10);
+      if (isFinite(rn) && rn>0) state.lettiPerStanza[String(rn)] = { matrimoniale, singoli, culla, note: String(s.note||'') };
+    }
+  } else if (__rc_room){
+    state.lettiPerStanza[__rc_room] = {matrimoniale, singoli, culla};
+  }
+
   state.bedsDirty = true;
   document.getElementById('roomConfigModal').hidden = true;
+
+  // refresh soggiorni
+  try { window.__ddae_renderStaysEditor && window.__ddae_renderStaysEditor(); } catch(_) {}
 });
 
 // Popup letti: Annulla (chiudi senza salvare)
