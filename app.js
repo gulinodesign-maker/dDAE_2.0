@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.023";
+const BUILD_VERSION = "dDAE_2.022";
 
 
 function __parseBuildVersion(v){
@@ -1647,7 +1647,7 @@ const lav = e.target.closest && e.target.closest("#goLavanderia") || e.target.cl
     const s1 = e.target.closest && e.target.closest("#goStatGen");
     if (s1){ hideLauncher(); showPage("statgen"); return; }
     const s2 = e.target.closest && e.target.closest("#goStatMensili");
-    if (s2){ hideLauncher(); showPage("statmensili"); return; }
+    if (s2){ hideLauncher(); toast("Incassi mensili: in arrivo"); return; }
     const s3 = e.target.closest && e.target.closest("#goStatSpese");
     if (s3){ hideLauncher(); showPage("statspese"); return; }
     const s4 = e.target.closest && e.target.closest("#goStatPrenotazioni");
@@ -1800,12 +1800,6 @@ state.page = page;
     statGenTopTools.hidden = (page !== "statgen");
   }
 
-  // Top tools (Statistiche → Incassi mensili)
-  const statMensiliTopTools = $("#statMensiliTopTools");
-  if (statMensiliTopTools){
-    statMensiliTopTools.hidden = (page !== "statmensili");
-  }
-
   // Top tools (Statistiche → Spese generali)
   const statSpeseTopTools = $("#statSpeseTopTools");
   if (statSpeseTopTools){
@@ -1867,13 +1861,6 @@ state.page = page;
     const _nav = navId;
     ensurePeriodData({ showLoader:true })
       .then(()=>{ if (state.navId !== _nav || state.page !== "statspese") return; renderStatSpese(); })
-      .catch(e=>toast(e.message));
-  }
-
-  if (page === "statmensili") {
-    const _nav = navId;
-    ensureStatMensiliData({ showLoader:true })
-      .then(()=>{ if (state.navId !== _nav || state.page !== "statmensili") return; renderStatMensili(); })
       .catch(e=>toast(e.message));
   }
 
@@ -2028,7 +2015,7 @@ if (goCalendarioTopOspiti){
   const s1 = $("#goStatGen");
   if (s1){ bindFastTap(s1, () => { hideLauncher(); showPage("statgen"); }); }
   const s2 = $("#goStatMensili");
-  if (s2){ bindFastTap(s2, () => { hideLauncher(); showPage("statmensili"); }); }
+  if (s2){ bindFastTap(s2, () => toast("Incassi mensili: in arrivo")); }
   const s3 = $("#goStatSpese");
   if (s3){ bindFastTap(s3, () => { hideLauncher(); showPage("statspese"); }); }
   const s4 = $("#goStatPrenotazioni");
@@ -2037,8 +2024,6 @@ if (goCalendarioTopOspiti){
   // STATGEN: topbar tools
   const btnBackStats = $("#btnBackStatistiche");
   if (btnBackStats){ bindFastTap(btnBackStats, () => { closeStatPieModal(); showPage("statistiche"); }); }
-  const btnBackStatsMensili = $("#btnBackStatisticheMensili");
-  if (btnBackStatsMensili){ bindFastTap(btnBackStatsMensili, () => { showPage("statistiche"); }); }
   const btnPie = $("#btnStatPie");
   if (btnPie){ bindFastTap(btnPie, () => { openStatPieModal(); }); }
   const statPieClose = $("#statPieClose");
@@ -2773,84 +2758,3226 @@ function renderStatGen(){
   set("sgCassa", s.giacenzaCassa);
 }
 
-// ===== STATISTICHE: INCASSI MENSILI (dDAE_2.023) =====
-const __MONTHS_IT = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
+function openStatPieModal(){
+  try{
+    if (!state.statGen) state.statGen = computeStatGen();
+  }catch(_){ state.statGen = state.statGen || null; }
 
-function __gradientRedToIndigo(n=12){
-  const start = [255, 0, 0];
-  const end   = [75, 0, 130]; // indigo
-  const out = [];
-  const denom = (n<=1) ? 1 : (n-1);
-  for (let i=0; i<n; i++){
-    const t = i / denom;
-    const r = Math.round(start[0] + (end[0]-start[0]) * t);
-    const g = Math.round(start[1] + (end[1]-start[1]) * t);
-    const b = Math.round(start[2] + (end[2]-start[2]) * t);
-    out.push(`rgb(${r},${g},${b})`);
+  const m = document.getElementById("statPieModal");
+  if (!m) return;
+  m.hidden = false;
+  m.setAttribute("aria-hidden", "false");
+
+  const s = state.statGen || computeStatGen();
+  const slices = [
+    { label: "Fatturato totale", value: s.fatturatoTotale, color: "#2b7cb4" },
+    { label: "Spese totali", value: s.speseTotali, color: "#4d9cc5" },
+    { label: "Importo senza ricevuta", value: s.noRicevuta, color: "#6fb7d6" },
+    { label: "Importo con ricevuta", value: s.ricevuta, color: "#96bfc7" },
+    { label: "IVA da versare", value: s.ivaDaVersare, color: "#bfbea9" },
+    { label: "Guadagno totale", value: s.guadagnoTotale, color: "#cf9458" },
+    { label: "Giacenza in cassa", value: s.cassa, color: "#c9772b" },
+  ];
+
+  drawPie("statPieCanvas", slices);
+
+  const leg = document.getElementById("statPieLegend");
+  if (leg){
+    const total = slices.reduce((a,x)=>a+Math.max(0,Number(x.value||0)),0);
+    leg.innerHTML = "";
+    slices.forEach((sl)=>{
+      const v = Math.max(0, Number(sl.value || 0));
+      const pct = total > 0 ? (v/total*100) : 0;
+      const row = document.createElement("div");
+      row.className = "legrow";
+      row.innerHTML = `
+        <div class="legleft">
+          <div class="dot" style="background:${sl.color}"></div>
+          <div class="legname">${escapeHtml(sl.label)}</div>
+        </div>
+        <div class="legright">${pct.toFixed(1)}% · ${euro(v)}</div>
+      `;
+      leg.appendChild(row);
+    });
   }
-  return out;
 }
 
-async function ensureStatMensiliData({ showLoader=true, force=false } = {}){
-  const year = String(state.exerciseYear || loadExerciseYear());
-  const key = `y:${year}`;
-  if (!force && state._statMensiliKey === key && Array.isArray(state.statMensiliGuests)) return;
-  const from = `${year}-01-01`;
-  const to   = `${year}-12-31`;
-  const data = await cachedGet("ospiti", { from, to }, { showLoader, ttlMs: 30*1000, force });
-  state.statMensiliGuests = Array.isArray(data) ? data : [];
-  state._statMensiliKey = key;
+function closeStatPieModal(){
+  const m = document.getElementById("statPieModal");
+  if (!m) return;
+  m.hidden = true;
+  m.setAttribute("aria-hidden", "true");
 }
 
-function computeIncassiMensili(guests, year){
-  const yStr = String(year || '').trim();
-  const out = Array(12).fill(0);
-  const items = Array.isArray(guests) ? guests : [];
-  for (const g of items){
-    const ci = formatISODateLocal(g?.check_in ?? g?.checkIn ?? '');
-    if (!ci || ci.length < 10) continue;
-    if (ci.slice(0,4) !== yStr) continue;
-    const m = parseInt(ci.slice(5,7), 10);
-    if (!m || m < 1 || m > 12) continue;
-    const dep = Number(g?.acconto_importo || 0) || 0;
-    const saldo = Number(g?.saldo_pagato ?? g?.saldoPagato ?? g?.saldo ?? 0) || 0;
-    const v = dep + saldo;
-    if (isFinite(v) && v > 0) out[m-1] += v;
+
+function computeStatSpese(){
+  const r = state.report || null;
+  const by = (r && r.byCategoria) ? r.byCategoria : null;
+
+  const get = (k) => {
+    try{ return Number(by?.[k]?.importoLordo || 0) || 0; }catch(_){ return 0; }
+  };
+
+  let contanti = get("CONTANTI");
+  let tassa = get("TASSA_SOGGIORNO");
+  let iva22 = get("IVA_22");
+  let iva10 = get("IVA_10");
+  let iva4 = get("IVA_4");
+
+  // Fallback: se il report non ha la breakdown, aggrega dalle spese
+  if (!by){
+    const items = Array.isArray(state.spese) ? state.spese : [];
+    const acc = { CONTANTI:0, TASSA_SOGGIORNO:0, IVA_22:0, IVA_10:0, IVA_4:0 };
+
+    for (const s of items){
+      const lordo = Number(s?.importoLordo || 0) || 0;
+      if (!isFinite(lordo) || lordo === 0) continue;
+
+      const catRaw = (s?.categoria ?? s?.cat ?? "").toString().trim().toLowerCase();
+
+      if (catRaw.includes("contant")) { acc.CONTANTI += lordo; continue; }
+      if (catRaw.includes("tassa") && catRaw.includes("sogg")) { acc.TASSA_SOGGIORNO += lordo; continue; }
+
+      if (catRaw.includes("iva")){
+        if (catRaw.includes("22")) { acc.IVA_22 += lordo; continue; }
+        if (catRaw.includes("10")) { acc.IVA_10 += lordo; continue; }
+        if (catRaw.includes("4")) { acc.IVA_4 += lordo; continue; }
+      }
+
+      // fallback su aliquota numerica
+      const n = parseFloat(String(s?.aliquotaIva ?? s?.aliquota_iva ?? "").replace(",","."));
+      if (!isNaN(n)){
+        if (n >= 21.5) acc.IVA_22 += lordo;
+        else if (n >= 9.5 && n < 11.5) acc.IVA_10 += lordo;
+        else if (n >= 3.5 && n < 5.5) acc.IVA_4 += lordo;
+      }
+    }
+
+    contanti = acc.CONTANTI;
+    tassa = acc.TASSA_SOGGIORNO;
+    iva22 = acc.IVA_22;
+    iva10 = acc.IVA_10;
+    iva4 = acc.IVA_4;
   }
-  return out;
+
+  return {
+    contanti,
+    tassaSoggiorno: tassa,
+    iva22,
+    iva10,
+    iva4,
+  };
 }
 
-function renderStatMensili(){
-  const list = document.getElementById('smList');
-  if (!list) return;
-  const year = String(state.exerciseYear || loadExerciseYear());
-  const guests = Array.isArray(state.statMensiliGuests) ? state.statMensiliGuests : [];
-  const months = computeIncassiMensili(guests, year);
-  const max = Math.max(0, ...months.map(x => Number(x||0) || 0));
-  const colors = __gradientRedToIndigo(12);
-  list.innerHTML = '';
-  for (let i=0; i<12; i++){
-    const amt = Number(months[i] || 0) || 0;
-    const pct = (max > 0) ? Math.max(0, Math.min(100, (amt / max) * 100)) : 0;
-    const row = document.createElement('div');
-    row.className = 'mensile-row';
-    row.innerHTML = `
-      <div class="mensile-head">
-        <div class="mensile-name">${__MONTHS_IT[i]}</div>
-        <div class="mensile-val">${euro(amt)}</div>
-      </div>
-      <div class="mensile-bar">
-        <div class="mensile-fill" style="--mcolor:${colors[i]}; width:0%"></div>
-      </div>
-    `;
-    list.appendChild(row);
-    const fill = row.querySelector('.mensile-fill');
-    if (fill){
-      try{ requestAnimationFrame(() => { fill.style.width = pct.toFixed(2) + '%'; }); }
-      catch(_){ fill.style.width = pct.toFixed(2) + '%'; }
+function renderStatSpese(){
+  const s = computeStatSpese();
+  state.statSpese = s;
+
+  const set = (id, v) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = euro(Number(v || 0));
+  };
+
+  set("ssContanti", s.contanti);
+  set("ssTassa", s.tassaSoggiorno);
+  set("ssIva22", s.iva22);
+  set("ssIva10", s.iva10);
+  set("ssIva4", s.iva4);
+}
+
+function openStatSpesePieModal(){
+  try{
+    if (!state.statSpese) state.statSpese = computeStatSpese();
+  }catch(_){ state.statSpese = state.statSpese || null; }
+
+  const m = document.getElementById("statSpesePieModal");
+  if (!m) return;
+  m.hidden = false;
+  m.setAttribute("aria-hidden", "false");
+
+  const s = state.statSpese || computeStatSpese();
+  const slices = [
+    { key:"CONTANTI", label: categoriaLabel("CONTANTI"), value:s.contanti, color:(COLORS.CONTANTI || "#2b7cb4") },
+    { key:"TASSA_SOGGIORNO", label: categoriaLabel("TASSA_SOGGIORNO"), value:s.tassaSoggiorno, color:(COLORS.TASSA_SOGGIORNO || "#d8bd97") },
+    { key:"IVA_22", label: categoriaLabel("IVA_22"), value:s.iva22, color:(COLORS.IVA_22 || "#c9772b") },
+    { key:"IVA_10", label: categoriaLabel("IVA_10"), value:s.iva10, color:(COLORS.IVA_10 || "#7ac0db") },
+    { key:"IVA_4", label: categoriaLabel("IVA_4"), value:s.iva4, color:(COLORS.IVA_4 || "#1f2937") },
+  ];
+
+  drawPie("statSpesePieCanvas", slices);
+
+  const leg = document.getElementById("statSpesePieLegend");
+  if (leg){
+    const total = slices.reduce((a,x)=>a+Math.max(0,Number(x.value||0)),0);
+    leg.innerHTML = "";
+    slices.forEach((sl)=>{
+      const v = Math.max(0, Number(sl.value || 0));
+      const pct = total > 0 ? (v/total*100) : 0;
+      const row = document.createElement("div");
+      row.className = "legrow";
+      row.innerHTML = `
+        <div class="legleft">
+          <div class="dot" style="background:${sl.color}"></div>
+          <div class="legname">${escapeHtml(sl.label)}</div>
+        </div>
+        <div class="legright">${pct.toFixed(1)}% · ${euro(v)}</div>
+      `;
+      leg.appendChild(row);
+    });
+  }
+}
+
+function closeStatSpesePieModal(){
+  const m = document.getElementById("statSpesePieModal");
+  if (!m) return;
+  m.hidden = true;
+  m.setAttribute("aria-hidden", "true");
+}
+
+/* Wire buttons */
+
+
+function bindPeriodAuto(fromSel, toSel){
+  const fromEl = document.querySelector(fromSel);
+  const toEl = document.querySelector(toSel);
+  if (!fromEl || !toEl) return;
+
+  let timer = null;
+
+  const schedule = () => {
+    if (periodSyncLock > 0) return; // update programmatici: ignora
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(async () => {
+      if (periodSyncLock > 0) return;
+      const from = fromEl.value;
+      const to = toEl.value;
+
+      if (!from || !to) return;
+      if (from > to) {
+        toast("Periodo non valido");
+        return;
+      }
+
+      setPresetValue("custom");
+      setPeriod(from, to);
+
+      try { await onPeriodChanged({ showLoader:false }); } catch (e) { toast(e.message); }
+    }, 220);
+  };
+
+  fromEl.addEventListener("change", schedule);
+  toEl.addEventListener("change", schedule);
+}
+
+function bindPeriodAutoGuests(fromSel, toSel){
+  const fromEl = document.querySelector(fromSel);
+  const toEl = document.querySelector(toSel);
+  if (!fromEl || !toEl) return;
+
+  let timer = null;
+
+  const schedule = () => {
+    if (periodSyncLock > 0) return;
+    if (timer) clearTimeout(timer);
+    timer = setTimeout(async () => {
+      if (periodSyncLock > 0) return;
+      const from = fromEl.value;
+      const to = toEl.value;
+      if (!from || !to) return;
+
+      // valida
+      if (from > to){
+        toast("Periodo non valido");
+        return;
+      }
+
+      setPresetValue("custom");
+      setPeriod(from, to);
+
+      try { await loadOspiti({ from, to }); } catch (e) { toast(e.message); }
+    }, 220);
+  };
+
+  fromEl.addEventListener("change", schedule);
+  toEl.addEventListener("change", schedule);
+}
+
+
+
+
+
+
+function updateGuestRemaining(){
+  const out = document.getElementById("guestRemaining");
+  if (!out) return;
+
+  const totalEl = document.getElementById("guestTotal");
+  const depEl = document.getElementById("guestDeposit");
+  const saldoEl = document.getElementById("guestSaldo");
+
+  const totalStr = (totalEl?.value ?? "");
+  const depStr = (depEl?.value ?? "");
+  const saldoStr = (saldoEl?.value ?? "");
+
+  const anyFilled = [totalStr, depStr, saldoStr].some(s => String(s).trim().length > 0);
+  if (!anyFilled) {
+    out.value = "";
+    try { refreshFloatingLabels(); } catch (_) {}
+    return;
+  }
+
+  const total = parseFloat(totalStr || "0") || 0;
+  const deposit = parseFloat(depStr || "0") || 0;
+  const saldo = parseFloat(saldoStr || "0") || 0;
+  const remaining = total - deposit - saldo;
+
+  out.value = (isFinite(remaining) ? remaining.toFixed(2) : "");
+  try { refreshFloatingLabels(); } catch (_) {}
+}
+
+function enterGuestCreateMode(){
+  setGuestFormViewOnly(false);
+
+  state.guestViewItem = null;
+
+  state.guestMode = "create";
+  try{ updateGuestFormModeClass(); }catch(_){ }
+  state.guestEditId = null;
+  state.guestEditCreatedAt = null;
+
+  const title = document.getElementById("ospiteFormTitle");
+  if (title) title.textContent = "Nuovo ospite";
+  const btn = document.getElementById("createGuestCard");
+  if (btn) btn.textContent = "Crea ospite";
+
+  // reset fields
+  const fields = ["guestName","guestAdults","guestKidsU10","guestCheckOut","guestTotal","guestBooking","guestDeposit","guestSaldo","guestRemaining"];
+  fields.forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
+  try { updateGuestRemaining(); } catch (_) {}
+
+  const ci = document.getElementById("guestCheckIn");
+  if (ci) ci.value = todayISO();
+
+  setMarriage(false);
+  state.guestRooms = state.guestRooms || new Set();
+  state.guestRooms.clear();
+  state.lettiPerStanza = {};
+  state.bedsDirty = false;
+  state.stanzeSnapshotOriginal = "";
+
+  // Pagamenti (pillole): default contanti + ricevuta OFF
+  state.guestDepositType = "contante";
+  state.guestSaldoType = "contante";
+  state.guestDepositReceipt = false;
+  state.guestSaldoReceipt = false;
+
+  setPayType("depositType", state.guestDepositType);
+  setPayType("saldoType", state.guestSaldoType);
+  setPayReceipt("depositType", state.guestDepositReceipt);
+  setPayReceipt("saldoType", state.guestSaldoReceipt);
+
+
+  // Registrazioni (PS/ISTAT): default OFF
+  state.guestPSRegistered = false;
+  state.guestISTATRegistered = false;
+  setRegFlags("regTags", state.guestPSRegistered, state.guestISTATRegistered);
+  // refresh rooms UI if present
+  try {
+    document.querySelectorAll("#roomsPicker .room-dot").forEach(btn => {
+      btn.classList.remove("selected");
+      btn.setAttribute("aria-pressed", "false");
+    });
+  } catch (_) {}
+  try { updateOspiteHdActions(); } catch (_) {}
+
+  // (Create mode) nulla da fare sulle stanze: la disponibilita' si aggiorna quando l'utente inserisce le date.
+}
+
+function enterGuestEditMode(ospite){
+  setGuestFormViewOnly(false);
+
+  state.guestViewItem = null;
+
+  state.guestMode = "edit";
+  try{ updateGuestFormModeClass(); }catch(_){ }
+  state.guestEditId = ospite?.id ?? null;
+  state.guestEditCreatedAt = (ospite?.created_at ?? ospite?.createdAt ?? null);
+
+  const title = document.getElementById("ospiteFormTitle");
+  if (title) title.textContent = "Modifica ospite";
+  const btn = document.getElementById("createGuestCard");
+  if (btn) btn.textContent = "Salva modifiche";
+
+  document.getElementById("guestName").value = ospite.nome || ospite.name || "";
+  document.getElementById("guestAdults").value = ospite.adulti ?? ospite.adults ?? 0;
+  document.getElementById("guestKidsU10").value = ospite.bambini_u10 ?? ospite.kidsU10 ?? 0;
+  document.getElementById("guestCheckIn").value = formatISODateLocal(ospite.check_in || ospite.checkIn || "") || "";
+  document.getElementById("guestCheckOut").value = formatISODateLocal(ospite.check_out || ospite.checkOut || "") || "";
+  document.getElementById("guestTotal").value = ospite.importo_prenotazione ?? ospite.total ?? 0;
+  document.getElementById("guestBooking").value = ospite.importo_booking ?? ospite.booking ?? 0;
+  document.getElementById("guestDeposit").value = ospite.acconto_importo ?? ospite.deposit ?? 0;
+  document.getElementById("guestSaldo").value = ospite.saldo_pagato ?? ospite.saldoPagato ?? ospite.saldo ?? 0;
+
+  // matrimonio
+  const mEl = document.getElementById("guestMarriage");
+  if (mEl) mEl.checked = !!(ospite.matrimonio);
+  refreshFloatingLabels();
+  try { updateGuestRemaining(); } catch (_) {}
+
+
+  // deposit type (se disponibile)
+  const dt = ospite.acconto_tipo || ospite.depositType || "contante";
+  state.guestDepositType = dt;
+  setPayType("depositType", dt);
+
+  const st = ospite.saldo_tipo || ospite.saldoTipo || "contante";
+  state.guestSaldoType = st;
+  setPayType("saldoType", st);
+
+  // ricevuta fiscale (toggle indipendente)
+  const depRec = truthy(ospite.acconto_ricevuta ?? ospite.accontoRicevuta ?? ospite.ricevuta_acconto ?? ospite.ricevutaAcconto ?? ospite.acconto_ricevutain);
+  const saldoRec = truthy(ospite.saldo_ricevuta ?? ospite.saldoRicevuta ?? ospite.ricevuta_saldo ?? ospite.ricevutaSaldo ?? ospite.saldo_ricevutain);
+  state.guestDepositReceipt = depRec;
+  state.guestSaldoReceipt = saldoRec;
+  setPayReceipt("depositType", depRec);
+  setPayReceipt("saldoType", saldoRec);
+
+
+
+  // registrazioni PS/ISTAT
+  const psReg = truthy(ospite.ps_registrato ?? ospite.psRegistrato);
+  const istatReg = truthy(ospite.istat_registrato ?? ospite.istatRegistrato);
+  state.guestPSRegistered = psReg;
+  state.guestISTATRegistered = istatReg;
+  setRegFlags("regTags", psReg, istatReg);
+  // stanze: backend non espone GET stanze; se in futuro arrivano su ospite.stanze li applichiamo
+  try {
+    if (ospite.stanze) {
+      const rooms = Array.isArray(ospite.stanze) ? ospite.stanze : String(ospite.stanze).split(",").map(x=>x.trim()).filter(Boolean);
+      state.guestRooms = new Set(rooms.map(x=>parseInt(x,10)).filter(n=>isFinite(n)));
+      document.querySelectorAll("#roomsPicker .room-dot").forEach(btn => {
+        const n = parseInt(btn.getAttribute("data-room"), 10);
+        const on = state.guestRooms.has(n);
+        btn.classList.toggle("selected", on);
+        btn.setAttribute("aria-pressed", on ? "true" : "false");
+      });
+    }
+  } catch (_) {}
+
+  // --- FIX A+B (dDAE): preserva la configurazione letti esistente e non riscrivere "stanze" se non è cambiata ---
+  try {
+    state.bedsDirty = false;
+
+    // Ricostruisci lettiPerStanza dai dati già salvati sul foglio "stanze" (state.stanzeByKey)
+    const gid = String(guestIdOf(ospite) || ospite?.id || "").trim();
+    const next = {};
+    const roomsNow = Array.from(state.guestRooms || []).map(n=>parseInt(n,10)).filter(n=>isFinite(n));
+    for (const rn of roomsNow){
+      const key = `${gid}:${String(rn)}`;
+      const d = (state.stanzeByKey && state.stanzeByKey[key]) ? state.stanzeByKey[key] : {};
+      next[String(rn)] = {
+        matrimoniale: !!(d.letto_m),
+        singoli: parseInt(d.letto_s || 0, 10) || 0,
+        culla: !!(d.culla),
+        note: ""
+      };
+    }
+    state.lettiPerStanza = next;
+
+    // Snapshot originale per evitare riscritture inutili su salvataggio
+    state.stanzeSnapshotOriginal = JSON.stringify(buildArrayFromState());
+  } catch (_) {}
+
+  try { updateOspiteHdActions(); } catch (_) {}
+
+  // ✅ FIX dDAE: entrando in modifica con date gia' valorizzate, ricalcola subito disponibilita' stanze.
+  // In iOS/Safari PWA gli handler input/change dei campi date possono non partire finche' l'utente non li tocca.
+  // refreshRoomsAvailability/renderRooms sono definiti in setupOspite: li esponiamo su window e li richiamiamo qui.
+  try {
+    state._roomsAvailKey = "";
+    const run = () => {
+      try { window.__ddae_renderRooms && window.__ddae_renderRooms(); } catch (_) {}
+      try { window.__ddae_refreshRoomsAvailability && window.__ddae_refreshRoomsAvailability(); } catch (_) {}
+    };
+    setTimeout(run, 50);
+    setTimeout(run, 180);
+  } catch (_) {}
+}
+
+function _guestIdOf(item){
+  return String(item?.id || item?.ID || item?.ospite_id || item?.ospiteId || item?.guest_id || item?.guestId || "").trim();
+}
+
+function _parseRoomsArr(stanzeField){
+  let roomsArr = [];
+  try {
+    const st = stanzeField;
+    if (Array.isArray(st)) roomsArr = st;
+    else if (st != null && String(st).trim().length) {
+      const s = String(st);
+      const m = s.match(/[1-6]/g) || [];
+      roomsArr = m.map(x => parseInt(x, 10));
+    }
+  } catch (_) {}
+  roomsArr = Array.from(new Set((roomsArr||[]).map(n => parseInt(n,10)).filter(n => isFinite(n) && n>=1 && n<=6))).sort((a,b)=>a-b);
+  return roomsArr;
+}
+
+function buildRoomsStackHTML(guestId, roomsArr){
+  if (!roomsArr || !roomsArr.length) return `<span class="room-dot-badge is-empty" aria-label="Nessuna stanza">—</span>`;
+  return `<div class="rooms-stack" aria-label=" e letti">` + roomsArr.map((n) => {
+    const key = `${guestId}:${n}`;
+    const info = (state.stanzeByKey && state.stanzeByKey[key]) ? state.stanzeByKey[key] : { letto_m: 0, letto_s: 0, culla: 0 };
+    const lettoM = Number(info.letto_m || 0) || 0;
+    const lettoS = Number(info.letto_s || 0) || 0;
+    const culla  = Number(info.culla  || 0) || 0;
+
+    let dots = "";
+    if (lettoM > 0) dots += `<span class="bed-dot bed-dot-m" aria-label="Letto matrimoniale"></span>`;
+    for (let i = 0; i < lettoS; i++) dots += `<span class="bed-dot bed-dot-s" aria-label="Letto singolo"></span>`;
+    if (culla > 0) dots += `<span class="bed-dot bed-dot-c" aria-label="Culla"></span>`;
+
+    return `<div class="room-row">
+      <span class="room-dot-badge room-${n}">${n}</span>
+      <div class="bed-dots" aria-label="Letti">${dots || `<span class="bed-dot bed-dot-empty" aria-label="Nessun letto"></span>`}</div>
+    </div>`;
+  }).join("") + `</div>`;
+}
+
+function renderRoomsReadOnly(ospite){
+  const ro = document.getElementById("roomsReadOnly");
+  if (!ro) return;
+
+  const guestId = _guestIdOf(ospite);
+  let roomsArr = _parseRoomsArr(ospite?.stanze);
+
+  // fallback: se per qualche motivo non arriva 'stanze' dal backend, usa lo stato locale
+  if (!roomsArr.length && state.guestRooms && state.guestRooms.size){
+    roomsArr = Array.from(state.guestRooms)
+      .map(n => parseInt(n,10))
+      .filter(n => isFinite(n) && n>=1 && n<=6)
+      .sort((a,b)=>a-b);
+  }
+
+  const stackHTML = buildRoomsStackHTML(guestId, roomsArr);
+
+  // Pillola: notti + tassa di soggiorno (solo in sola lettura)
+  const nights = calcStayNights(ospite);
+  let pillHTML = ``;
+
+  if (nights != null){
+    const tt = calcTouristTax(ospite, nights);
+    const nightsLabel = (nights === 1) ? `1 notte` : `${nights} notti`;
+    const taxLabel = `Tassa ${formatEUR(tt.total)}`;
+    pillHTML = `<span class="stay-pill" aria-label="Pernottamenti e tassa di soggiorno">
+      <span class="stay-pill__n">${nightsLabel}</span>
+      <span class="stay-pill__sep">•</span>
+      <span class="stay-pill__t">${taxLabel}</span>
+    </span>`;
+  }
+
+  // Matrimonio: pallino verde con "m" bianca, a sinistra della pillola (solo in sola lettura)
+  const marriageOn = !!(ospite?.matrimonio);
+
+  const rightHTML = pillHTML
+    ? `<div class="stay-right">${marriageOn ? `<span class="marriage-dot" aria-label="Matrimonio">M</span>` : ``}${pillHTML}</div>`
+    : ``;
+
+  ro.innerHTML = `<div class="rooms-readonly-wrap">${stackHTML}${rightHTML}</div>`;
+}
+
+function updateOspiteHdActions(){
+  const hdActions = document.getElementById("ospiteHdActions");
+  if (!hdActions) return;
+
+  // Mostra il contenitore (poi nascondiamo i singoli pallini senza azione)
+  hdActions.hidden = false;
+
+  const btnCal  = hdActions.querySelector("[data-guest-cal]");
+  const btnBack = hdActions.querySelector("[data-guest-back]");
+  const btnEdit = hdActions.querySelector("[data-guest-edit]");
+  const btnDel  = hdActions.querySelector("[data-guest-del]");
+
+  const mode = state.guestMode; // "create" | "edit" | "view"
+
+  // Indaco: vai al calendario (sempre presente)
+  if (btnCal) btnCal.hidden = false;
+
+  // Verde: sempre presente (torna alla lista ospiti)
+  if (btnBack) btnBack.hidden = false;
+
+  // Giallo: solo in sola lettura (azione: passa a modifica)
+  if (btnEdit) btnEdit.hidden = (mode !== "view");
+
+  // Rosso: in sola lettura e in modifica (azione: elimina ospite)
+  if (btnDel) btnDel.hidden = !(mode === "view" || mode === "edit");
+}
+
+
+function updateGuestFormModeClass(){
+  try{
+    const card = document.querySelector("#page-ospite .guest-form-card");
+    if (!card) return;
+    const mode = String(state.guestMode || "").toLowerCase();
+    const isView = (mode === "view");
+    card.classList.toggle("is-view", isView);
+    card.classList.toggle("is-create", !isView && mode === "create");
+    card.classList.toggle("is-edit", !isView && mode === "edit");
+  }catch(_){}
+}
+
+function setGuestFormViewOnly(isView, ospite){
+  try{ updateGuestFormModeClass(); }catch(_){ }
+  const card = document.querySelector("#page-ospite .guest-form-card");
+  if (card) card.classList.toggle("is-view", !!isView);
+
+  const btn = document.getElementById("createGuestCard");
+  if (btn) btn.hidden = !!isView;
+
+  const picker = document.getElementById("roomsPicker");
+  if (picker) picker.hidden = !!isView;
+
+  const ro = document.getElementById("roomsReadOnly");
+  if (ro) {
+    ro.hidden = !isView;
+    if (isView) renderRoomsReadOnly(ospite);
+    else ro.innerHTML = "";
+  }
+
+  // Aggiorna i pallini in testata in base alla modalità corrente
+  try { updateOspiteHdActions(); } catch (_) {}
+}
+
+function enterGuestViewMode(ospite){
+  // Riempiamo la maschera usando la stessa logica dell'edit, poi blocchiamo tutto in sola lettura
+  enterGuestEditMode(ospite);
+  state.guestMode = "view";
+  try{ updateGuestFormModeClass(); }catch(_){ }
+  state.guestViewItem = ospite || null;
+
+  const title = document.getElementById("ospiteFormTitle");
+  if (title) title.textContent = "Scheda ospite";
+
+  setGuestFormViewOnly(true, ospite);
+  try { updateOspiteHdActions(); } catch (_) {}
+}
+
+
+async function saveGuest(){
+  const name = (document.getElementById("guestName")?.value || "").trim();
+  const adults = parseInt(document.getElementById("guestAdults")?.value || "0", 10) || 0;
+  const kidsU10 = parseInt(document.getElementById("guestKidsU10")?.value || "0", 10) || 0;
+  const checkIn = document.getElementById("guestCheckIn")?.value || "";
+  const checkOut = document.getElementById("guestCheckOut")?.value || "";
+  const total = parseFloat(document.getElementById("guestTotal")?.value || "0") || 0;
+  const booking = parseFloat(document.getElementById("guestBooking")?.value || "0") || 0;
+  const deposit = parseFloat(document.getElementById("guestDeposit")?.value || "0") || 0;
+  const saldoPagato = parseFloat(document.getElementById("guestSaldo")?.value || "0") || 0;
+  const saldoTipo = state.guestSaldoType || "contante";
+  const rooms = Array.from(state.guestRooms || []).sort((a,b)=>a-b);
+  const depositType = state.guestDepositType || "contante";
+  const matrimonio = !!(state.guestMarriage);
+if (!name) return toast("Inserisci il nome");
+  const payload = {
+    nome: name,
+    adulti: adults,
+    bambini_u10: kidsU10,
+    check_in: checkIn,
+    check_out: checkOut,
+    importo_prenotazione: total,
+    importo_booking: booking,
+    acconto_importo: deposit,
+    acconto_tipo: depositType,
+    saldo_pagato: saldoPagato,
+    saldo_tipo: saldoTipo,
+    acconto_ricevuta: !!state.guestDepositReceipt,
+    saldo_ricevuta: !!state.guestSaldoReceipt,
+    saldo_ricevutain: !!state.guestSaldoReceipt,
+    matrimonio,
+    ps_registrato: state.guestPSRegistered ? "1" : "",
+    istat_registrato: state.guestISTATRegistered ? "1" : "",
+    stanze: rooms.join(",")
+  };
+
+
+
+  const isEdit = state.guestMode === "edit";
+  if (isEdit){
+    if (!state.guestEditId) return toast("ID ospite mancante");
+    payload.id = state.guestEditId;
+    // preserva la data di inserimento (non deve cambiare con le modifiche)
+    const ca = state.guestEditCreatedAt;
+    if (ca){
+      payload.createdAt = ca;
+      payload.created_at = ca;
     }
   }
+
+  
+  else {
+    // CREATE: genera subito un ID stabile, così possiamo salvare le stanze al primo tentativo
+    payload.id = payload.id || genId("o");
+  }
+// CREATE vs UPDATE (backend GAS: POST=create, PUT=update)
+  const method = isEdit ? "PUT" : "POST";
+  const res = await api("ospiti", { method, body: payload });
+
+  // stanze: backend gestisce POST e sovrascrive (deleteWhere + append)
+  const ospiteId = payload.id;
+  const stanze = buildArrayFromState();
+
+  let shouldSave = true;
+  if (isEdit){
+    try {
+      const snapNow = JSON.stringify(stanze);
+      const snapOrig = state.stanzeSnapshotOriginal || "";
+      shouldSave = (snapNow !== snapOrig);
+    } catch (_) {
+      shouldSave = true;
+    }
+  }
+
+  if (shouldSave){
+    try { await api("stanze", { method:"POST", body: { ospite_id: ospiteId, stanze } }); } catch (_) {}
+  }
+
+  // Invalida cache in-memory (ospiti/stanze) e forza refresh Calendario.
+  // Questo evita che il calendario rimanga "stale" finche' non riavvii la PWA.
+  try{ invalidateApiCache("ospiti|"); }catch(_){ }
+  try{ invalidateApiCache("stanze|"); }catch(_){ }
+  try{ if (state.calendar){ state.calendar.ready = false; state.calendar.rangeKey = ""; } }catch(_){ }
+
+  await loadOspiti({ ...(state.period || {}), force:true });
+  toast(isEdit ? "Modifiche salvate" : "Ospite creato");
+
+  // Dopo salvataggio: torna sempre alla lista ospiti
+  try { enterGuestCreateMode(); } catch (_) {}
+  showPage("ospiti");
+}
+
+function setupOspite(){
+  const hb = document.getElementById("hamburgerBtnOspite");
+  if (hb) hb.addEventListener("click", () => { hideLauncher(); showPage("home"); });
+
+  // Azioni Scheda ospite (solo lettura): verde=indietro, giallo=modifica, rosso=elimina
+  const hdActions = document.getElementById("ospiteHdActions");
+  if (hdActions && !hdActions.__bound){
+    hdActions.__bound = true;
+    hdActions.addEventListener("click", async (e) => {
+      const btn = e.target.closest("button");
+      if (!btn || !hdActions.contains(btn) || btn.hidden) return;
+
+      // Indaco: vai al calendario
+      if (btn.hasAttribute("data-guest-cal")){
+        showPage("calendario");
+        return;
+      }
+
+      // Verde: torna sempre alla lista ospiti (anche in Nuovo/Modifica)
+      if (btn.hasAttribute("data-guest-back")){
+        showPage("ospiti");
+        return;
+      }
+
+      const mode = state.guestMode;
+      const item = state.guestViewItem;
+
+      // Giallo: dalla sola lettura passa a modifica
+      if (btn.hasAttribute("data-guest-edit")){
+        if (!item) return;
+        enterGuestEditMode(item);
+        try { updateOspiteHdActions(); } catch (_) {}
+        return;
+      }
+
+      // Rosso: elimina (solo in sola lettura o modifica)
+      if (btn.hasAttribute("data-guest-del")){
+        let gid = null;
+
+        if (mode === "view"){
+          if (!item) return;
+          gid = guestIdOf(item) || item.id;
+        } else if (mode === "edit"){
+          gid = state.guestEditId || null;
+        }
+
+        if (!gid) return;
+        if (!confirm("Eliminare definitivamente questo ospite?")) return;
+
+        try {
+          await api("ospiti", { method:"DELETE", params:{ id: gid }});
+          toast("Ospite eliminato");
+          invalidateApiCache("ospiti|");
+          invalidateApiCache("stanze|");
+          try{ if (state.calendar){ state.calendar.ready = false; state.calendar.rangeKey = ""; } }catch(_){ }
+          await loadOspiti({ ...(state.period || {}), force:true });
+          showPage("ospiti");
+        } catch (err) {
+          toast(err?.message || "Errore");
+        }
+        return;
+      }
+    });
+}
+
+  const roomsWrap = document.getElementById("roomsPicker");
+  const roomsOut = null; // removed UI string output
+
+  function _getGuestDateRange(){
+    try{
+      const ci = (document.getElementById("guestCheckIn")?.value || "").trim();
+      const co = (document.getElementById("guestCheckOut")?.value || "").trim();
+      if (!ci || !co) return null;
+      // Date ISO YYYY-MM-DD: confronto lessicografico ok
+      if (co <= ci) return null;
+      return { ci, co };
+    }catch(_){ return null; }
+  }
+
+  async function refreshRoomsAvailability(){
+    // Regola: nessuna stanza selezionabile senza intervallo date valido
+    const range = _getGuestDateRange();
+
+    const editId = String(state.guestEditId || "").trim();
+
+    // reset/lock
+    if (!range){
+      state.occupiedRooms = new Set();
+      state._roomsAvailKey = "";
+      // se l'utente non ha ancora inserito date, non deve poter selezionare stanze
+      if (state.guestRooms && state.guestRooms.size){
+        state.guestRooms.clear();
+        if (state.lettiPerStanza) state.lettiPerStanza = {};
+      }
+      renderRooms();
+      return;
+    }
+
+    const key = `${range.ci}|${range.co}|${editId}`;
+    if (state._roomsAvailKey === key && state.occupiedRooms instanceof Set) {
+      renderRooms();
+      return;
+    }
+    state._roomsAvailKey = key;
+
+    let rows = [];
+    try{
+      const data = await cachedGet("ospiti", {}, { showLoader:false, ttlMs: 15000 });
+      rows = Array.isArray(data) ? data : [];
+    }catch(_){ rows = []; }
+
+    const occ = new Set();
+
+    for (const g of rows){
+      // In MODIFICA: ignora l'ospite corrente (altrimenti le sue stanze risultano occupate e diventano rosse)
+      if (editId){
+        const gid = guestIdOf(g);
+        if (gid && gid === editId) continue;
+      }
+
+      const gi = String(g.check_in ?? g.checkIn ?? g.checkin ?? "").slice(0,10);
+      const go = String(g.check_out ?? g.checkOut ?? g.checkout ?? "").slice(0,10);
+      if (!gi || !go) continue;
+
+      // overlap: [gi,go) interseca [ci,co)
+      if (!(gi < range.co && go > range.ci)) continue;
+
+      const roomsArr = _parseRoomsArr(g.stanze ?? g.rooms ?? g.stanza ?? "");
+      roomsArr.forEach(r => occ.add(r));
+    }
+
+    state.occupiedRooms = occ;
+
+    // Se l'utente aveva selezionato stanze che ora risultano occupate, le togliamo
+    let removed = false;
+    try{
+      for (const r of Array.from(state.guestRooms || [])){
+        if (occ.has(r)){
+          state.guestRooms.delete(r);
+          if (state.lettiPerStanza) delete state.lettiPerStanza[String(r)];
+          removed = true;
+        }
+      }
+    }catch(_){}
+
+    if (removed){
+      try{ toast("Alcune stanze non sono disponibili"); }catch(_){}
+    }
+
+    renderRooms();
+  }
+
+  function renderRooms(){
+    const range = _getGuestDateRange();
+    const locked = !range;
+    const occSet = (state.occupiedRooms instanceof Set) ? state.occupiedRooms : new Set();
+
+    roomsWrap?.querySelectorAll(".room-dot").forEach(btn => {
+      // Il pallino "M" non è una stanza numerata
+      if (btn.id === "roomMarriage") return;
+
+      const n = parseInt(btn.getAttribute("data-room"), 10);
+      const on = state.guestRooms.has(n);
+      const occ = !locked && occSet.has(n);
+
+      btn.classList.toggle("selected", on);
+      btn.classList.toggle("occupied", occ);
+
+      const dis = locked || occ;
+      btn.disabled = !!dis;
+      btn.setAttribute("aria-disabled", dis ? "true" : "false");
+      btn.setAttribute("aria-pressed", on ? "true" : "false");
+    });
+
+    // matrimonio dot (rimane gestibile come flag)
+    setMarriage(state.guestMarriage);
+  }
+
+  // Espone le funzioni (scope setupOspite) per poterle richiamare da enterGuestEditMode
+  // senza dipendere dall'evento input/change dei campi date (iOS/Safari PWA).
+  try {
+    window.__ddae_refreshRoomsAvailability = refreshRoomsAvailability;
+    window.__ddae_renderRooms = renderRooms;
+  } catch (_) {}
+
+  roomsWrap?.addEventListener("click", (e) => {
+    const b = e.target.closest(".room-dot");
+    if (!b) return;
+
+    // Matrimonio: flag separato
+    if (b.id === "roomMarriage") { setMarriage(!state.guestMarriage); return; }
+
+    const range = _getGuestDateRange();
+    if (!range){
+      try{ toast("Seleziona prima check-in e check-out"); }catch(_){}
+      return;
+    }
+
+    // Se occupata (rossa) => popup
+    if (b.classList.contains("occupied") || b.disabled){
+      try{ toast("Stanza occupata"); }catch(_){}
+      return;
+    }
+
+    const n = parseInt(b.getAttribute("data-room"), 10);
+    if (state.guestRooms.has(n)) {
+      state.guestRooms.delete(n);
+      if (state.lettiPerStanza) delete state.lettiPerStanza[String(n)];
+    } else {
+      state.guestRooms.add(n);
+    }
+    renderRooms();
+  });
+
+  function bindPayPill(containerId, kind){
+    const wrap = document.getElementById(containerId);
+    if (!wrap) return;
+    wrap.addEventListener("click", (e) => {
+      const btn = e.target.closest(".pay-dot");
+      if (!btn || !wrap.contains(btn)) return;
+
+      const t = btn.getAttribute("data-type");
+      if (t) {
+        if (kind === "deposit") state.guestDepositType = t;
+        if (kind === "saldo") state.guestSaldoType = t;
+        setPayType(containerId, t);
+        return;
+      }
+
+      if (btn.hasAttribute("data-receipt")) {
+        if (kind === "deposit") state.guestDepositReceipt = !state.guestDepositReceipt;
+        if (kind === "saldo") state.guestSaldoReceipt = !state.guestSaldoReceipt;
+        setPayReceipt(containerId, kind === "deposit" ? state.guestDepositReceipt : state.guestSaldoReceipt);
+        return;
+      }
+    });
+  }
+
+  bindPayPill("depositType", "deposit");
+  bindPayPill("saldoType", "saldo");
+
+
+
+  function bindRegPill(containerId){
+    const wrap = document.getElementById(containerId);
+    if (!wrap) return;
+    wrap.addEventListener("click", (e) => {
+      const btn = e.target.closest('.pay-dot[data-flag]');
+      if (!btn || !wrap.contains(btn)) return;
+
+      const flag = (btn.getAttribute("data-flag") || "").toLowerCase();
+      if (flag === "ps") state.guestPSRegistered = !state.guestPSRegistered;
+      if (flag === "istat") state.guestISTATRegistered = !state.guestISTATRegistered;
+
+      setRegFlags(containerId, state.guestPSRegistered, state.guestISTATRegistered);
+    });
+  }
+
+  bindRegPill("regTags");
+
+  // Rimanenza da pagare (Importo prenotazione - Acconto - Saldo)
+  ["guestTotal","guestDeposit","guestSaldo"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("input", () => { try { updateGuestRemaining(); } catch (_) {} });
+    el.addEventListener("change", () => { try { updateGuestRemaining(); } catch (_) {} });
+  });
+  try { updateGuestRemaining(); } catch (_) {}
+
+
+  // ✅ Stanze: blocca selezione finché non c'è un intervallo date valido + segna stanze occupate (rosso)
+  ["guestCheckIn","guestCheckOut"].forEach((id) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+    el.addEventListener("input", () => { try { refreshRoomsAvailability(); } catch (_) {} });
+    el.addEventListener("change", () => { try { refreshRoomsAvailability(); } catch (_) {} });
+  });
+  try { refreshRoomsAvailability(); } catch (_) {}
+
+
+  const btnCreate = document.getElementById("createGuestCard");
+  btnCreate?.addEventListener("click", async () => {
+    try { await saveGuest(); } catch (e) { toast(e.message || "Errore"); }
+  });
+
+  // Default: check-in oggi (solo UI)
+  const today = new Date();
+  const iso = today.toISOString().slice(0,10);
+  const ci = document.getElementById("guestCheckIn");
+  if (ci && !ci.value) ci.value = iso;
+
+  renderRooms();
+  renderGuestCards();
+}
+
+function euro(n){
+  try { return (Number(n)||0).toLocaleString("it-IT", { style:"currency", currency:"EUR" }); }
+  catch { return (Number(n)||0).toFixed(2) + " €"; }
 }
 
 
-function openStatPieModal(
+
+function renderGuestCards(){
+  const wrap = document.getElementById("guestCards");
+  if (!wrap) return;
+  wrap.hidden = false;
+  wrap.replaceChildren();
+
+  const frag = document.createDocumentFragment();
+
+  let items = Array.isArray(state.ospiti) && state.ospiti.length
+    ? state.ospiti
+    : (Array.isArray(state.guests) ? state.guests : []);
+
+  // Filtro rapido "Oggi": mostra solo ospiti con arrivo (check_in) = oggi
+  if (state.guestTodayOnly){
+    const today = todayISO();
+    items = (items || []).filter(g => {
+      const v = (g?.check_in ?? g?.checkIn ?? g?.arrivo ?? g?.arrival ?? g?.guestCheckIn ?? "");
+      const s = String(v).trim();
+      const d = s ? s.slice(0,10) : "";
+      return d === today;
+    });
+  }
+
+
+  if (!items.length){
+    wrap.replaceChildren();
+    const empty = document.createElement("div");
+    empty.style.opacity = ".7";
+    empty.style.fontSize = "14px";
+    empty.style.padding = "8px";
+    empty.textContent = state.guestTodayOnly ? "Nessun ospite per oggi." : "Nessun ospite nel periodo.";
+    frag.appendChild(empty);
+    wrap.appendChild(frag);
+    return;
+  }
+
+  // Numero progressivo di inserimento (stabile) + sorting
+  const insMap = computeInsertionMap(items);
+  items.forEach((it) => {
+    const id = guestIdOf(it);
+    it._insNo = id ? insMap[id] : null;
+  });
+
+  items = sortGuestsList(items);
+
+  items.forEach(item => {
+    const card = document.createElement("div");
+    card.className = "guest-card";
+
+    const nome = escapeHtml(item.nome || item.name || "Ospite");
+
+    const insNo = (Number(item._insNo) && Number(item._insNo) > 0) ? Number(item._insNo) : null;
+
+    const led = guestLedStatus(item);
+    const depositTypeRaw = (item.acconto_tipo || item.depositType || item.guestDepositType || "contante").toString().toLowerCase();
+    const depositTag = (depositTypeRaw.includes("elet")) ? "Elettronico" : "Contanti";
+
+    const depAmount = Number(item.acconto_importo || 0);
+    const saldoAmount = Number(item.saldo_pagato ?? item.saldoPagato ?? item.saldo ?? 0);
+    const saldoTypeRaw = (item.saldo_tipo || item.saldoTipo || item.saldoType || item.guestSaldoType || "").toString().toLowerCase();
+
+    const depLedCls = (!depAmount) ? "led-gray led-off" : (depositTypeRaw.includes("elet") ? "led-green" : "led-red");
+    const saldoLedCls = (!saldoAmount) ? "led-gray led-off" : (saldoTypeRaw.includes("elet") ? "led-green" : "led-red");
+
+    //  prenotate (campo 'stanze' se presente: "1,2", "[1,2]", "1 2", ecc.)
+    let roomsArr = [];
+    try {
+      const st = item.stanze;
+      if (Array.isArray(st)) {
+        roomsArr = st;
+      } else if (st != null && String(st).trim().length) {
+        const s = String(st);
+        // Estrae SOLO numeri 1–6 (robusto contro separatori strani)
+        const m = s.match(/[1-6]/g) || [];
+        roomsArr = m.map(x => parseInt(x, 10));
+      }
+    } catch (_) {}
+    roomsArr = Array.from(new Set((roomsArr||[]).map(n=>parseInt(n,10)).filter(n=>isFinite(n) && n>=1 && n<=6))).sort((a,b)=>a-b);
+
+    const guestId = String(item.id || item.ID || item.ospite_id || item.ospiteId || item.guest_id || item.guestId || "").trim();
+
+    const roomsDotsHTML = roomsArr.length
+      ? `<div class="rooms-stack" aria-label=" e letti">` + roomsArr.map((n) => {
+          const key = `${guestId}:${n}`;
+          const info = (state.stanzeByKey && state.stanzeByKey[key]) ? state.stanzeByKey[key] : { letto_m: 0, letto_s: 0, culla: 0 };
+          const lettoM = Number(info.letto_m || 0) || 0;
+          const lettoS = Number(info.letto_s || 0) || 0;
+          const culla = Number(info.culla || 0) || 0;
+
+          let dots = "";
+          if (lettoM > 0) dots += `<span class="bed-dot bed-dot-m" aria-label="Letto matrimoniale"></span>`;
+          for (let i = 0; i < lettoS; i++) dots += `<span class="bed-dot bed-dot-s" aria-label="Letto singolo"></span>`;
+          if (culla > 0) dots += `<span class="bed-dot bed-dot-c" aria-label="Culla"></span>`;
+
+          return `<div class="room-row">
+            <span class="room-dot-badge room-${n}" aria-label="Stanza ${n}">${n}</span>
+            <div class="bed-dots" aria-label="Dotazione letti">${dots}</div>
+          </div>`;
+        }).join("") + `</div>`
+      : `<span class="room-dot-badge is-empty" aria-label="Nessuna stanza">—</span>`;
+
+
+
+
+    const arrivoText = formatLongDateIT(item.check_in || item.checkIn || "") || "—";
+
+    card.tabIndex = 0;
+    card.setAttribute("role", "button");
+    card.setAttribute("aria-label", `Apri scheda ospite: ${nome}`);
+
+    card.innerHTML = `
+      <div class="guest-row">
+        <div class="guest-main">
+          ${insNo ? `<span class="guest-insno">${insNo}</span>` : ``}
+          <span class="guest-name-text">${nome}</span>
+        </div>
+        <div class="guest-meta-right" aria-label="Arrivo e stato">
+          <span class="guest-arrivo" aria-label="Arrivo">${arrivoText}</span>
+          <span class="guest-led ${led.cls}" aria-label="${led.label}" title="${led.label}"></span>
+        </div>
+      </div>
+    `;
+
+    const open = () => {
+      enterGuestViewMode(item);
+      showPage("ospite");
+    };
+    card.addEventListener("click", open);
+    card.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " ") {
+        e.preventDefault();
+        open();
+      }
+    });
+
+    frag.appendChild(card);
+  });
+  wrap.appendChild(frag);
+}
+
+
+
+
+
+
+function initFloatingLabels(){
+  const fields = document.querySelectorAll(".field.float");
+  fields.forEach((f) => {
+    const control = f.querySelector("input, select, textarea");
+    if (!control) return;
+    const update = () => {
+      const has = !!(control.value && String(control.value).trim().length);
+      f.classList.toggle("has-value", has);
+    };
+    control.addEventListener("input", update);
+    control.addEventListener("change", update);
+    update();
+  });
+}
+
+
+function refreshFloatingLabels(){
+  try{
+    document.querySelectorAll(".field.float").forEach(f => {
+      const c = f.querySelector("input, select, textarea");
+      const v = c ? String(c.value ?? "").trim() : "";
+      f.classList.toggle("has-value", v.length > 0);
+    });
+  }catch(_){}
+}
+
+
+async function init(){
+  // Perf mode: deve girare DOPO che body esiste e DOPO init delle costanti
+  applyPerfMode();
+  const __restore = __readRestoreState();
+  // Session + anno
+  state.session = loadSession();
+  state.exerciseYear = loadExerciseYear();
+  updateYearPill();
+
+  document.body.dataset.page = (state.session && state.session.user_id) ? "home" : "auth";
+  setupHeader();
+  setupAuth();
+  setupHome();
+  setupCalendario();
+  setupImpostazioni();
+
+    setupOspite();
+  initFloatingLabels();
+
+  // Pagina iniziale
+  if (!state.session || !state.session.user_id) {
+    showPage("auth");
+  } else {
+    showPage("home");
+  }
+// periodo iniziale
+  if (__restore && __restore.preset) state.periodPreset = __restore.preset;
+  if (__restore && __restore.period && __restore.period.from && __restore.period.to) {
+    setPeriod(__restore.period.from, __restore.period.to);
+  } else {
+    const [from,to] = monthRangeISO(new Date());
+    setPeriod(from,to);
+  }
+
+  // Preset periodo (scroll iOS)
+  bindPresetSelect("#periodPreset1");
+  bindPresetSelect("#periodPreset2");
+  bindPresetSelect("#periodPreset3");
+  bindPresetSelect("#periodPreset4");
+  setPresetValue(state.periodPreset || "this_month");
+
+  // Ordinamento Spese (lista)
+  if (!state.speseSort) state.speseSort = "date";
+  const spSort = document.getElementById("speseSort");
+  if (spSort){
+    spSort.value = state.speseSort;
+    spSort.addEventListener("change", () => {
+      state.speseSort = spSort.value || "date";
+      try { if (state.page === "spese" && state.speseView === "list") renderSpese(); } catch(_){}
+    });
+  }
+
+
+  // Periodo automatico (niente tasto Applica)
+  bindPeriodAuto("#fromDate", "#toDate");
+  bindPeriodAuto("#fromDate2", "#toDate2");
+  bindPeriodAuto("#fromDate3", "#toDate3");
+  setupGuestListControls();
+
+  $("#spesaData").value = todayISO();
+
+  // Motivazione: se l'utente scrive una variante già esistente, usa la versione canonica
+  const mot = $("#spesaMotivazione");
+  if (mot) {
+    mot.addEventListener("blur", () => {
+      const v = collapseSpaces((mot.value || "").trim());
+      if (!v) return;
+      const canonical = findCanonicalMotivazione(v);
+      if (canonical) mot.value = canonical;
+      else mot.value = v; // pulizia spazi multipli
+    });
+  }
+
+  $("#btnSaveSpesa").addEventListener("click", async () => {
+    try { await saveSpesa(); } catch(e){ toast(e.message); }
+  });
+
+
+  // prefetch leggero (evita lentezza all'avvio) — solo dopo login
+  if (state.session && state.session.user_id){
+    try { await loadMotivazioni(); } catch(e){ toast(e.message); }
+    // Impostazioni: carica in background (serve per tassa soggiorno / operatori)
+    try { await ensureSettingsLoaded({ force:false, showLoader:false }); } catch(_) {}
+  }
+
+  // avvio: ripristina sezione se il SW ha forzato un reload su iOS
+  const targetPage = (__restore && __restore.page) ? __restore.page : "home";
+  showPage(targetPage);
+  if (__restore) setTimeout(() => { try { __applyUiState(__restore); } catch(_) {} }, 0);
+
+
+  // --- Pulizie (solo grafica) ---
+  const cleanPrev = document.getElementById("cleanPrev");
+  const cleanNext = document.getElementById("cleanNext");
+  const cleanToday = document.getElementById("cleanToday");
+
+  const cleanGrid = document.getElementById("cleanGrid");
+  const cleanSaveLaundry = document.getElementById("cleanSaveLaundry");
+  const cleanSaveHours = document.getElementById("cleanSaveHours");
+  const btnLaundryFromPulizie = document.getElementById("topLaundryBtn");
+  const btnOrePuliziaFromPulizie = document.getElementById("topWorkBtn");
+
+  // --- Pulizie: popup descrizioni intestazioni (MAT/SIN/...) ---
+  const cleanHeaderModal = document.getElementById("cleanHeaderModal");
+  const cleanHeaderText = document.getElementById("cleanHeaderText");
+  const cleanHeaderClose = document.getElementById("cleanHeaderClose");
+
+  const CLEAN_HEADER_DESC = {
+    MAT: "Lenzuolo Matrimoniale",
+    SIN: "Lenzuolo Singolo",
+    FED: "Federe",
+    TDO: "Telo Doccia",
+    TFA: "Telo Faccia",
+    TBI: "Telo Bidet",
+    TAP: "Tappeto",
+    TPI: "Telo Piscina",
+  };
+
+  const openCleanHeaderModal = (code) => {
+    if (!cleanHeaderModal || !cleanHeaderText) return;
+    const c = String(code || "").trim().toUpperCase();
+    const text = CLEAN_HEADER_DESC[c] || "";
+    if (!text) return;
+    cleanHeaderText.textContent = text;
+    cleanHeaderModal.hidden = false;
+  };
+
+  const closeCleanHeaderModal = () => {
+    if (!cleanHeaderModal) return;
+    cleanHeaderModal.hidden = true;
+  };
+
+  if (cleanHeaderClose){
+    cleanHeaderClose.addEventListener("click", (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      closeCleanHeaderModal();
+    }, true);
+  }
+
+  if (cleanHeaderModal){
+    cleanHeaderModal.addEventListener("click", (e) => {
+      // click fuori dalla card chiude
+      if (e.target === cleanHeaderModal) closeCleanHeaderModal();
+    }, true);
+  }
+
+
+
+  const readCell = (el) => {
+    const v = String(el.textContent || "").trim();
+    const n = parseInt(v, 10);
+    return isNaN(n) ? 0 : n;
+  };
+  const writeCell = (el, n) => {
+    const val = Math.max(0, parseInt(n || 0, 10) || 0);
+    el.textContent = val ? String(val) : "";
+  };
+
+  const getCleanDate = () => {
+    const d = state.cleanDay ? new Date(state.cleanDay) : new Date();
+    return toISODateLocal(d);
+  };
+
+  // --- Ore operatori (foglio "operatori") ---
+  const OP_BENZINA_EUR = (state.settings && state.settings.loaded) ? getSettingNumber("costo_benzina", 2.00) : 2.00;   // € per presenza
+  const OP_RATE_EUR_H = (state.settings && state.settings.loaded) ? getSettingNumber("tariffa_oraria", 8.00) : 8.00;    // € per ora
+
+    const opEls = [
+    { name: document.getElementById("op1Name"), hours: document.getElementById("op1Hours") },
+    { name: document.getElementById("op2Name"), hours: document.getElementById("op2Hours") },
+    { name: document.getElementById("op3Name"), hours: document.getElementById("op3Hours") },
+  ].filter(x => x.name && x.hours);
+
+  const readHourDot = (el) => {
+    const n = parseInt(String(el.dataset.value || "0"), 10);
+    return isNaN(n) ? 0 : Math.max(0, n);
+  };
+  const writeHourDot = (el, n) => {
+    const val = Math.max(0, parseInt(n || 0, 10) || 0);
+    el.dataset.value = String(val);
+    el.textContent = val ? String(val) : "";
+    el.classList.toggle("is-zero", !val);
+  };
+
+  const bindHourDot = (el) => {
+    // Tap incrementa, long press (0.5s) azzera — come la biancheria
+    let pressTimer = null;
+    let longFired = false;
+    let lastTouchAt = 0;
+
+    const clear = () => {
+      if (pressTimer){ clearTimeout(pressTimer); pressTimer = null; }
+      longFired = false;
+    };
+
+    const onLong = () => { el.classList.remove("is-saved"); writeHourDot(el, 0); };
+    const onTap = () => { el.classList.remove("is-saved"); writeHourDot(el, readHourDot(el) + 1); };
+
+    el.addEventListener("touchstart", (e) => {
+      lastTouchAt = Date.now();
+      clear();
+      pressTimer = setTimeout(() => {
+        longFired = true;
+        onLong();
+      }, 500);
+      e.preventDefault();
+      e.stopPropagation();
+    }, { passive: false, capture: true });
+
+    el.addEventListener("touchend", (e) => {
+      if (pressTimer){ clearTimeout(pressTimer); pressTimer = null; }
+      if (!longFired) onTap();
+      clear();
+      e.preventDefault();
+      e.stopPropagation();
+    }, { passive: false, capture: true });
+
+    el.addEventListener("touchcancel", (e) => {
+      clear();
+      try{ e.preventDefault(); e.stopPropagation(); }catch(_){}
+    }, { passive: false, capture: true });
+
+    // Click (desktop) + anti ghost-click dopo touch
+    el.addEventListener("click", (e) => {
+      if (Date.now() - lastTouchAt < 450) { e.preventDefault(); e.stopPropagation(); return; }
+      onTap();
+      e.preventDefault();
+      e.stopPropagation();
+    }, true);
+  };
+
+  const syncCleanOperators = () => {
+  const names = getOperatorNamesFromSettings(); // [op1, op2, op3]
+
+  opEls.forEach((r, idx) => {
+    const n = String(names[idx] || "").trim();
+    const rowEl = (r.hours && r.hours.closest) ? r.hours.closest(".clean-op-row") : null;
+
+    // Se non è impostato: NON mostrare né scritta né pallino
+    if (!n) {
+      if (rowEl) rowEl.style.display = "none";
+      if (String(r.name.tagName || "").toUpperCase() === "INPUT") {
+        r.name.value = "";
+      } else {
+        r.name.textContent = "";
+        r.name.classList.remove("is-placeholder");
+      }
+      // sicurezza: azzera il dot
+      writeHourDot(r.hours, 0);
+      return;
+    }
+
+    // Se impostato: mostra riga e applica nome
+    if (rowEl) rowEl.style.display = "";
+
+    // Nome: solo lettura
+    if (String(r.name.tagName || "").toUpperCase() === "INPUT") {
+      r.name.readOnly = true;
+      r.name.setAttribute("readonly", "");
+      r.name.value = n;
+    } else {
+      r.name.textContent = n;
+      r.name.classList.remove("is-placeholder");
+    }
+
+    // Dot: init a 0 (se mancante)
+    if (!r.hours.dataset.value) writeHourDot(r.hours, 0);
+
+    // Accessibilità: usa il nome reale
+    try {
+      r.name.setAttribute("aria-label", n);
+      r.hours.setAttribute("aria-label", "Ore " + n);
+    } catch (_) {}
+  });
+};
+
+  try{ syncCleanOperators(); }catch(_){}
+  opEls.forEach(r => { try{ bindHourDot(r.hours); }catch(_){ } });
+
+  const buildOperatoriPayload = () => {
+    const date = getCleanDate();
+    const rows = [];
+    const names = getOperatorNamesFromSettings(); // [op1, op2, op3]
+
+    const hasAnyName = names.some(n => String(n || "").trim());
+    if (!hasAnyName){
+      throw new Error("Imposta i nomi operatori in Impostazioni");
+    }
+
+    // IMPORTANTE: inviamo ANCHE le ore a 0.
+    // Il backend farà "replace" del giorno: cancella i record esistenti per quella data
+    // e reinserisce solo quelli con ore > 0. Così un secondo salvataggio SOVRASCRIVE.
+    opEls.forEach((r, idx) => {
+      const name = String(names[idx] || "").trim();
+      if (!name) return; // operatore non configurato
+
+      const hours = readHourDot(r.hours); // può essere 0
+      rows.push({
+        data: date,
+        operatore: name,
+        ore: hours,
+        benzina_euro: OP_BENZINA_EUR
+      });
+    });
+
+    return { touched: true, payload: { data: date, operatori: rows, replaceDay: true } };
+  };
+
+
+
+  
+  const clearAllSlots = () => {
+    document.querySelectorAll(".clean-grid .cell.slot").forEach(el => { el.textContent = ""; el.classList.remove("is-saved"); });
+  };
+
+  const applyPulizieRows = (rows) => {
+    clearAllSlots();
+    if (!Array.isArray(rows)) return;
+    rows.forEach(r => {
+      const room = String(r.stanza || r.room || "").trim();
+      if (!room) return;
+      ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"].forEach(c => {
+        const cell = document.querySelector(`.clean-grid .cell.slot[data-room="${room}"][data-col="${c}"]`);
+        if (!cell) return;
+        const n = parseInt(r[c] ?? 0, 10);
+        cell.textContent = (!isNaN(n) && n>0) ? String(n) : "";
+        cell.classList.toggle("is-saved", (!isNaN(n) && n>0));
+      });
+    });
+  };
+
+  // --- Ore operatori: carica dal DB per il giorno selezionato (così un nuovo salvataggio SOVRASCRIVE davvero) ---
+  const _normOpName = (s) => String(s || "").trim().toLowerCase();
+
+  const applyOperatoriRows = (rows) => {
+    if (!Array.isArray(rows)) rows = [];
+    const map = new Map();
+    rows.forEach(r => {
+      const op = _normOpName(r?.operatore || r?.nome || "");
+      const ore = parseInt(String(r?.ore ?? 0), 10);
+      if (op) map.set(op, isNaN(ore) ? 0 : Math.max(0, ore));
+    });
+
+    const names = getOperatorNamesFromSettings(); // [op1, op2, op3]
+    opEls.forEach((r, idx) => {
+      const name = String(names[idx] || "").trim();
+      if (!name) return; // non configurato (riga nascosta)
+      const v = map.get(_normOpName(name)) || 0;
+      writeHourDot(r.hours, v);
+      r.hours.classList.toggle("is-saved", v > 0);
+    });
+  };
+
+  const loadOperatoriForDay = async ({ clearFirst = true } = {}) => {
+    if (clearFirst){
+      // azzera dots visivamente (se poi arrivano dati li ripopola)
+      const names = getOperatorNamesFromSettings();
+      opEls.forEach((r, idx) => {
+        const name = String(names[idx] || "").trim();
+        if (!name) return;
+        writeHourDot(r.hours, 0);
+        r.hours.classList.remove("is-saved");
+      });
+    }
+    try{
+      const data = getCleanDate();
+      const res = await api("operatori", { method:"GET", params:{ data }, showLoader:false });
+
+      const rows = Array.isArray(res) ? res
+        : (res && Array.isArray(res.rows) ? res.rows
+        : (res && Array.isArray(res.data) ? res.data
+        : []));
+      applyOperatoriRows(rows);
+    }catch(_){
+      // offline/errore: se clearFirst era true, restano a 0
+    }
+  };
+
+
+  const loadPulizieForDay = async ({ clearFirst = true } = {}) => {
+    // Regola: quando cambi giorno, la griglia deve essere SUBITO vuota.
+    // Poi, se ci sono dati salvati per quel giorno, li carichiamo.
+    if (clearFirst) clearAllSlots();
+    try{
+      const day = state.cleanDay ? new Date(state.cleanDay) : new Date();
+      const data = toISODateLocal(day);
+      const res = await api("pulizie", { method:"GET", params:{ data }, showLoader:false });
+      // Supporta risposte: array diretto, oppure {data:[...]}
+      const rows = Array.isArray(res) ? res
+        : (res && Array.isArray(res.data) ? res.data
+        : (res && res.data && Array.isArray(res.data.data) ? res.data.data
+        : (res && Array.isArray(res.rows) ? res.rows
+        : [])));
+      if (rows.length) applyPulizieRows(rows);
+      // altrimenti resta come sta
+    }catch(_){
+      // offline/errore: se stiamo cambiando giorno, resta vuota; se stiamo solo ricaricando dopo salvataggio, non tocchiamo
+      if (clearFirst) clearAllSlots();
+    }
+  };
+
+const buildPuliziePayload = () => {
+    const data = getCleanDate();
+    const rooms = ["1","2","3","4","5","6","RES"];
+    const cols = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
+    const rows = rooms.map(stanza => {
+      const row = { data, stanza };
+      cols.forEach(c => {
+        const cell = document.querySelector(`.clean-grid .cell.slot[data-room="${stanza}"][data-col="${c}"]`);
+        row[c] = cell ? readCell(cell) : 0;
+      });
+      return row;
+    });
+    return { data, rows };
+  };
+
+  // Tap incrementa, long press (0.5s) azzera
+  let pressTimer = null;
+  let pressTarget = null;
+  let longFired = false;
+  let lastTouchAt = 0;
+
+  const clearPress = () => {
+    if (pressTimer){ clearTimeout(pressTimer); pressTimer = null; }
+    pressTarget = null;
+    longFired = false;
+  };
+
+  const startPress = (slot) => {
+    clearPress();
+    pressTarget = slot;
+    pressTimer = setTimeout(() => {
+      longFired = true;
+      slot.classList.remove("is-saved");
+      writeCell(slot, 0);
+    }, 500);
+  };
+
+  const tapSlot = (slot) => {
+    slot.classList.remove("is-saved");
+    writeCell(slot, readCell(slot) + 1);
+  };
+
+  if (cleanGrid){
+    // Header click (MAT/SIN/FED...): mostra descrizione in popup
+    let __lastHeadTouchAt = 0;
+    const __pickHeadCode = (ev) => {
+      const head = ev.target && ev.target.closest ? ev.target.closest(".cell.head") : null;
+      if (!head || head.classList.contains("corner")) return null;
+      const code = String(head.textContent || "").trim().toUpperCase();
+      return CLEAN_HEADER_DESC[code] ? code : null;
+    };
+
+    cleanGrid.addEventListener("touchend", (e) => {
+      const code = __pickHeadCode(e);
+      if (!code) return;
+      __lastHeadTouchAt = Date.now();
+      openCleanHeaderModal(code);
+      e.preventDefault();
+      e.stopPropagation();
+    }, { passive: false, capture: true });
+
+    cleanGrid.addEventListener("click", (e) => {
+      const code = __pickHeadCode(e);
+      if (!code) return;
+      if (Date.now() - __lastHeadTouchAt < 450) { e.preventDefault(); e.stopPropagation(); return; }
+      openCleanHeaderModal(code);
+      e.preventDefault();
+      e.stopPropagation();
+    }, true);
+
+
+    // Touch (iPhone)
+    cleanGrid.addEventListener("touchstart", (e) => {
+      const slot = e.target.closest && e.target.closest(".cell.slot");
+      if (!slot) return;
+      lastTouchAt = Date.now();
+      startPress(slot);
+      // blocca altri handler globali
+      e.preventDefault();
+      e.stopPropagation();
+    }, { passive: false, capture: true });
+
+    cleanGrid.addEventListener("touchend", (e) => {
+      const slot = e.target.closest && e.target.closest(".cell.slot");
+      if (!slot) return;
+      if (pressTimer){ clearTimeout(pressTimer); pressTimer = null; }
+      if (!longFired) tapSlot(slot);
+      clearPress();
+      e.preventDefault();
+      e.stopPropagation();
+    }, { passive: false, capture: true });
+
+    cleanGrid.addEventListener("touchcancel", (e) => {
+      clearPress();
+      try{ e.preventDefault(); e.stopPropagation(); }catch(_){}
+    }, { passive: false, capture: true });
+
+    // Click (desktop) + anti ghost-click dopo touch
+    cleanGrid.addEventListener("click", (e) => {
+      const slot = e.target.closest && e.target.closest(".cell.slot");
+      if (!slot) return;
+      if (Date.now() - lastTouchAt < 450) { e.preventDefault(); e.stopPropagation(); return; }
+      tapSlot(slot);
+      e.preventDefault();
+      e.stopPropagation();
+    }, true);
+  }
+
+  // Salva biancheria (foglio "pulizie")
+if (cleanSaveLaundry){
+  cleanSaveLaundry.addEventListener("click", async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try{
+      const payload = buildPuliziePayload();
+      await api("pulizie", { method:"POST", body: payload });
+
+      // ricarica dal DB senza svuotare (così resta visibile subito)
+      try{ await loadPulizieForDay({ clearFirst:false }); }catch(_){ }
+
+      toast("Biancheria salvata", "blue");
+    }catch(err){
+      toast(String(err && err.message || "Errore salvataggio biancheria"));
+    }
+  }, true);
+}
+
+// Salva ore lavoro (foglio "operatori") — REPLACE per data (sovrascrive report del giorno)
+if (cleanSaveHours){
+  cleanSaveHours.addEventListener("click", async (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    try{
+      const { touched, payload: opPayload } = buildOperatoriPayload();
+
+      if (!touched){
+        toast("Nessun operatore configurato");
+        return;
+      }
+
+      const res = await api("operatori", { method:"POST", body: opPayload });
+      const saved = (res && typeof res.saved === "number") ? res.saved : 0;
+      const deleted = (res && typeof res.deleted === "number") ? res.deleted : null;
+
+      // Ricarica dal DB per confermare UI allineata
+      try{ await loadOperatoriForDay({ clearFirst:false }); }catch(_){}
+
+      const msg = (deleted != null)
+        ? `Ore lavoro salvate (${saved}) — sostituiti ${deleted} record`
+        : `Ore lavoro salvate (${saved})`;
+      toast(msg, "orange");
+    }catch(err){
+      toast(String(err && err.message || "Errore salvataggio ore lavoro"));
+    }
+  }, true);
+}
+
+
+  const updateCleanLabel = () => {
+    const lab = document.getElementById("cleanDateLabel");
+    if (!lab) return;
+    const base = state.cleanDay ? new Date(state.cleanDay) : new Date();
+    lab.textContent = formatFullDateIT(startOfLocalDay(base));
+  };
+
+  const shiftClean = (deltaDays) => {
+    const base = state.cleanDay ? new Date(state.cleanDay) : new Date();
+    const d = startOfLocalDay(base);
+    d.setDate(d.getDate() + deltaDays);
+    state.cleanDay = d.toISOString();
+    updateCleanLabel();
+    try{ loadPulizieForDay(); }catch(_){ }
+    try{ loadOperatoriForDay(); }catch(_){ }
+  };
+
+  if (cleanPrev) cleanPrev.addEventListener("click", () => shiftClean(-1));
+  if (cleanNext) cleanNext.addEventListener("click", () => shiftClean(1));
+  if (cleanToday) cleanToday.addEventListener("click", () => {
+    state.cleanDay = startOfLocalDay(new Date()).toISOString();
+    updateCleanLabel();
+    try{ loadPulizieForDay(); }catch(_){ }
+    try{ loadOperatoriForDay(); }catch(_){ }
+  });
+
+  // inizializza label se apri direttamente la pagina
+  if (!state.cleanDay) state.cleanDay = startOfLocalDay(new Date()).toISOString();
+  updateCleanLabel();
+  try{ loadPulizieForDay(); }catch(_){ }
+    try{ loadOperatoriForDay(); }catch(_){ }
+
+
+
+// --- Lavanderia ---
+  const btnLaundryGenerate = document.getElementById("btnLaundryGenerate");
+  try{
+    const fromEl = document.getElementById("laundryFrom");
+    const toEl   = document.getElementById("laundryTo");
+    if (fromEl){ fromEl.addEventListener("change", syncLaundryDateText_); fromEl.addEventListener("input", syncLaundryDateText_); }
+    if (toEl){ toEl.addEventListener("change", syncLaundryDateText_); toEl.addEventListener("input", syncLaundryDateText_); }
+    syncLaundryDateText_();
+  }catch(_){ }
+
+if (btnLaundryGenerate){
+    bindFastTap(btnLaundryGenerate, async () => {
+      try{
+        showPage("lavanderia");
+        await createLavanderiaReport_();
+      }catch(e){
+        console.error(e);
+        try{ toast(e.message || "Errore"); }catch(_){}
+      }
+    });
+  }
+if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie){
+    bindFastTap(btnOrePuliziaFromPulizie, () => {
+      try{ showPage("orepulizia"); }catch(_){}
+    });
+  }
+
+  if (typeof btnLaundryFromPulizie !== "undefined" && btnLaundryFromPulizie){
+    bindFastTap(btnLaundryFromPulizie, async () => {
+      try{
+        showPage("lavanderia");
+        }catch(e){
+        console.error(e);
+        try{ toast(e.message || "Errore"); }catch(_){}
+      }
+    });
+  }
+
+}
+
+
+// ===== CALENDARIO (dDAE_2.019) =====
+function setupCalendario(){
+  const pickBtn = document.getElementById("calPickBtn");
+  const todayBtn = document.getElementById("calTodayBtn");
+  const prevBtn = document.getElementById("calPrevBtn");
+  const nextBtn = document.getElementById("calNextBtn");
+  const syncBtn = document.getElementById("calSyncBtn");
+  const input = document.getElementById("calDateInput");
+
+  if (!state.calendar) {
+    state.calendar = { anchor: new Date(), ready: false, guests: [] };
+  }
+
+  // Sync: forza lettura database (tap-safe iOS PWA)
+  if (syncBtn){
+    syncBtn.setAttribute("aria-label", "Forza lettura database");
+    bindFastTap(syncBtn, async () => {
+      try{
+        syncBtn.disabled = true;
+        syncBtn.classList.add("is-loading");
+        if (state.calendar) state.calendar.ready = false;
+        await ensureCalendarData({ force:true });
+        renderCalendario();
+        try{ toast("Aggiornato"); }catch(_){ }
+      }catch(e){
+        console.error(e);
+        try{ toast(e.message || "Errore"); }catch(_){ }
+      }finally{
+        syncBtn.classList.remove("is-loading");
+        syncBtn.disabled = false;
+      }
+    });
+  }
+
+  const openPicker = () => {
+    if (!input) return;
+    try { input.value = formatISODateLocal(state.calendar.anchor) || todayISO(); } catch(_) {}
+    input.click();
+  };
+
+  if (pickBtn) pickBtn.addEventListener("click", openPicker);
+  if (input) input.addEventListener("change", () => {
+    if (!input.value) return;
+    state.calendar.anchor = new Date(input.value + "T00:00:00");
+    renderCalendario();
+  });
+  if (todayBtn) todayBtn.addEventListener("click", () => {
+    state.calendar.anchor = new Date();
+    renderCalendario();
+  });
+  if (prevBtn) prevBtn.addEventListener("click", () => {
+    state.calendar.anchor = addDays(state.calendar.anchor, -7);
+    renderCalendario();
+  });
+  if (nextBtn) nextBtn.addEventListener("click", () => {
+    state.calendar.anchor = addDays(state.calendar.anchor, 7);
+    renderCalendario();
+  });
+}
+
+
+async function ensureCalendarData({ force = false } = {}) {
+  if (!state.calendar) state.calendar = { anchor: new Date(), ready: false, guests: [], rangeKey: "" };
+
+  const anchor = (state.calendar && state.calendar.anchor) ? state.calendar.anchor : new Date();
+  const start = startOfWeekMonday(anchor);
+
+  // Finestra dati: 2 settimane prima + 2 settimane dopo (evita payload enormi)
+  const winFrom = toISO(addDays(start, -14));
+  const winTo = toISO(addDays(start, 7 + 14));
+  const rangeKey = `${winFrom}|${winTo}`;
+
+  // Se ho già i dati per questa finestra, non ricarico
+  if (!force && state.calendar.ready && state.calendar.rangeKey === rangeKey) return;
+
+  await load({ showLoader: true }); // necessario per i pallini letti
+    const data = await cachedGet("ospiti", { from: winFrom, to: winTo }, { showLoader: true, ttlMs: 30*1000, force });
+  state.calendar.guests = Array.isArray(data) ? data : [];
+  state.calendar.ready = true;
+  state.calendar.rangeKey = rangeKey;
+}
+
+
+function renderCalendario(){
+  const grid = document.getElementById("calGrid");
+  const title = document.getElementById("calWeekTitle");
+  if (!grid) return;
+
+  grid.replaceChildren();
+  const frag = document.createDocumentFragment();
+
+  const anchor = (state.calendar && state.calendar.anchor) ? state.calendar.anchor : new Date();
+  const start = startOfWeekMonday(anchor);
+  const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
+
+  if (title) {
+    const month = monthNameIT(start).toUpperCase();
+    title.textContent = month;
+  }
+
+  const occ = buildWeekOccupancy(start);
+
+  grid.innerHTML = "";
+
+  // Angolo alto-sinistra: etichetta "ST" (sopra la colonna stanze, a sinistra dei giorni)
+  const corner = document.createElement("div");
+  corner.className = "cal-cell cal-head cal-corner";
+  corner.innerHTML = `<div class="cal-corner-text">ST</div>`;
+  frag.appendChild(corner);
+
+// Prima riga: giorni (colonne)
+  for (let i = 0; i < 7; i++) {
+    const d = days[i];
+    const dayPill = document.createElement("div");
+    dayPill.className = "cal-cell cal-head";
+
+    // Abbreviazione (LUN, MAR...) sopra, numero giorno sotto
+    const ab = document.createElement("div");
+    ab.className = "cal-day-abbrev";
+    ab.textContent = weekdayShortIT(d).toUpperCase();
+
+    const num = document.createElement("div");
+    num.className = "cal-day-num";
+    num.textContent = String(d.getDate());
+
+    dayPill.appendChild(ab);
+    dayPill.appendChild(num);
+
+    frag.appendChild(dayPill);
+  }
+
+  // Righe: stanze (prima colonna) + celle per ogni giorno
+  for (let r = 1; r <= 6; r++) {
+    const pill = document.createElement("div");
+    pill.className = `cal-pill room room-${r}`;
+
+    const rn = document.createElement("span");
+    rn.className = "cal-room-num";
+    rn.textContent = String(r);
+    pill.appendChild(rn);
+
+    frag.appendChild(pill);
+
+    for (let i = 0; i < 7; i++) {
+      const d = days[i];
+      const dIso = isoDate(d);
+
+      const cell = document.createElement("button");
+      cell.type = "button";
+      cell.className = `cal-cell room-${r}`;
+      cell.setAttribute("aria-label", `Stanza ${r}, ${weekdayShortIT(d)} ${d.getDate()}`);
+      cell.dataset.date = dIso;
+      cell.dataset.room = String(r);
+      const info = occ.get(`${dIso}:${r}`);
+      if (!info) {
+        // Casella vuota: nessuna azione (evita anche handler globali tipo [data-room])
+        cell.addEventListener("click", (ev)=>{
+          try { ev.preventDefault(); } catch (_) {}
+          try { ev.stopPropagation(); } catch (_) {}
+
+          // Feedback minimo: solo bordo nero spesso (nessuna azione / nessuna apertura schede)
+          try{
+            const prev = grid.querySelector(".cal-cell.empty-selected");
+            if (prev && prev !== cell) prev.classList.remove("empty-selected");
+            cell.classList.toggle("empty-selected");
+          }catch(_){}
+        });
+      }
+      if (info) {
+        cell.classList.add("has-booking");
+        if (info.lastDay) cell.classList.add("last-day");
+
+        const inner = document.createElement("div");
+        inner.className = "cal-cell-inner";
+
+        const ini = document.createElement("div");
+        ini.className = "cal-initials";
+        ini.textContent = info.initials;
+        inner.appendChild(ini);
+
+        const dots = document.createElement("div");
+        dots.className = "cal-dots";
+        const arr = info.dots.slice(0, 4); // 2x2
+        for (const t of arr) {
+          const s = document.createElement("span");
+          s.className = `bed-dot ${t === "m" ? "bed-dot-m" : t === "s" ? "bed-dot-s" : "bed-dot-c"}`;
+          dots.appendChild(s);
+        }
+        inner.appendChild(dots);
+
+        cell.appendChild(inner);
+
+        cell.addEventListener("click", (ev) => {
+          // Pulisci eventuale selezione su casella vuota
+          try{ const prev = grid.querySelector(".cal-cell.empty-selected"); if (prev) prev.classList.remove("empty-selected"); }catch(_){}
+
+          // Se la cella ha una prenotazione, apri la scheda in SOLA LETTURA
+          // e blocca la propagazione per evitare l'apertura del popup letto (listener globale [data-room]).
+          try { ev.preventDefault(); } catch (_) {}
+          try { ev.stopPropagation(); } catch (_) {}
+
+          const ospite = findCalendarGuestById(info.guestId);
+          if (!ospite) return;
+          enterGuestViewMode(ospite);
+          showPage("ospite");
+        });
+      }
+
+      frag.appendChild(cell);
+    }
+  }
+  grid.appendChild(frag);
+}
+
+
+function findCalendarGuestById(id){
+  const gid = String(id ?? "").trim();
+  const arr = (state.calendar && Array.isArray(state.calendar.guests)) ? state.calendar.guests : [];
+  return arr.find(o => String(o.id ?? o.ID ?? o.ospite_id ?? o.ospiteId ?? o.guest_id ?? o.guestId ?? "").trim() === gid) || null;
+}
+
+function buildWeekOccupancy(weekStart){
+  const map = new Map();
+  const guests = (state.calendar && Array.isArray(state.calendar.guests)) ? state.calendar.guests : [];
+  const weekEnd = addDays(weekStart, 7);
+  const todayIso = isoDate(new Date());
+
+
+  for (const g of guests){
+    const guestId = String(g.id ?? g.ID ?? g.ospite_id ?? g.ospiteId ?? g.guest_id ?? g.guestId ?? "").trim();
+    if (!guestId) continue;
+
+    const ciStr = formatISODateLocal(g.check_in || g.checkIn || "");
+    const coStr = formatISODateLocal(g.check_out || g.checkOut || "");
+    if (!ciStr || !coStr) continue;
+
+    const ci = new Date(ciStr + "T00:00:00");
+    const co = new Date(coStr + "T00:00:00");
+    const last = addDays(co, -1);
+    const lastIso = isoDate(last);
+    const lastIsPresentOrFuture = (lastIso >= todayIso);
+
+    let roomsArr = [];
+    try {
+      const st = g.stanze;
+      if (Array.isArray(st)) roomsArr = st;
+      else if (st != null && String(st).trim().length) {
+        const m = String(st).match(/[1-6]/g) || [];
+        roomsArr = m.map(x => parseInt(x, 10));
+      }
+    } catch (_) {}
+    roomsArr = Array.from(new Set((roomsArr||[]).map(n=>parseInt(n,10)).filter(n=>isFinite(n) && n>=1 && n<=6))).sort((a,b)=>a-b);
+    if (!roomsArr.length) continue;
+
+    const initials = initialsFromName(g.nome || g.name || "");
+
+    for (let d = new Date(ci); d < co; d = addDays(d, 1)) {
+      if (d < weekStart || d >= weekEnd) continue;
+      const dIso = isoDate(d);
+      const isLast = isoDate(d) === lastIso;
+
+      for (const r of roomsArr) {
+        const dots = dotsForGuestRoom(guestId, r);
+        map.set(`${dIso}:${r}`, { guestId, initials, dots, lastDay: isLast });
+      }
+    }
+  }
+  return map;
+}
+
+function dotsForGuestRoom(guestId, room){
+  const key = `${guestId}:${room}`;
+  const info = (state.stanzeByKey && state.stanzeByKey[key]) ? state.stanzeByKey[key] : { letto_m:0, letto_s:0, culla:0 };
+  const lettoM = Number(info.letto_m || 0) || 0;
+  const lettoS = Number(info.letto_s || 0) || 0;
+  const culla = Number(info.culla || 0) || 0;
+
+  const arr = [];
+  if (lettoM > 0) arr.push("m");
+  for (let i=0;i<lettoS;i++) arr.push("s");
+  if (culla > 0) arr.push("c");
+  return arr;
+}
+
+function initialsFromName(name){
+  const s = collapseSpaces(String(name||"").trim());
+  if (!s) return "";
+  const parts = s.split(" ").filter(Boolean);
+  if (parts.length === 1) return parts[0].slice(0,2).toUpperCase();
+  const a = parts[0].slice(0,1);
+  const b = parts[parts.length-1].slice(0,1);
+  return (a+b).toUpperCase();
+}
+
+function startOfWeekMonday(date){
+  const d = new Date(date);
+  d.setHours(0,0,0,0);
+  const day = d.getDay(); // 0 Sun..6 Sat
+  const diff = (day === 0 ? -6 : 1 - day);
+  return addDays(d, diff);
+}
+
+function addDays(date, days){
+  const d = new Date(date);
+  d.setDate(d.getDate() + days);
+  d.setHours(0,0,0,0);
+  return d;
+}
+
+function isoDate(date){
+  const d = new Date(date);
+  d.setHours(0,0,0,0);
+  const y = d.getFullYear();
+  const m = String(d.getMonth()+1).padStart(2,"0");
+  const da = String(d.getDate()).padStart(2,"0");
+  return `${y}-${m}-${da}`;
+}
+
+function weekdayShortIT(date){
+  const names = ["Dom","Lun","Mar","Mer","Gio","Ven","Sab"];
+  return names[new Date(date).getDay()];
+}
+
+function monthNameIT(date){
+  const names = ["gennaio","febbraio","marzo","aprile","maggio","giugno","luglio","agosto","settembre","ottobre","novembre","dicembre"];
+  return names[new Date(date).getMonth()];
+}
+
+function romanWeekOfMonth(weekStart){
+  const d = new Date(weekStart);
+  const y = d.getFullYear();
+  const m = d.getMonth();
+  const firstOfMonth = new Date(y, m, 1);
+  const firstWeekStart = startOfWeekMonday(firstOfMonth);
+  const diff = Math.floor((startOfWeekMonday(d) - firstWeekStart) / (7*24*60*60*1000));
+  const n = Math.max(1, diff + 1);
+  return toRoman(n);
+}
+
+function toRoman(n){
+  const map = [[10,"X"],[9,"IX"],[8,"VIII"],[7,"VII"],[6,"VI"],[5,"V"],[4,"IV"],[3,"III"],[2,"II"],[1,"I"]];
+  let out = "";
+  let x = Math.max(1, Math.min(10, n));
+  for (const [v,s] of map){
+    while (x >= v){ out += s; x -= v; }
+  }
+  return out || "I";
+}
+
+
+(async ()=>{ try{ await init(); } catch(e){ console.error(e); try{ toast(e.message||"Errore"); }catch(_){ } } })();
+
+
+
+
+/* =========================
+   Lavanderia (dDAE_2.019)
+========================= */
+const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
+const LAUNDRY_LABELS = {
+  MAT: "Matrimoniale",
+  SIN: "Singolo",
+  FED: "Federe",
+  // Teli (arancio)
+  TDO: "Telo doccia",
+  TFA: "Telo Faccia",
+  TBI: "Telo bidet",
+  // Eccezioni
+  TAP: "Tappeto",
+  TPI: "Telo Piscina",
+};
+
+function sanitizeLaundryItem_(it){
+  it = it || {};
+  const out = {};
+  out.id = String(it.id || "").trim();
+  out.startDate = String(it.startDate || it.start_date || it.from || "").trim();
+  out.endDate = String(it.endDate || it.end_date || it.to || "").trim();
+  out.createdAt = String(it.createdAt || it.created_at || "").trim();
+  out.updatedAt = String(it.updatedAt || it.updated_at || it.updatedAt || "").trim();
+  for (const k of LAUNDRY_COLS){
+    const n = Number(it[k]);
+    out[k] = isNaN(n) ? 0 : Math.max(0, Math.floor(n));
+  }
+  return out;
+}
+
+function setLaundryLabels_(){
+  for (const k of LAUNDRY_COLS){
+    const el = document.getElementById("laundryLbl"+k);
+    if (el) el.textContent = LAUNDRY_LABELS[k] || k;
+  }
+}
+
+function renderLaundry_(item){
+  item = item ? sanitizeLaundryItem_(item) : null;
+  state.laundry.current = item;
+
+  const rangeEl = document.getElementById("laundryPeriodLabel");
+  const printRangeEl = document.getElementById("laundryPrintRange");
+
+  if (!item){
+    if (rangeEl){ rangeEl.hidden = true; rangeEl.textContent = ""; }
+    if (printRangeEl) printRangeEl.textContent = "";
+    for (const k of LAUNDRY_COLS){
+      const v = document.getElementById("laundryVal"+k);
+      if (v) v.textContent = "0";
+    }
+    const tbody = document.getElementById("laundryPrintBody");
+    if (tbody) tbody.innerHTML = "";
+    return;
+  }
+
+  const startLbl = item.startDate ? formatLongDateIT(item.startDate) : "";
+  const endLbl = item.endDate ? formatLongDateIT(item.endDate) : "";
+  const rangeText = (startLbl && endLbl) ? `${startLbl} – ${endLbl}` : (startLbl || endLbl || "—");
+  if (rangeEl){ rangeEl.hidden = false; rangeEl.innerHTML = `<b>${rangeText}</b>`; }
+  if (printRangeEl) printRangeEl.textContent = rangeText;
+
+  for (const k of LAUNDRY_COLS){
+    const v = document.getElementById("laundryVal"+k);
+    if (v) v.textContent = String(item[k] || 0);
+  }
+
+  const tbody = document.getElementById("laundryPrintBody");
+  if (tbody){
+    tbody.innerHTML = LAUNDRY_COLS.map(k => {
+      const label = LAUNDRY_LABELS[k] || k;
+      const val = String(item[k] || 0);
+      return `<tr><td><b>${label}</b> <span style="opacity:.7">(${k})</span></td><td style="text-align:right;font-weight:950">${val}</td></tr>`;
+    }).join("");
+  }
+}
+
+function renderLaundryHistory_(list){
+  const host = document.getElementById("laundryHistory");
+  if (!host) return;
+  host.innerHTML = "";
+
+  if (!list || !list.length){
+    const empty = document.createElement("div");
+    empty.className = "item";
+    empty.style.opacity = "0.8";
+    empty.textContent = "Nessun resoconto ancora.";
+    host.appendChild(empty);
+    return;
+  }
+
+  list.forEach((raw) => {
+    const it = sanitizeLaundryItem_(raw);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "item";
+    btn.style.width = "100%";
+    btn.style.textAlign = "left";
+    btn.style.cursor = "pointer";
+    btn.style.display = "flex";
+    btn.style.justifyContent = "space-between";
+    btn.style.alignItems = "center";
+    btn.style.gap = "10px";
+
+    const left = document.createElement("div");
+    const startLbl = it.startDate ? formatShortDateIT(it.startDate) : "";
+    const endLbl = it.endDate ? formatShortDateIT(it.endDate) : "";
+    left.innerHTML = `<div style="font-weight:950">${startLbl} – ${endLbl}</div>`;
+
+
+    const del = document.createElement("button");
+    del.type = "button";
+    del.className = "laundry-del";
+    del.setAttribute("aria-label", "Elimina report");
+    del.innerHTML = `<span class="x">✕</span>`;
+
+    bindFastTap(del, async (ev) => {
+      try {
+        ev && ev.preventDefault && ev.preventDefault();
+        ev && ev.stopPropagation && ev.stopPropagation();
+      } catch(_){}
+
+      // Anti-doppio tap / tocchi multipli
+      if (del.classList.contains("busy")) return;
+
+      const startLblFull = it.startDate ? formatLongDateIT(it.startDate) : String(it.startDate || "");
+      const endLblFull = it.endDate ? formatLongDateIT(it.endDate) : String(it.endDate || "");
+      const msg = (startLblFull && endLblFull)
+        ? `Eliminare il report lavanderia\n${startLblFull} → ${endLblFull}\n\n(Non tocca le Pulizie)`
+        : "Eliminare questo report lavanderia?\n\n(Non tocca le Pulizie)";
+      if (!confirm(msg)) return;
+
+      const prevHTML = del.innerHTML;
+      del.classList.add("busy");
+      del.disabled = true;
+      del.innerHTML = `<span class="spinner" aria-hidden="true"></span>`;
+
+      try{
+        await api("lavanderia", { method:"DELETE", body:{ id: it.id }, showLoader:true });
+        toast("Report eliminato");
+        await loadLavanderia();
+      }catch(e){
+        console.error(e);
+        toast(e && e.message ? e.message : "Errore eliminazione");
+        // ripristina solo se l'elemento esiste ancora
+        try{
+          if (del && del.isConnected){
+            del.innerHTML = prevHTML;
+          }
+        }catch(_){}
+      }finally{
+        try{
+          if (del && del.isConnected){
+            del.classList.remove("busy");
+            del.disabled = false;
+            // se non è stato ripristinato nel catch
+            if (!del.querySelector(".x") && !del.querySelector(".spinner")) del.innerHTML = prevHTML;
+          }
+        }catch(_){}
+      }
+    }, true);;
+
+    btn.appendChild(left);
+    btn.appendChild(del);
+
+    bindFastTap(btn, () => {
+      renderLaundry_(it);
+      // scroll su
+      try{ window.scrollTo({ top: 0, behavior: "smooth" }); }catch(_){
+        window.scrollTo(0,0);
+      }
+    });
+
+    host.appendChild(btn);
+  });
+}
+
+function syncLaundryDateText_(){
+  try{
+    const fromEl = document.getElementById("laundryFrom");
+    const toEl = document.getElementById("laundryTo");
+    const fromTxt = document.getElementById("laundryFromText");
+    const toTxt = document.getElementById("laundryToText");
+    if (fromTxt) fromTxt.textContent = fromEl && fromEl.value ? formatShortDateIT(fromEl.value) : "--/--/--";
+    if (toTxt) toTxt.textContent = toEl && toEl.value ? formatShortDateIT(toEl.value) : "--/--/--";
+  }catch(_){ }
+}
+
+async function loadLavanderia() {
+  setLaundryLabels_();
+  const hint = document.getElementById("laundryHint");
+  try {
+    const res = await api("lavanderia", { method:"GET", showLoader:false });
+    const rows = Array.isArray(res) ? res
+      : (res && Array.isArray(res.data) ? res.data
+      : (res && res.data && Array.isArray(res.data.data) ? res.data.data
+      : (res && Array.isArray(res.rows) ? res.rows
+      : [])));
+    const list = (rows || []).map(sanitizeLaundryItem_).sort((a,b) => String(b.endDate||"").localeCompare(String(a.endDate||"")));
+    state.laundry.list = list;
+    renderLaundryHistory_(list);
+    renderLaundry_(list[0] || null);
+    if (hint) hint.textContent = "";
+  } catch (e) {
+    if (hint) hint.textContent = "";
+    throw e;
+  }
+}
+
+async function createLavanderiaReport_() {
+  const hint = document.getElementById("laundryHint");
+  const fromEl = document.getElementById("laundryFrom");
+  const toEl = document.getElementById("laundryTo");
+
+  const startDate = (fromEl && fromEl.value) ? String(fromEl.value).trim() : "";
+  const endDate = (toEl && toEl.value) ? String(toEl.value).trim() : "";
+  try{ if (typeof __laundrySyncDateText === "function") __laundrySyncDateText(); }catch(_){ }
+
+  if (!startDate || !endDate) {
+    if (hint) hint.textContent = "";
+    toast("Seleziona le date");
+    return null;
+  }
+  if (startDate > endDate) {
+    if (hint) hint.textContent = "";
+    toast("Intervallo non valido");
+    return null;
+  }
+
+  if (hint) hint.textContent = "";
+  const res = await api("lavanderia", { method:"POST", body: { startDate, endDate }, showLoader:true });
+  const item = sanitizeLaundryItem_(res && res.data ? res.data : res);
+
+  await loadLavanderia();
+  renderLaundry_(item);
+
+  if (hint) hint.textContent = "";
+  return item;
+}
+
+
+/* Service Worker: forza update su iOS (cache-bust via query) */
+async function registerSW(){
+  if (!("serviceWorker" in navigator)) return;
+  try {
+    // Query param = BUILD_VERSION -> forza fetch del file SW anche con cache aggressiva
+    const reg = await navigator.serviceWorker.register(`./service-worker.js?v=${BUILD_VERSION}`, {
+      updateViaCache: "none"
+    });
+
+    const checkUpdate = () => {
+      try { reg?.update?.(); } catch (_) {}
+    };
+
+    // check immediato + quando torna in primo piano
+    checkUpdate();
+    window.addEventListener("focus", checkUpdate);
+    document.addEventListener("visibilitychange", () => {
+      if (!document.hidden) checkUpdate();
+    });
+    // check periodico (non invasivo)
+    setInterval(checkUpdate, 60 * 60 * 1000);
+
+    // Se viene trovata una nuova versione, prova ad attivarla subito
+    reg.addEventListener("updatefound", () => {
+      const nw = reg.installing;
+      if (!nw) return;
+      nw.addEventListener("statechange", () => {
+        if (nw.state === "installed" && navigator.serviceWorker.controller) {
+          try { nw.postMessage({ type: "SKIP_WAITING" }); } catch (_) {}
+        }
+      });
+    });
+
+    // se cambia controller, ricarica una volta per prendere i file nuovi
+    let reloaded = false;
+    navigator.serviceWorker.addEventListener("controllerchange", () => {
+      if (reloaded) return;
+      reloaded = true;
+      __requestSwReload();
+    });
+  } catch (_) {}
+}
+registerSW();
+
+
+
+
+
+try{ hardUpdateCheck(); }catch(_){}
+
+// iOS/PWA: quando l'app torna in foreground (senza un vero reload), alcune viste possono restare "stale".
+// Forziamo un refresh mirato del Calendario se e' la pagina attiva.
+async function __onAppResume(){
+  // Se nel frattempo e' stata deployata una nuova build, hardUpdateCheck fara' reload.
+  try{ await hardUpdateCheck(); }catch(_){ }
+
+  try{
+    if (state.page === "calendario") {
+      if (state.calendar){ state.calendar.ready = false; }
+      await ensureCalendarData({ force:true });
+      renderCalendario();
+    }
+  }catch(_){ }
+}
+
+try{
+  window.addEventListener("focus", () => { __onAppResume(); });
+  document.addEventListener("visibilitychange", () => {
+    if (!document.hidden) __onAppResume();
+  });
+}catch(_){ }
+// ---  helpers (sheet "stanze") ---
+function buildArrayFromState(){
+  const rooms = Array.from(state.guestRooms || []).map(n=>parseInt(n,10)).filter(n=>isFinite(n)).sort((a,b)=>a-b);
+  const lp = state.lettiPerStanza || {};
+  return rooms.map((n)=>{
+    const d = lp[String(n)] || lp[n] || {};
+    return {
+      stanza_num: n,
+      letto_m: !!d.matrimoniale,
+      letto_s: parseInt(d.singoli || 0, 10) || 0,
+      culla: !!d.culla,
+      note: (d.note || "").toString()
+    };
+  });
+}
+
+function applyToState(rows){
+  state.guestRooms = state.guestRooms || new Set();
+  state.lettiPerStanza = {};
+  state.bedsDirty = false;
+  state.stanzeSnapshotOriginal = "";
+  state.guestRooms.clear();
+  (Array.isArray(rows) ? rows : []).forEach(r=>{
+    const n = parseInt(r.stanza_num ?? r.stanzaNum ?? r.room ?? r.stanza, 10);
+    if (!isFinite(n) || n<=0) return;
+    state.guestRooms.add(n);
+    state.lettiPerStanza[String(n)] = {
+      matrimoniale: !!(r.letto_m ?? r.lettoM ?? r.matrimoniale),
+      singoli: parseInt(r.letto_s ?? r.lettoS ?? r.singoli, 10) || 0,
+      culla: !!(r.culla),
+      note: (r.note || "").toString()
+    };
+  });
+}
+
+// --- Room beds config (non-invasive) ---
+state.lettiPerStanza = state.lettiPerStanza || {};
+let __rc_room = null;
+
+function __rc_renderToggle(el, on){
+  el.innerHTML = `<span class="dot ${on?'on':''}"></span>`;
+  el.onclick = ()=> el.firstElementChild.classList.toggle('on');
+}
+function __rc_renderSingoli(el, n){
+  el.innerHTML = '';
+  for(let i=1;i<=3;i++){
+    const s=document.createElement('span');
+    s.className='dot'+(i<=n?' on':'');
+    s.onclick=()=>{
+      [...el.children].forEach((c,ix)=>c.classList.toggle('on', ix < i));
+    };
+    el.appendChild(s);
+  }
+}
+
+function openRoomConfig(room){
+  __rc_room = String(room);
+  const d = state.lettiPerStanza[__rc_room] || {matrimoniale:false,singoli:0,culla:false};
+  document.getElementById('roomConfigTitle').textContent = 'Stanza '+room;
+  __rc_renderToggle(document.getElementById('rc_matrimoniale'), d.matrimoniale);
+  __rc_renderSingoli(document.getElementById('rc_singoli'), d.singoli);
+  __rc_renderToggle(document.getElementById('rc_culla'), d.culla);
+  document.getElementById('roomConfigModal').hidden = false;
+}
+
+document.addEventListener('click', (e)=>{
+  const b = e.target.closest && e.target.closest('[data-room]');
+  if(!b) return;
+  // Le celle del calendario settimanale usano data-room: qui NON deve aprirsi la config stanza
+  if (b.closest && b.closest('#calGrid')) return;
+  openRoomConfig(b.getAttribute('data-room'));
+});
+
+document.getElementById('rc_save')?.addEventListener('click', ()=>{
+  const matrimoniale = document.querySelector('#rc_matrimoniale .dot')?.classList.contains('on')||false;
+  const culla = document.querySelector('#rc_culla .dot')?.classList.contains('on')||false;
+  const singoli = document.querySelectorAll('#rc_singoli .dot.on').length;
+  state.lettiPerStanza[__rc_room] = {matrimoniale, singoli, culla};
+  state.bedsDirty = true;
+  document.getElementById('roomConfigModal').hidden = true;
+});
+
+// Popup letti: Annulla (chiudi senza salvare)
+document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
+  const m = document.getElementById('roomConfigModal');
+  if (m) m.hidden = true;
+});
+// --- end room beds config ---
+
+
+// --- FIX dDAE_2.019: renderSpese allineato al backend ---
+// --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
+function renderSpese(){
+  const list = document.getElementById("speseList");
+  if (!list) return;
+  list.innerHTML = "";
+
+  let items = Array.isArray(state.spese) ? [...state.spese] : [];
+
+  // Ordina: data / inserimento / motivazione
+  const mode = String(state.speseSort || "date");
+  const withIdx = items.map((s, idx) => ({ s, idx }));
+
+  const toTime = (v) => {
+    if (!v) return null;
+    const s = String(v);
+    const iso = s.slice(0, 10);
+    if (/^\d{4}-\d{2}-\d{2}$/.test(iso)){
+      const t = Date.parse(iso + "T00:00:00Z");
+      return isNaN(t) ? null : t;
+    }
+    const t = Date.parse(s);
+    return isNaN(t) ? null : t;
+  };
+
+  withIdx.sort((a, b) => {
+    if (mode === "motivazione"){
+      const am = (a.s.motivazione || a.s.motivo || "").toString().trim().toLowerCase();
+      const bm = (b.s.motivazione || b.s.motivo || "").toString().trim().toLowerCase();
+      const c = am.localeCompare(bm, "it", { sensitivity: "base" });
+      return c !== 0 ? c : (a.idx - b.idx);
+    }
+
+    if (mode === "insert"){
+      const ta = toTime(a.s.createdAt || a.s.created_at) ?? a.idx;
+      const tb = toTime(b.s.createdAt || b.s.created_at) ?? b.idx;
+      // Nuovi prima
+      return (tb - ta);
+    }
+
+    // mode === "date" (default): più recenti prima
+    const da = toTime(a.s.dataSpesa || a.s.data || a.s.data_spesa);
+    const db = toTime(b.s.dataSpesa || b.s.data || b.s.data_spesa);
+    if (da == null && db == null) return a.idx - b.idx;
+    if (da == null) return 1;
+    if (db == null) return -1;
+    return (db - da);
+  });
+
+  items = withIdx.map(x => x.s);
+  if (!items.length){
+    list.innerHTML = '<div style="font-size:13px; opacity:.75; padding:8px 2px;">Nessuna spesa nel periodo.</div>';
+    return;
+  }
+
+  items.forEach(s => {
+    const el = document.createElement("div");
+    el.className = "item spesa-bg";
+    const cls = spesaCategoryClass(s);
+    if (cls) el.classList.add(cls);
+
+    const importo = Number(s.importoLordo || 0);
+    const data = formatShortDateIT(s.dataSpesa || s.data || s.data_spesa || "");
+    const motivoTxt = (s.motivazione || s.motivo || "").toString();
+    const motivo = escapeHtml(motivoTxt);
+
+    el.innerHTML = `
+      <div class="item-top" style="align-items:center;">
+        <div class="spesa-line" title="${motivo}">
+          <span class="spesa-imp">${euro(importo)}</span>
+          <span class="spesa-sep">·</span>
+          <span class="spesa-date">${data}</span>
+          <span class="spesa-sep">·</span>
+          <span class="spesa-motivo">${motivo}</span>
+        </div>
+        <button class="delbtn delbtn-x" type="button" aria-label="Elimina record" data-del="${s.id}">Elimina</button>
+      </div>
+    `;
+
+    const btn = el.querySelector("[data-del]");
+    if (btn) btn.addEventListener("click", async () => {
+      if (!confirm("Eliminare definitivamente questa spesa?")) return;
+      await api("spese", { method:"DELETE", params:{ id: s.id } });
+      toast("Spesa eliminata");
+      invalidateApiCache("spese|");
+      invalidateApiCache("report|");
+      await ensurePeriodData({ showLoader:false, force:true });
+      renderSpese();
+    });
+
+    list.appendChild(el);
+  });
+}
+
+
+
+// --- FIX dDAE_2.019: delete reale ospiti ---
+function attachDeleteOspite(card, ospite){
+  const btn = document.createElement("button");
+  btn.className = "delbtn";
+  btn.textContent = "Elimina";
+  btn.addEventListener("click", async () => {
+    if (!confirm("Eliminare definitivamente questo ospite?")) return;
+    await api("ospiti", { method:"DELETE", params:{ id: ospite.id } });
+    toast("Ospite eliminato");
+    invalidateApiCache("ospiti|");
+    invalidateApiCache("stanze|");
+    try{ if (state.calendar){ state.calendar.ready = false; state.calendar.rangeKey = ""; } }catch(_){ }
+    await loadOspiti({ ...(state.period || {}), force:true });
+  });
+  const actions = card.querySelector(".actions") || card;
+  actions.appendChild(btn);
+}
+
+
+// Hook delete button into ospiti render
+(function(){
+  const orig = window.renderOspiti;
+  if (!orig) return;
+  window.renderOspiti = function(){
+    orig();
+    const cards = document.querySelectorAll(".guest-card");
+    cards.forEach(card => {
+      const id = card.getAttribute("data-id");
+      const ospite = (state.ospiti||[]).find(o=>String(o.id)===String(id));
+      if (ospite) attachDeleteOspite(card, ospite);
+    });
+  }
+})();
+
+
+// --- FIX dDAE_2.019: mostra nome ospite ---
+(function(){
+  const orig = window.renderOspiti;
+  if (!orig) return;
+  window.renderOspiti = function(){
+    orig();
+    document.querySelectorAll(".guest-card").forEach(card=>{
+      const id = card.getAttribute("data-id");
+      const ospite = (state.ospiti||[]).find(o=>String(o.id)===String(id));
+      if(!ospite) return;
+      if(card.querySelector(".guest-name")) return;
+      const name = document.createElement("div");
+      name.className = "guest-name";
+      name.textContent = ospite.nome || ospite.name || "Ospite";
+      name.style.fontWeight = "950";
+      name.style.fontSize = "18px";
+      name.style.marginBottom = "6px";
+      card.prepend(name);
+    });
+  }
+})();
+
+
+
+// ===== Tassa di soggiorno =====
+let __tassaBound = false;
+
+function __parseDateFlexibleToISO(unknown){
+  // Ritorna ISO YYYY-MM-DD oppure "" se non parsabile
+  const s = String(unknown || "").trim();
+  if (!s) return "";
+  // ISO date (YYYY-MM-DD) or ISO datetime
+  const mIso = s.match(/^(\d{4})-(\d{2})-(\d{2})/);
+  if (mIso) return `${mIso[1]}-${mIso[2]}-${mIso[3]}`;
+  // dd/mm/yyyy
+  const mIt = s.match(/^(\d{1,2})\/(\d{1,2})\/(\d{4})$/);
+  if (mIt){
+    const dd = String(mIt[1]).padStart(2,"0");
+    const mm = String(mIt[2]).padStart(2,"0");
+    const yy = mIt[3];
+    return `${yy}-${mm}-${dd}`;
+  }
+  return "";
+}
+
+function __utcDay(y,m,d){ return Date.UTC(y, m-1, d); }
+
+function __daysBetweenUTC(isoA, isoB){
+  // isoA, isoB: YYYY-MM-DD ; ritorna giorni interi (B - A)
+  const [ya,ma,da] = isoA.split("-").map(n=>parseInt(n,10));
+  const [yb,mb,db] = isoB.split("-").map(n=>parseInt(n,10));
+  const ta = __utcDay(ya,ma,da);
+  const tb = __utcDay(yb,mb,db);
+  return Math.round((tb - ta) / 86400000);
+}
+
+function __addDaysISO(iso, delta){
+  const [y,m,d] = iso.split("-").map(n=>parseInt(n,10));
+  const dt = new Date(Date.UTC(y, m-1, d));
+  dt.setUTCDate(dt.getUTCDate() + delta);
+  const yy = dt.getUTCFullYear();
+  const mm = String(dt.getUTCMonth()+1).padStart(2,"0");
+  const dd = String(dt.getUTCDate()).padStart(2,"0");
+  return `${yy}-${mm}-${dd}`;
+}
+
+function __overlapNights(checkInISO, checkOutISO, fromISO, toISO_inclusive){
+  // Intersezione tra [checkIn, checkOut) e [from, to+1)
+  const toExcl = __addDaysISO(toISO_inclusive, 1);
+  const start = (checkInISO > fromISO) ? checkInISO : fromISO;
+  const end   = (checkOutISO < toExcl) ? checkOutISO : toExcl;
+  const n = __daysBetweenUTC(start, end);
+  return (isFinite(n) && n > 0) ? n : 0;
+}
+
+function resetTassaUI(){
+  const res = $("#taxResults");
+  if (res) res.hidden = true;
+  const rb = $("#taxReportBtn");
+  if (rb) rb.disabled = true;
+
+  const ids = ["taxPayingCount","taxPayingAmount","taxKidsCount","taxKidsAmount","taxReducedCount","taxReducedAmount"];
+  ids.forEach(id => { const el = $("#"+id); if (el) el.textContent = "—"; });
+}
+
+async function calcTassa(){
+  const fromEl = $("#taxFrom");
+  const toEl = $("#taxTo");
+  const from = fromEl ? fromEl.value : "";
+  const to   = toEl ? toEl.value : "";
+  if (!from || !to){
+    toast("Seleziona un periodo (Da/A)");
+    resetTassaUI();
+    return;
+  }
+  if (to < from){
+    toast("Il periodo non è valido");
+    resetTassaUI();
+    return;
+  }
+
+  // Prende i dati SOLO dalle prenotazioni (foglio ospiti)
+  const ospiti = await api("ospiti", { method:"GET" }) || [];
+
+  let payingPres = 0;
+  let kidsPres = 0;
+  let reducedPres = 0;
+
+  for (const o of ospiti){
+    const inISO  = __parseDateFlexibleToISO(o.check_in || o.checkIn);
+    const outISO = __parseDateFlexibleToISO(o.check_out || o.checkOut);
+    if (!inISO || !outISO) continue;
+
+    const nights = __overlapNights(inISO, outISO, from, to);
+    if (!nights) continue;
+
+    const adults = Number(o.adulti || 0) || 0;
+    const kids   = Number(o.bambini_u10 || 0) || 0;
+
+    // Ridotti: campo futuro (se presente). Esempi supportati: ridotti, anziani, ridotti_n
+    const red = Number(o.ridotti ?? o.anziani ?? o.ridotti_n ?? 0) || 0;
+
+    const redClamped = Math.max(0, Math.min(adults, red));
+    const fullAdults = Math.max(0, adults - redClamped);
+
+    payingPres  += fullAdults * nights;
+    reducedPres += redClamped * nights;
+    kidsPres    += kids * nights;
+  }
+
+  const rate = (state.settings && state.settings.loaded) ? (getSettingNumber("tassa_soggiorno", (typeof TOURIST_TAX_EUR_PPN !== "undefined" ? TOURIST_TAX_EUR_PPN : 0)) || 0) : (Number(typeof TOURIST_TAX_EUR_PPN !== "undefined" ? TOURIST_TAX_EUR_PPN : 0) || 0);
+  const redFactor = Number(typeof TOURIST_TAX_REDUCED_FACTOR !== "undefined" ? TOURIST_TAX_REDUCED_FACTOR : 1) || 1;
+
+  const payingAmt  = payingPres * rate;
+  const reducedAmt = reducedPres * rate * redFactor;
+
+  // salva per report
+  state._taxLast = { from, to, payingPres, kidsPres, reducedPres, rate, redFactor, payingAmt, reducedAmt, totalAmt: (payingAmt + reducedAmt) };
+
+  // UI: mostra solo dopo click Calcola
+  const res = $("#taxResults");
+  if (res) res.hidden = false;
+  const rb = $("#taxReportBtn");
+  if (rb) rb.disabled = false;
+
+  const pc = $("#taxPayingCount"); if (pc) pc.textContent = String(payingPres);
+  const pa = $("#taxPayingAmount"); if (pa) pa.textContent = formatEUR(payingAmt);
+
+  const kc = $("#taxKidsCount"); if (kc) kc.textContent = String(kidsPres);
+  const ka = $("#taxKidsAmount"); if (ka) ka.textContent = "—"; // non pagano
+
+  const rc = $("#taxReducedCount"); if (rc) rc.textContent = String(reducedPres);
+  const ra = $("#taxReducedAmount"); if (ra) ra.textContent = formatEUR(reducedAmt);
+}
+
+
+function buildTaxReportText(){
+  const t = state._taxLast;
+  if (!t) return "Premi prima Calcola.";
+  const lines = [];
+  lines.push("Report tassa di soggiorno");
+  lines.push(`Periodo: ${t.from} → ${t.to}`);
+  lines.push("");
+  lines.push(`Presenze paganti: ${t.payingPres}`);
+  lines.push(`Importo paganti: ${formatEUR(t.payingAmt)}`);
+  lines.push("");
+  lines.push(`Presenze ridotte: ${t.reducedPres}`);
+  lines.push(`Importo ridotti: ${formatEUR(t.reducedAmt)}`);
+  lines.push("");
+  lines.push(`Bambini (<10): ${t.kidsPres} (esenti)`);
+  lines.push("");
+  lines.push(`Tariffa: ${formatEUR(t.rate)} / persona / notte`);
+  if (t.redFactor !== 1) lines.push(`Fattore ridotti: ${String(t.redFactor)}`);
+  lines.push("");
+  lines.push(`TOTALE: ${formatEUR(t.totalAmt)}`);
+  return lines.join("\n");
+}
+
+function openTaxReportModal(text){
+  const modal = document.getElementById("taxReportModal");
+  const pre = document.getElementById("taxReportText");
+  const closeBtn = document.getElementById("taxReportCloseBtn");
+  const copyBtn = document.getElementById("taxReportCopyBtn");
+
+  if (!modal || !pre) return;
+  pre.textContent = text || "";
+
+  modal.hidden = false;
+  modal.setAttribute("aria-hidden","false");
+
+  const close = () => {
+    modal.hidden = true;
+    modal.setAttribute("aria-hidden","true");
+  };
+
+  // click su overlay chiude
+  const onOverlay = (e)=>{
+    if (e.target === modal) close();
+  };
+  modal.addEventListener("click", onOverlay, { once:true });
+
+  if (closeBtn){
+    closeBtn.onclick = close;
+  }
+
+  if (copyBtn){
+    copyBtn.onclick = async () => {
+      try{
+        const txt = pre.textContent || "";
+        if (navigator.clipboard && navigator.clipboard.writeText){
+          await navigator.clipboard.writeText(txt);
+        } else {
+          // fallback
+          const ta = document.createElement("textarea");
+          ta.value = txt;
+          document.body.appendChild(ta);
+          ta.select();
+          document.execCommand("copy");
+          ta.remove();
+        }
+        toast("Copiato");
+      }catch(_){
+        toast("Impossibile copiare");
+      }
+    };
+  }
+}
+
+
+function initTassaPage(){
+  if (__tassaBound) return;
+  __tassaBound = true;
+
+  const from = $("#taxFrom");
+  const to = $("#taxTo");
+  if (from) from.addEventListener("change", resetTassaUI);
+  if (to) to.addEventListener("change", resetTassaUI);
+
+  const btn = $("#taxCalcBtn");
+  if (btn){
+    bindFastTap(btn, async () => {
+      try { await calcTassa(); }
+      catch (err) { toast(String(err && err.message || err || "Errore")); resetTassaUI(); }
+    });
+  }
+
+
+// Stato iniziale: risultati nascosti finché non premi "Calcola"
+  resetTassaUI();
+}
+
+
+/* =========================
+   Ore pulizia (Calendario ore operatori)
+   Build: dDAE_2.019
+========================= */
+
+state.orepulizia = state.orepulizia || {
+  inited: false,
+  monthKey: "",          // "YYYY-MM"
+  operatore: "",         // nome operatore oppure "__ALL__"
+  rows: [],              // righe da foglio operatori
+  months: []             // [{key,label}]
+};
+
+function __capitalizeFirst_(s){
+  s = String(s||"");
+  return s ? (s[0].toUpperCase() + s.slice(1)) : "";
+}
+
+function formatMonthYearIT_(monthKey){
+  // monthKey = "YYYY-MM"
+  if (!monthKey || !/^\d{4}-\d{2}$/.test(monthKey)) return "";
+  const parts = monthKey.split("-").map(n=>parseInt(n,10));
+  const y = parts[0], m = parts[1];
+  const dt = new Date(y, (m-1), 1);
+  const s = dt.toLocaleDateString("it-IT", { month:"long", year:"numeric" });
+  return __capitalizeFirst_(s);
+}
+
+function __fmtHours_(h){
+  const n = Number(h||0);
+  if (!isFinite(n) || n <= 0) return "";
+  // 2 dec max, no trailing zeros
+  let s = (Math.round(n * 100) / 100).toFixed(2);
+  s = s.replace(/\.00$/, "").replace(/0$/, "");
+  // italiano: virgola
+  s = s.replace(".", ",");
+  return s;
+}
+
+function __fmtMoneyNoSpace_(amount){
+  const n = Number(amount || 0);
+  if (!isFinite(n)) return "—";
+  // Formato italiano senza spazio prima di €
+  const s = n.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+  return s + "€";
+}
+
+
+function __getUniqueMonthsFromRows_(rows){
+  const set = new Set();
+  (rows||[]).forEach(r=>{
+    const iso = formatISODateLocal(r.data || r.date || r.Data || "");
+    if (!iso) return;
+    if (/^\d{4}-\d{2}-\d{2}$/.test(iso)) set.add(iso.slice(0,7));
+  });
+  return Array.from(set).sort();
+}
+
+async function __loadOperatoriRows_(){
+  try{
+    const res = await api("operatori", { method:"GET", showLoader:true });
+    const rows = res && (res.rows || res.items) ? (res.rows || res.items) : [];
+    return Array.isArray(rows) ? rows : [];
+  }catch(e){
+    console.warn("Operatori load failed", e);
+    return [];
+  }
+}
+
+function __fillSelect_(sel, items, value){
+  if (!sel) return;
+  sel.innerHTML = "";
+  (items||[]).forEach(it=>{
+    const opt = document.createElement("option");
+    opt.value = it.value;
+    opt.textContent = it.label;
+    sel.appendChild(opt);
+  });
+  if (value) sel.value = value;
+}
+
+function __fmtHoursOrDash_(h){
+  const s = __fmtHours_(h);
+  return s ? s : "—";
+}
+
+function __opLabel_(op){
+  const v = String(op||"").trim();
+  if (!v || v === "__ALL__") return "Tutti";
+  const low = v.toLowerCase();
+  // Title-case semplice (spazi, trattini, apostrofi)
+  return low.replace(/(^|[\s\-'])\S/g, (m) => m.toUpperCase());
+}
+
+function __renderOrePuliziaCalendar_(){
+  const grid = document.getElementById("opcalGrid");
+  if (!grid) return;
+
+  const monthKey = state.orepulizia.monthKey;
+  if (!monthKey || !/^\d{4}-\d{2}$/.test(monthKey)) {
+    grid.innerHTML = "";
+    return;
+  }
+
+  const titleEl = document.getElementById("opcalTitleMain");
+  const totalEl = document.getElementById("opcalTotalHours");
+  const daysEl = document.getElementById("opcalDaysWithHours");
+
+  const monthLabel = formatMonthYearIT_(monthKey) || monthKey;
+  const op = String(state.orepulizia.operatore || "").trim();
+  const opDisp = __opLabel_(op);
+
+  if (titleEl) titleEl.textContent = `${opDisp} - ${monthLabel}`;
+
+  const parts = monthKey.split("-").map(n=>parseInt(n,10));
+  const Y = parts[0], M = parts[1]; // 1..12
+  const first = new Date(Y, M-1, 1);
+  const daysInMonth = new Date(Y, M, 0).getDate();
+
+  // Lun=0..Dom=6
+  const jsDow = first.getDay(); // Dom=0..Sab=6
+  const dowMon0 = (jsDow + 6) % 7; // convert to Mon=0
+  const totalCells = 42; // 6 settimane
+
+  // ore per giorno
+  const rows = state.orepulizia.rows || [];
+  const hoursByDay = new Map();
+  rows.forEach(r=>{
+    const iso = formatISODateLocal(r.data || r.date || r.Data || "");
+    if (!iso) return;
+    if (!iso.startsWith(monthKey + "-")) return;
+
+    const oper = String(r.operatore || r.nome || "").trim();
+    if (op && op !== "__ALL__" && oper !== op) return;
+
+    const oreRaw = (r.ore !== undefined && r.ore !== null) ? r.ore : (r.Ore !== undefined ? r.Ore : "");
+    const ore = Number(String(oreRaw).trim().replace(",", "."));
+    if (!isFinite(ore) || ore <= 0) return;
+
+    const d = parseInt(iso.slice(8,10), 10);
+    if (!d) return;
+    hoursByDay.set(d, (hoursByDay.get(d) || 0) + ore);
+  });
+
+  // stats
+  let totalHours = 0;
+  let presenze = 0;
+  for (const h of hoursByDay.values()){
+    if (h > 0){
+      totalHours += h;
+      presenze += 1;
+    }
+  }
+
+  // Tariffe da impostazioni
+  // - tariffa_oraria: €/ora
+  // - costo_benzina: €/presenza (giorno con ore)
+  const tariffaOraria = (state.settings && state.settings.loaded) ? getSettingNumber("tariffa_oraria", 0) : 0;
+  const costoBenzinaPerPresenza = (state.settings && state.settings.loaded) ? getSettingNumber("costo_benzina", 0) : 0;
+
+  const hoursStr = __fmtHours_(totalHours);
+  const totalImporto = (isFinite(totalHours) && isFinite(tariffaOraria)) ? (totalHours * tariffaOraria) : 0;
+  const totalImportoStr = (tariffaOraria > 0) ? __fmtMoneyNoSpace_(totalImporto) : "—";
+
+  const presenzeImporto = (isFinite(presenze) && isFinite(costoBenzinaPerPresenza)) ? (presenze * costoBenzinaPerPresenza) : 0;
+  const presenzeImportoStr = (costoBenzinaPerPresenza > 0) ? __fmtMoneyNoSpace_(presenzeImporto) : "—";
+
+  if (totalEl) {
+    totalEl.textContent = hoursStr ? `${hoursStr} ore - ${totalImportoStr}` : "—";
+  }
+  if (daysEl) {
+    daysEl.textContent = presenze > 0 ? `${presenze} transfert - ${presenzeImportoStr}` : "—";
+  }
+
+  // build cells
+  grid.innerHTML = "";
+  for (let i=0; i<totalCells; i++) {
+    const cell = document.createElement("div");
+    cell.className = "opcal-cell";
+
+    const dayNum = i - dowMon0 + 1;
+    if (dayNum < 1 || dayNum > daysInMonth) {
+      cell.classList.add("is-empty");
+      grid.appendChild(cell);
+      continue;
+    }
+
+    const dayEl = document.createElement("div");
+    dayEl.className = "opcal-day";
+    dayEl.textContent = String(dayNum);
+    cell.appendChild(dayEl);
+
+    const h = hoursByDay.get(dayNum) || 0;
+    if (h > 0) {
+      const hEl = document.createElement("div");
+      hEl.className = "opcal-hours";
+      hEl.textContent = __fmtHours_(h); // no zeri
+      cell.appendChild(hEl);
+    }
+
+    grid.appendChild(cell);
+  }
+}
+
+async function initOrePuliziaPage(){
+  const s = state.orepulizia;
+  const back = document.getElementById("opcalBack");
+  const selMonth = document.getElementById("opcalMonthSelect");
+  const selOp = document.getElementById("opcalOperatorSelect");
+
+  // Serve per mostrare importi in "Totali ore" e "Spese Benzina"
+  try{ await ensureSettingsLoaded({ force:false, showLoader:false }); }catch(_){}
+
+  if (!s.inited){
+    s.inited = true;
+
+    if (back) back.addEventListener("click", ()=>showPage("pulizie"));
+
+    // Topbar: tasto arancione "torna a Pulizie"
+    const topBack = document.getElementById("backBtnTop");
+    if (topBack && !s._topBackBound){
+      s._topBackBound = true;
+      bindFastTap(topBack, () => { try{ showPage("pulizie"); }catch(_){ } });
+    }
+
+    if (selMonth) selMonth.addEventListener("change", ()=>{
+      s.monthKey = selMonth.value;
+      __renderOrePuliziaCalendar_();
+    });
+
+    if (selOp) selOp.addEventListener("change", ()=>{
+      s.operatore = selOp.value;
+      __renderOrePuliziaCalendar_();
+    });
+  }
+
+  // dati
+  await ensureSettingsLoaded({ force:false, showLoader:false });
+  s.rows = await __loadOperatoriRows_();
+
+  // mesi
+  const months = __getUniqueMonthsFromRows_(s.rows);
+  const now = new Date();
+  const nowKey = String(now.getFullYear()) + "-" + String(now.getMonth()+1).padStart(2,"0");
+  if (!months.includes(nowKey)) months.push(nowKey);
+  months.sort();
+
+  s.months = months.map(k=>({ key:k, label: formatMonthYearIT_(k) }));
+  const monthItems = s.months.map(m=>({ value:m.key, label:m.label }));
+
+  // default month: ultimo (più recente)
+  if (!s.monthKey) s.monthKey = monthItems.length ? monthItems[monthItems.length-1].value : nowKey;
+
+  __fillSelect_(selMonth, monthItems, s.monthKey);
+
+  // operatori list: da impostazioni + da righe
+  let fromSet = [];
+  try{ fromSet = getOperatorNamesFromSettings(); }catch(_){ fromSet = []; }
+  const fromRows = Array.from(new Set((s.rows||[]).map(r=>String(r.operatore||r.nome||"").trim()).filter(Boolean))).sort();
+  const ops = Array.from(new Set([...(fromSet||[]), ...(fromRows||[])]))
+    .filter(Boolean)
+    .sort();
+
+  // opzioni: TUTTI + operatori
+  const opItems = [{ value:"__ALL__", label:"TUTTI" }, ...ops.map(x=>({ value:x, label:x }))];
+
+  // default operatore
+  if (!s.operatore) s.operatore = ops.length ? ops[0] : "__ALL__";
+  if (!opItems.some(o=>o.value === s.operatore)) s.operatore = ops.length ? ops[0] : "__ALL__";
+
+  __fillSelect_(selOp, opItems, s.operatore);
+
+  __renderOrePuliziaCalendar_();
+}
+
