@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.044";
+const BUILD_VERSION = "dDAE_2.045";
 
 
 function __parseBuildVersion(v){
@@ -1830,7 +1830,7 @@ state.page = page;
     statGenTopTools.hidden = (page !== "statgen");
   }
 
-  // Top tools (Statistiche → Incassi mensili)
+  // Top tools (Statistiche → Fatturati mensili)
   const statMensiliTopTools = $("#statMensiliTopTools");
   if (statMensiliTopTools){
     statMensiliTopTools.hidden = (page !== "statmensili");
@@ -2924,7 +2924,7 @@ function renderStatGen(){
 
 
 
-// ===== Statistiche: Incassi mensili =====
+// ===== Statistiche: Fatturati mensili =====
 function __hslToHex(h, s, l){
   h = ((h % 360) + 360) % 360;
   s = Math.max(0, Math.min(100, s)) / 100;
@@ -2955,14 +2955,29 @@ function __hslToHex(h, s, l){
 
 function __mensiliPalette12(){
   if (__mensiliPalette12._cache) return __mensiliPalette12._cache;
+  const root = document.documentElement;
+  const cs = getComputedStyle(root);
+  const pick = (name, fallback) => {
+    try{
+      const v = (cs.getPropertyValue(name) || "").trim();
+      return v || fallback;
+    }catch(_){ return fallback; }
+  };
+
+  // Palette coerente con l'app (CSS variables in :root)
+  const base = [
+    pick("--p1", "#2B7CB4"),
+    pick("--p2", "#4D9CC5"),
+    pick("--p3", "#6FB7D6"),
+    pick("--p4", "#96BFC7"),
+    pick("--p5", "#BFBEA9"),
+    pick("--p6", "#D6B286"),
+    pick("--p7", "#CF9458"),
+    pick("--p8", "#C9772B"),
+  ];
+
   const out = [];
-  const h0 = 0;     // rosso
-  const h1 = 275;   // indaco
-  for (let i = 0; i < 12; i++){
-    const t = (12 === 1) ? 0 : (i / 11);
-    const h = h0 + (h1 - h0) * t;
-    out.push(__hslToHex(h, 86, 55));
-  }
+  for (let i = 0; i < 12; i++) out.push(base[i % base.length]);
   __mensiliPalette12._cache = out;
   return out;
 }
@@ -2975,6 +2990,21 @@ const __MONTHS_IT = [
 function computeStatMensili(){
   const guests = Array.isArray(state.guests) ? state.guests : [];
   const byMonth = new Array(12).fill(0);
+
+  const money = (v) => {
+    if (v === null || v === undefined) return 0;
+    if (typeof v === "number") return isFinite(v) ? v : 0;
+    let s = String(v).trim();
+    if (!s) return 0;
+    // Normalizza numeri tipo "1.234,56" o "1234,56"
+    if (s.includes(",") && s.includes(".")) {
+      s = s.replace(/\./g, "").replace(",", ".");
+    } else if (s.includes(",")) {
+      s = s.replace(",", ".");
+    }
+    const n = Number(s);
+    return isFinite(n) ? n : 0;
+  };
 
   for (const gg of guests){
     let iso = "";
@@ -2997,12 +3027,11 @@ function computeStatMensili(){
     const mm = parseInt(iso.slice(5,7), 10);
     if (!Number.isFinite(mm) || mm < 1 || mm > 12) continue;
 
-    const dep = Number(gg?.acconto_importo || 0) || 0;
-    const saldo = Number(gg?.saldo_pagato ?? gg?.saldoPagato ?? gg?.saldo ?? 0) || 0;
-    const tot = dep + saldo;
-    if (!isFinite(tot) || tot === 0) continue;
+    // Fatturati mensili = somma di tutte le voci "importo prenotazione" (stessa regola del fatturato totale)
+    const pren = money(gg?.importo_prenotazione ?? gg?.importo_prenota ?? gg?.importoPrenotazione ?? gg?.importoPrenota ?? 0);
+    if (!isFinite(pren) || pren === 0) continue;
 
-    byMonth[mm - 1] += tot;
+    byMonth[mm - 1] += pren;
   }
 
   return { byMonth };
