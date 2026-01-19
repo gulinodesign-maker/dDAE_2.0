@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.033";
+const BUILD_VERSION = "dDAE_2.034";
 
 
 function __parseBuildVersion(v){
@@ -3543,7 +3543,7 @@ function renderRoomsReadOnly(ospite){
   `;
 }
 
-// ===== dDAE_2.033 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.034 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -3879,15 +3879,52 @@ function setupOspite(){
         }
 
         if (!gid) return;
-        if (!confirm("Eliminare definitivamente questo ospite?")) return;
+
+        // In sola lettura: se esistono più prenotazioni per lo stesso ospite, elimina TUTTI i gruppi contemporaneamente
+        let idsToDelete = [String(gid)];
+        try{
+          if (mode === "view"){
+            // 1) se abbiamo contesto multi gia' in memoria (aperto da lista), usalo
+            if (Array.isArray(state.guestGroupBookings) && state.guestGroupBookings.length){
+              const all = state.guestGroupBookings
+                .map(b => String(guestIdOf(b) || b?.id || "").trim())
+                .filter(Boolean);
+              if (all.length && all.includes(String(gid))) idsToDelete = Array.from(new Set(all));
+            }
+
+            // 2) fallback: ricostruisci gruppo dal dataset corrente (utile se aperto dal calendario)
+            if (!idsToDelete || idsToDelete.length <= 1){
+              const itemsNow = Array.isArray(state.ospiti) && state.ospiti.length ? state.ospiti : (Array.isArray(state.guests) ? state.guests : []);
+              const nm = String(item?.nome ?? item?.name ?? item?.Nome ?? "").trim();
+              const key = normalizeGuestNameKey(nm);
+              if (key){
+                const groups = groupGuestsByName(itemsNow || []);
+                const g = groups.find(x => String(x.key) === String(key));
+                if (g && Array.isArray(g.bookings) && g.bookings.length){
+                  const all2 = g.bookings.map(b => String(guestIdOf(b) || b?.id || "").trim()).filter(Boolean);
+                  if (all2.length && all2.includes(String(gid))) idsToDelete = Array.from(new Set(all2));
+                }
+              }
+            }
+          }
+        }catch(_){ idsToDelete = [String(gid)]; }
+
+        const msg = (idsToDelete.length > 1)
+          ? "Eliminare definitivamente questa prenotazione (tutti i gruppi)?"
+          : "Eliminare definitivamente questo ospite?";
+        if (!confirm(msg)) return;
 
         try {
-          await api("ospiti", { method:"DELETE", params:{ id: gid }});
+          for (const id of idsToDelete){
+            await api("ospiti", { method:"DELETE", params:{ id }});
+          }
           toast("Ospite eliminato");
           invalidateApiCache("ospiti|");
           invalidateApiCache("stanze|");
           try{ if (state.calendar){ state.calendar.ready = false; state.calendar.rangeKey = ""; } }catch(_){ }
           await loadOspiti({ ...(state.period || {}), force:true });
+          // pulisci contesto multi
+          try{ state.guestGroupBookings = null; state.guestGroupActiveId = null; state.guestGroupKey = null; clearGuestMulti(); }catch(_){ }
           showPage("ospiti");
         } catch (err) {
           toast(err?.message || "Errore");
@@ -4375,24 +4412,23 @@ function renderGuestCards(){
 
     const arrivoText = formatLongDateIT(first.check_in || first.checkIn || "") || "—";
 
-    const bookingsHTML = `<div class="guest-bookings">${group.bookings.map((b) => buildGuestBookingBlockHTML(b, { mode: "list" })).join("")}</div>`;
-
     card.tabIndex = 0;
     card.setAttribute("role", "button");
     card.setAttribute("aria-label", `Apri scheda ospite: ${nome}`);
 
     card.innerHTML = `
-      <div class="guest-row">
+      <div class="guest-row guest-row-compact">
         <div class="guest-main">
           ${insNo ? `<span class="guest-insno">${insNo}</span>` : ``}
-          <span class="guest-name-text">${nome}</span>
+          <div class="guest-nameblock">
+            <span class="guest-name-text">${nome}</span>
+            <span class="guest-arrivo guest-arrivo-under" aria-label="Arrivo">${arrivoText}</span>
+          </div>
         </div>
-        <div class="guest-meta-right" aria-label="Arrivo e stato">
-          <span class="guest-arrivo" aria-label="Arrivo">${arrivoText}</span>
+        <div class="guest-meta-right" aria-label="Stato">
           <span class="guest-led ${led.cls}" aria-label="${led.label}" title="${led.label}"></span>
         </div>
       </div>
-      ${bookingsHTML}
     `;
 
     const open = () => {
