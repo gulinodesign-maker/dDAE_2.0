@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.029";
+const BUILD_VERSION = "dDAE_2.031";
 
 
 function __parseBuildVersion(v){
@@ -3492,39 +3492,44 @@ function renderRoomsReadOnly(ospite){
 
   const stackHTML = buildRoomsStackHTML(guestId, roomsArr);
 
-  // Pillola: notti + tassa di soggiorno (solo in sola lettura)
-  const nights = calcStayNights(ospite);
-  let pillHTML = ``;
+  const ci = formatLongDateIT(ospite?.check_in ?? ospite?.checkIn ?? "") || "—";
+  const co = formatLongDateIT(ospite?.check_out ?? ospite?.checkOut ?? "") || "—";
 
+  // Range date sempre visibile (pill bianca)
+  const datesHTML = `<div class="guest-booking-dates-pill">${ci} → ${co}</div>`;
+
+  // Matrimonio: pallino verde con "M" bianca, in alto a destra (allineato alla pill date)
+  const marriageOn = !!(ospite?.matrimonio);
+  const topRightHTML = marriageOn ? `<span class="marriage-dot" aria-label="Matrimonio">M</span>` : ``;
+
+  // Notti + tassa: solo testo (no pillola)
+  const nights = calcStayNights(ospite);
+  let stayTextHTML = ``;
   if (nights != null){
     const tt = calcTouristTax(ospite, nights);
     const nightsLabel = (nights === 1) ? `1 notte` : `${nights} notti`;
     const taxLabel = `Tassa ${formatEUR(tt.total)}`;
-    pillHTML = `<span class="stay-pill" aria-label="Pernottamenti e tassa di soggiorno">
-      <span class="stay-pill__n">${nightsLabel}</span>
-      <span class="stay-pill__sep">•</span>
-      <span class="stay-pill__t">${taxLabel}</span>
-    </span>`;
+    stayTextHTML = `<div class="guest-booking-staytext" aria-label="Pernottamenti e tassa di soggiorno">${nightsLabel} • ${taxLabel}</div>`;
   }
-
-  // Matrimonio: pallino verde con "m" bianca, a sinistra della pillola (solo in sola lettura)
-  const marriageOn = !!(ospite?.matrimonio);
-
-  const rightHTML = pillHTML
-    ? `<div class="stay-right">${marriageOn ? `<span class="marriage-dot" aria-label="Matrimonio">M</span>` : ``}${pillHTML}</div>`
-    : ``;
 
   // Coerenza UI: usa lo stesso riquadro smussato delle prenotazioni multiple
   ro.innerHTML = `
     <div class="guest-booking-block guest-booking-block--primary">
+      <div class="guest-booking-top">
+        <div class="guest-booking-top-row">
+          ${datesHTML}
+          ${topRightHTML}
+        </div>
+        ${stayTextHTML}
+      </div>
       <div class="guest-booking-rooms guest-booking-ro">
-        <div class="rooms-readonly-wrap">${stackHTML}${rightHTML}</div>
+        <div class="rooms-readonly-wrap">${stackHTML}</div>
       </div>
     </div>
   `;
 }
 
-// ===== dDAE_2.029 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.031 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -3537,23 +3542,17 @@ function buildGuestBookingBlockHTML(ospite, { mode="view", showSelect=false, act
   const ci = formatLongDateIT(ospite?.check_in ?? ospite?.checkIn ?? "") || "—";
   const co = formatLongDateIT(ospite?.check_out ?? ospite?.checkOut ?? "") || "—";
 
+  // Notti + tassa: solo testo (no pillola)
   const nights = calcStayNights(ospite);
-  let stayHTML = "";
+  let stayTextHTML = "";
   if (nights != null){
     const tt = calcTouristTax(ospite, nights);
     const nightsLabel = (nights === 1) ? `1 notte` : `${nights} notti`;
     const taxLabel = `Tassa ${formatEUR(tt.total)}`;
-    stayHTML = `<span class="stay-pill" aria-label="Pernottamenti e tassa di soggiorno">
-      <span class="stay-pill__n">${nightsLabel}</span>
-      <span class="stay-pill__sep">•</span>
-      <span class="stay-pill__t">${taxLabel}</span>
-    </span>`;
+    stayTextHTML = `<div class="guest-booking-staytext" aria-label="Pernottamenti e tassa di soggiorno">${nightsLabel} • ${taxLabel}</div>`;
   }
 
   const marriageOn = !!(ospite?.matrimonio);
-  const stayLineHTML = (stayHTML || marriageOn)
-    ? `<div class="guest-booking-stay">${marriageOn ? `<span class="marriage-dot" aria-label="Matrimonio">M</span>` : ``}${stayHTML}</div>`
-    : ``;
 
   const isActive = (activeId && gid && String(activeId) === String(gid));
   const actionsHTML = (showSelect && gid)
@@ -3562,13 +3561,16 @@ function buildGuestBookingBlockHTML(ospite, { mode="view", showSelect=false, act
       </div>`
     : ``;
 
+  // Top right: azioni (in edit) altrimenti pallino matrimonio (in view)
+  const topRightHTML = actionsHTML || (marriageOn ? `<span class="marriage-dot" aria-label="Matrimonio">M</span>` : ``);
+
   return `<div class="guest-booking-block ${isActive ? "is-active" : ""}" data-booking-id="${gid}">
     <div class="guest-booking-top">
-      <div class="guest-booking-left">
-        <div class="guest-booking-dates">${ci} → ${co}</div>
-        ${stayLineHTML}
+      <div class="guest-booking-top-row">
+        <div class="guest-booking-dates-pill">${ci} → ${co}</div>
+        ${topRightHTML}
       </div>
-      ${actionsHTML || ``}
+      ${stayTextHTML || ``}
     </div>
     <div class="guest-booking-rooms">${roomsHTML}</div>
   </div>`;

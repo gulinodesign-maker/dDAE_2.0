@@ -41,7 +41,7 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.029"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.031"),
     radial-gradient(900px 600px at 10% 0%, rgba(43,124,180,0.10), transparent 62%),
     radial-gradient(800px 520px at 90% 8%, rgba(201,119,43,0.10), transparent 64%),
     radial-gradient(900px 700px at 20% 100%, rgba(111,183,214,0.10), transparent 62%),
@@ -777,7 +777,7 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.029"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.031"),
     radial-gradient(900px 650px at 12% 8%, rgba(43,124,180,0.18), transparent 62%),
     radial-gradient(820px 560px at 92% 14%, rgba(201,119,43,0.16), transparent 62%),
     radial-gradient(900px 700px at 18% 96%, rgba(111,183,214,0.16), transparent 62%),
@@ -3267,7 +3267,7 @@ body[data-page="ospiti"] .guest-card .actions {
   white-space: nowrap;
 }
 
-/* dDAE_2.029 — Multi prenotazioni per stesso nome (scheda unica con blocchi multipli) */
+/* dDAE_2.031 — Multi prenotazioni per stesso nome (scheda unica con blocchi multipli) */
 #page-ospiti .guest-bookings{
   margin-top: 10px;
   display: flex;
@@ -3292,9 +3292,34 @@ body.perf-lite .guest-booking-block{
 
 .guest-booking-top{
   display:flex;
-  align-items:flex-start;
+  flex-direction: column;
+  gap: 8px;
+}
+
+.guest-booking-top-row{
+  display:flex;
+  align-items:center;
   justify-content:space-between;
-  gap: 12px;
+  gap: 10px;
+}
+
+.guest-booking-dates-pill{
+  padding: 8px 12px;
+  border-radius: 999px;
+  background: rgba(255,255,255,0.88);
+  border: 1px solid rgba(15,23,42,0.08);
+  box-shadow: 0 8px 18px rgba(15,23,42,0.06);
+  font-size: 12px;
+  font-weight: 900;
+  color: rgba(15,23,42,0.82);
+  white-space: nowrap;
+  flex: 0 1 auto;
+}
+
+.guest-booking-staytext{
+  font-size: 12px;
+  font-weight: 850;
+  opacity: 0.75;
 }
 
 .guest-booking-left{
@@ -3323,7 +3348,7 @@ body.perf-lite .guest-booking-block{
   white-space: nowrap;
 }
 
-/* dDAE_2.029 — iPhone: evita taglio dei tab/pillole sulla destra */
+/* dDAE_2.031 — iPhone: evita taglio dei tab/pillole sulla destra */
 @media (max-width: 430px){
   #page-ospite .field.two-col.payment-row{
     grid-template-columns: minmax(0,1fr) !important;
@@ -3344,6 +3369,7 @@ body.perf-lite .guest-booking-block{
   }
 
   .guest-booking-dates{ white-space: normal; }
+  .guest-booking-dates-pill{ white-space: normal; }
 }
 
 .guest-booking-rooms{
@@ -5499,7 +5525,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 }
 
 
-/* dDAE_2.029 — iPhone: evita taglio pillole/tabs a destra nella scheda ospite */
+/* dDAE_2.031 — iPhone: evita taglio pillole/tabs a destra nella scheda ospite */
 @media (max-width: 430px){
   #page-ospite .field.two-col.payment-row{
     grid-template-columns: minmax(0,1fr) !important;
