@@ -3,7 +3,45 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.050";
+const BUILD_VERSION = "dDAE_2.051";
+
+// Ruoli: "user" (default) | "operatore"
+function isOperatoreSession(sess){
+  try{ return String(sess?.ruolo || "").trim().toLowerCase() === "operatore"; }
+  catch(_){ return false; }
+}
+
+function applyRoleMode(){
+  const isOp = !!(state && state.session && isOperatoreSession(state.session));
+  try{ document.body.dataset.role = isOp ? "operatore" : "user"; }catch(_){ }
+
+  // HOME: mostra solo Pulizie / Lavanderia / Calendario per operatori
+  if (isOp){
+    const hideIds = [
+      "goOspite",
+      "openLauncher",
+      "goTassaSoggiorno",
+      "goStatistiche",
+      "goImpostazioni",
+      // icone/shortcuts ospiti duplicati (se presenti)
+      "goOspiti",
+    ];
+    hideIds.forEach((id)=>{
+      const el = document.getElementById(id);
+      if (!el) return;
+      try{ el.hidden = true; }catch(_){ }
+      try{ el.style.display = "none"; }catch(_){ }
+    });
+
+    // Header tools: nascondi tools non consentiti
+    try{ const ospitiTopTools = document.getElementById("ospitiTopTools"); if (ospitiTopTools) ospitiTopTools.hidden = true; }catch(_){ }
+    try{ const speseTopTools = document.getElementById("speseTopTools"); if (speseTopTools) speseTopTools.hidden = true; }catch(_){ }
+    try{ const statGenTopTools = document.getElementById("statGenTopTools"); if (statGenTopTools) statGenTopTools.hidden = true; }catch(_){ }
+    try{ const statMensiliTopTools = document.getElementById("statMensiliTopTools"); if (statMensiliTopTools) statMensiliTopTools.hidden = true; }catch(_){ }
+    try{ const statSpeseTopTools = document.getElementById("statSpeseTopTools"); if (statSpeseTopTools) statSpeseTopTools.hidden = true; }catch(_){ }
+    try{ const statPrenTopTools = document.getElementById("statPrenTopTools"); if (statPrenTopTools) statPrenTopTools.hidden = true; }catch(_){ }
+  }
+}
 
 
 function __parseBuildVersion(v){
@@ -1331,6 +1369,7 @@ function setupImpostazioni() {
 
       try{ clearSession(); }catch(_){ }
       try{ state.session = null; }catch(_){ }
+      try{ applyRoleMode(); }catch(_){ }
       try{ invalidateApiCache(); }catch(_){ }
       try{ __lsClearAll(); }catch(_){ }
       toast("Account eliminato");
@@ -1342,6 +1381,7 @@ function setupImpostazioni() {
   if (logout) logout.addEventListener("click", () => {
     try{ clearSession(); }catch(_){ }
     try{ state.session = null; }catch(_){ }
+    try{ applyRoleMode(); }catch(_){ }
     try{ invalidateApiCache(); }catch(_){ }
     try{ showPage("auth"); }catch(_){ }
   });
@@ -1454,7 +1494,8 @@ function setupAuth(){
         saveSession(state.session);
         state.exerciseYear = loadExerciseYear();
         updateYearPill();
-        showPage("home");
+        try{ applyRoleMode(); }catch(_){ }
+        showPage(isOperatoreSession(state.session) ? "pulizie" : "home");
       }
     } catch(e){ setHint(e.message || "Errore"); }
   });
@@ -1481,6 +1522,7 @@ function setupAuth(){
       if (data && data.user){
         state.session = data.user;
         saveSession(state.session);
+        try{ applyRoleMode(); }catch(_){ }
       }
     } catch(e){ setHint(e.message || "Errore"); }
   });
@@ -1503,8 +1545,9 @@ function setupAuth(){
       try{ invalidateApiCache(); }catch(_){ }
       state.exerciseYear = loadExerciseYear();
       updateYearPill();
+      try{ applyRoleMode(); }catch(_){ }
       setHint("");
-      showPage("home");
+      showPage(isOperatoreSession(state.session) ? "pulizie" : "home");
     } catch(e){ setHint(e.message || "Errore"); }
   });
 }
@@ -1758,6 +1801,14 @@ function showPage(page){
     }
   }catch(_){ page = "auth"; }
 
+  // Gate ruolo: operatore vede solo Pulizie / Lavanderia / Calendario
+  try{
+    if (state.session && isOperatoreSession(state.session)){
+      const allowed = new Set(["home","pulizie","lavanderia","calendario","orepulizia","auth"]);
+      if (!allowed.has(page)) page = "pulizie";
+    }
+  }catch(_){ }
+
 
   // Token navigazione: impedisce render/loader fuori contesto quando cambi pagina durante fetch
   const navId = ++state.navId;
@@ -1948,7 +1999,11 @@ function setupHeader(){
   const bb = $("#backBtnTop");
   if (bb) bb.addEventListener("click", () => {
     if (state.page === "orepulizia") { showPage("pulizie"); return; }
-    if (state.page === "calendario") { showPage("ospiti"); return; }
+    if (state.page === "calendario") {
+      if (state.session && isOperatoreSession(state.session)) { showPage("pulizie"); return; }
+      showPage("ospiti");
+      return;
+    }
     showPage("home");
   });
 }
@@ -5037,6 +5092,7 @@ async function init(){
   setupHeader();
   setupAuth();
   setupHome();
+  try{ applyRoleMode(); }catch(_){ }
   setupCalendario();
   setupImpostazioni();
 
