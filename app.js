@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.026";
+const BUILD_VERSION = "dDAE_2.028";
 
 
 function __parseBuildVersion(v){
@@ -3255,6 +3255,12 @@ function enterGuestCreateMode(){
 
   state.guestViewItem = null;
 
+  // Multi prenotazioni: reset contesto
+  state.guestGroupBookings = null;
+  state.guestGroupActiveId = null;
+  state.guestGroupKey = null;
+  try{ clearGuestMulti(); }catch(_){ }
+
   state.guestMode = "create";
   try{ updateGuestFormModeClass(); }catch(_){ }
   state.guestEditId = null;
@@ -3417,6 +3423,16 @@ function enterGuestEditMode(ospite){
     setTimeout(run, 50);
     setTimeout(run, 180);
   } catch (_) {}
+
+  // Multi prenotazioni: mostra lista prenotazioni e abilita selezione
+  try{
+    if (Array.isArray(state.guestGroupBookings) && state.guestGroupBookings.length > 1){
+      state.guestGroupActiveId = guestIdOf(ospite);
+      renderGuestMulti({ mode: "edit" });
+    } else {
+      clearGuestMulti();
+    }
+  }catch(_){ }
 }
 
 function _guestIdOf(item){
@@ -3501,6 +3517,93 @@ function renderRoomsReadOnly(ospite){
   ro.innerHTML = `<div class="rooms-readonly-wrap">${stackHTML}${rightHTML}</div>`;
 }
 
+// ===== dDAE_2.028 — Multi prenotazioni per stesso nome =====
+function normalizeGuestNameKey(name){
+  try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
+}
+
+function buildGuestBookingBlockHTML(ospite, { mode="view", showSelect=false, activeId="" } = {}){
+  const gid = guestIdOf(ospite);
+  const roomsArr = _parseRoomsArr(ospite?.stanze);
+  const roomsHTML = buildRoomsStackHTML(gid, roomsArr);
+
+  const adults = Math.max(0, parseInt(ospite?.adulti ?? ospite?.adults ?? 0, 10) || 0);
+  const kids = Math.max(0, parseInt(ospite?.bambini_u10 ?? ospite?.kidsU10 ?? 0, 10) || 0);
+
+  const ci = formatLongDateIT(ospite?.check_in ?? ospite?.checkIn ?? "") || "—";
+  const co = formatLongDateIT(ospite?.check_out ?? ospite?.checkOut ?? "") || "—";
+
+  const nights = calcStayNights(ospite);
+  let stayHTML = "";
+  if (nights != null){
+    const tt = calcTouristTax(ospite, nights);
+    const nightsLabel = (nights === 1) ? `1 notte` : `${nights} notti`;
+    const taxLabel = `Tassa ${formatEUR(tt.total)}`;
+    stayHTML = `<span class="stay-pill" aria-label="Pernottamenti e tassa di soggiorno">
+      <span class="stay-pill__n">${nightsLabel}</span>
+      <span class="stay-pill__sep">•</span>
+      <span class="stay-pill__t">${taxLabel}</span>
+    </span>`;
+  }
+
+  const marriageOn = !!(ospite?.matrimonio);
+  const rightHTML = (stayHTML || marriageOn)
+    ? `<div class="stay-right">${marriageOn ? `<span class="marriage-dot" aria-label="Matrimonio">M</span>` : ``}${stayHTML}</div>`
+    : ``;
+
+  const isActive = (activeId && gid && String(activeId) === String(gid));
+  const actionsHTML = (showSelect && gid)
+    ? `<div class="guest-booking-actions">
+        <button class="mini-btn" type="button" data-guest-select="${gid}" ${isActive ? "disabled" : ""}>${isActive ? "In modifica" : "Modifica"}</button>
+      </div>`
+    : ``;
+
+  return `<div class="guest-booking-block ${isActive ? "is-active" : ""}" data-booking-id="${gid}">
+    <div class="guest-booking-top">
+      <div class="guest-booking-left">
+        <div class="guest-booking-people">${adults}A • ${kids}B</div>
+        <div class="guest-booking-dates">${ci} → ${co}</div>
+      </div>
+      ${actionsHTML || rightHTML}
+    </div>
+    ${actionsHTML ? `<div class="guest-booking-rooms">${roomsHTML}${rightHTML ? `<div style="margin-top:8px;">${rightHTML}</div>` : ``}</div>` : `<div class="guest-booking-rooms">${roomsHTML}</div>`}
+  </div>`;
+}
+
+function clearGuestMulti(){
+  const el = document.getElementById("guestMulti");
+  if (!el) return;
+  el.hidden = true;
+  el.innerHTML = "";
+}
+
+function renderGuestMulti({ mode="view" } = {}){
+  const el = document.getElementById("guestMulti");
+  if (!el) return;
+
+  const list = Array.isArray(state.guestGroupBookings) ? state.guestGroupBookings : [];
+  const activeId = String(state.guestGroupActiveId || state.guestEditId || "").trim();
+
+  if (!list || list.length <= 1){
+    clearGuestMulti();
+    return;
+  }
+
+  // In sola lettura: mostra solo le prenotazioni aggiuntive (sotto la prima)
+  const showSelect = (mode === "edit");
+  const shown = (mode === "view") ? list.filter(x => guestIdOf(x) !== activeId) : list;
+
+  if (!shown.length){
+    clearGuestMulti();
+    return;
+  }
+
+  const title = showSelect ? `<div class="guest-multi-title">Prenotazioni</div>` : ``;
+  const blocks = shown.map(g => buildGuestBookingBlockHTML(g, { mode, showSelect, activeId })).join("");
+  el.innerHTML = `${title}${blocks}`;
+  el.hidden = false;
+}
+
 function updateOspiteHdActions(){
   const hdActions = document.getElementById("ospiteHdActions");
   if (!hdActions) return;
@@ -3574,6 +3677,15 @@ function enterGuestViewMode(ospite){
   if (title) title.textContent = "Scheda ospite";
 
   setGuestFormViewOnly(true, ospite);
+  // Multi prenotazioni: mostra prenotazioni aggiuntive sotto la prima
+  try{
+    if (Array.isArray(state.guestGroupBookings) && state.guestGroupBookings.length > 1){
+      state.guestGroupActiveId = guestIdOf(ospite);
+      renderGuestMulti({ mode: "view" });
+    } else {
+      clearGuestMulti();
+    }
+  }catch(_){ }
   try { updateOspiteHdActions(); } catch (_) {}
 }
 
@@ -3690,6 +3802,8 @@ function setupOspite(){
 
       // Verde: torna sempre alla lista ospiti (anche in Nuovo/Modifica)
       if (btn.hasAttribute("data-guest-back")){
+        // pulisci contesto multi
+        try{ state.guestGroupBookings = null; state.guestGroupActiveId = null; state.guestGroupKey = null; clearGuestMulti(); }catch(_){ }
         showPage("ospiti");
         return;
       }
@@ -3734,6 +3848,26 @@ function setupOspite(){
       }
     });
 }
+
+  // Selezione prenotazione (multi) in modifica
+  const multi = document.getElementById("guestMulti");
+  if (multi && !multi.__bound){
+    multi.__bound = true;
+    multi.addEventListener("click", (e) => {
+      const btn = e.target.closest("button[data-guest-select]");
+      if (!btn || !multi.contains(btn)) return;
+      const id = String(btn.getAttribute("data-guest-select") || "").trim();
+      if (!id) return;
+
+      const list = Array.isArray(state.guestGroupBookings) ? state.guestGroupBookings : [];
+      const target = list.find(x => String(guestIdOf(x)) === id);
+      if (!target) return;
+
+      state.guestGroupActiveId = id;
+      enterGuestEditMode(target);
+      // enterGuestEditMode renderizza gia' la lista in modalita' edit
+    });
+  }
 
   const roomsWrap = document.getElementById("roomsPicker");
   const roomsOut = null; // removed UI string output
@@ -3970,6 +4104,70 @@ function euro(n){
   catch { return (Number(n)||0).toFixed(2) + " €"; }
 }
 
+function groupGuestsByName(items){
+  const map = new Map();
+  for (const it of (items || [])){
+    const rawName = it?.nome ?? it?.name ?? "";
+    const display = collapseSpaces(String(rawName || "").trim()) || "Ospite";
+    const key0 = normalizeGuestNameKey(display);
+    const key = key0 || (`__guest__${guestIdOf(it) || Math.random().toString(16).slice(2)}`);
+    let g = map.get(key);
+    if (!g){
+      g = { key, nome: display, bookings: [] };
+      map.set(key, g);
+    }
+    g.bookings.push(it);
+  }
+
+  const groups = Array.from(map.values());
+  for (const g of groups){
+    // Ordina le prenotazioni nello stesso gruppo: per arrivo, poi per inserimento
+    g.bookings = g.bookings.slice().sort((a,b) => {
+      const ta = parseDateTs(a?.check_in ?? a?.checkIn);
+      const tb = parseDateTs(b?.check_in ?? b?.checkIn);
+      if (ta == null && tb == null){
+        return (Number(a?._insNo) || 1e18) - (Number(b?._insNo) || 1e18);
+      }
+      if (ta == null) return 1;
+      if (tb == null) return -1;
+      if (ta !== tb) return ta - tb;
+      return (Number(a?._insNo) || 1e18) - (Number(b?._insNo) || 1e18);
+    });
+
+    // Chiavi di ordinamento a livello gruppo
+    const ins = g.bookings.map(x => Number(x?._insNo) || 1e18);
+    g._insNo = Math.min.apply(null, ins.length ? ins : [1e18]);
+    const arrTs = g.bookings.map(x => parseDateTs(x?.check_in ?? x?.checkIn)).filter(t => t != null);
+    g._arrivoTs = arrTs.length ? Math.min.apply(null, arrTs) : null;
+  }
+  return groups;
+}
+
+function sortGuestGroups(groups){
+  const by = state.guestSortBy || "arrivo";
+  const dir = (state.guestSortDir === "desc") ? -1 : 1;
+  const nameKey = (s) => normalizeGuestNameKey(s);
+
+  const out = (groups || []).slice();
+  out.sort((a,b) => {
+    if (by === "nome"){
+      return nameKey(a?.nome).localeCompare(nameKey(b?.nome), "it") * dir;
+    }
+    if (by === "inserimento"){
+      const aa = Number(a?._insNo) || 1e18;
+      const bb = Number(b?._insNo) || 1e18;
+      return (aa - bb) * dir;
+    }
+    const ta = (a?._arrivoTs == null) ? null : Number(a._arrivoTs);
+    const tb = (b?._arrivoTs == null) ? null : Number(b._arrivoTs);
+    if (ta == null && tb == null) return 0;
+    if (ta == null) return 1;
+    if (tb == null) return -1;
+    return (ta - tb) * dir;
+  });
+  return out;
+}
+
 
 
 function renderGuestCards(){
@@ -4008,75 +4206,33 @@ function renderGuestCards(){
     return;
   }
 
-  // Numero progressivo di inserimento (stabile) + sorting
+  // Numero progressivo di inserimento (stabile)
   const insMap = computeInsertionMap(items);
   items.forEach((it) => {
     const id = guestIdOf(it);
     it._insNo = id ? insMap[id] : null;
   });
 
-  items = sortGuestsList(items);
+  // Raggruppa per nome (multi prenotazioni sullo stesso cliente)
+  let groups = groupGuestsByName(items);
+  groups = sortGuestGroups(groups);
 
-  items.forEach(item => {
+  groups.forEach(group => {
+    const first = (group.bookings && group.bookings.length) ? group.bookings[0] : null;
+    if (!first) return;
+
     const card = document.createElement("div");
     card.className = "guest-card";
 
-    const nome = escapeHtml(item.nome || item.name || "Ospite");
+    const nome = escapeHtml(group.nome || "Ospite");
 
-    const insNo = (Number(item._insNo) && Number(item._insNo) > 0) ? Number(item._insNo) : null;
+    const insNo = (Number(group._insNo) && Number(group._insNo) > 0 && Number(group._insNo) < 1e18) ? Number(group._insNo) : null;
 
-    const led = guestLedStatus(item);
-    const depositTypeRaw = (item.acconto_tipo || item.depositType || item.guestDepositType || "contante").toString().toLowerCase();
-    const depositTag = (depositTypeRaw.includes("elet")) ? "Elettronico" : "Contanti";
+    const led = guestLedStatus(first);
 
-    const depAmount = Number(item.acconto_importo || 0);
-    const saldoAmount = Number(item.saldo_pagato ?? item.saldoPagato ?? item.saldo ?? 0);
-    const saldoTypeRaw = (item.saldo_tipo || item.saldoTipo || item.saldoType || item.guestSaldoType || "").toString().toLowerCase();
+    const arrivoText = formatLongDateIT(first.check_in || first.checkIn || "") || "—";
 
-    const depLedCls = (!depAmount) ? "led-gray led-off" : (depositTypeRaw.includes("elet") ? "led-green" : "led-red");
-    const saldoLedCls = (!saldoAmount) ? "led-gray led-off" : (saldoTypeRaw.includes("elet") ? "led-green" : "led-red");
-
-    //  prenotate (campo 'stanze' se presente: "1,2", "[1,2]", "1 2", ecc.)
-    let roomsArr = [];
-    try {
-      const st = item.stanze;
-      if (Array.isArray(st)) {
-        roomsArr = st;
-      } else if (st != null && String(st).trim().length) {
-        const s = String(st);
-        // Estrae SOLO numeri 1–6 (robusto contro separatori strani)
-        const m = s.match(/[1-6]/g) || [];
-        roomsArr = m.map(x => parseInt(x, 10));
-      }
-    } catch (_) {}
-    roomsArr = Array.from(new Set((roomsArr||[]).map(n=>parseInt(n,10)).filter(n=>isFinite(n) && n>=1 && n<=6))).sort((a,b)=>a-b);
-
-    const guestId = String(item.id || item.ID || item.ospite_id || item.ospiteId || item.guest_id || item.guestId || "").trim();
-
-    const roomsDotsHTML = roomsArr.length
-      ? `<div class="rooms-stack" aria-label=" e letti">` + roomsArr.map((n) => {
-          const key = `${guestId}:${n}`;
-          const info = (state.stanzeByKey && state.stanzeByKey[key]) ? state.stanzeByKey[key] : { letto_m: 0, letto_s: 0, culla: 0 };
-          const lettoM = Number(info.letto_m || 0) || 0;
-          const lettoS = Number(info.letto_s || 0) || 0;
-          const culla = Number(info.culla || 0) || 0;
-
-          let dots = "";
-          if (lettoM > 0) dots += `<span class="bed-dot bed-dot-m" aria-label="Letto matrimoniale"></span>`;
-          for (let i = 0; i < lettoS; i++) dots += `<span class="bed-dot bed-dot-s" aria-label="Letto singolo"></span>`;
-          if (culla > 0) dots += `<span class="bed-dot bed-dot-c" aria-label="Culla"></span>`;
-
-          return `<div class="room-row">
-            <span class="room-dot-badge room-${n}" aria-label="Stanza ${n}">${n}</span>
-            <div class="bed-dots" aria-label="Dotazione letti">${dots}</div>
-          </div>`;
-        }).join("") + `</div>`
-      : `<span class="room-dot-badge is-empty" aria-label="Nessuna stanza">—</span>`;
-
-
-
-
-    const arrivoText = formatLongDateIT(item.check_in || item.checkIn || "") || "—";
+    const bookingsHTML = `<div class="guest-bookings">${group.bookings.map((b) => buildGuestBookingBlockHTML(b, { mode: "list" })).join("")}</div>`;
 
     card.tabIndex = 0;
     card.setAttribute("role", "button");
@@ -4093,10 +4249,22 @@ function renderGuestCards(){
           <span class="guest-led ${led.cls}" aria-label="${led.label}" title="${led.label}"></span>
         </div>
       </div>
+      ${bookingsHTML}
     `;
 
     const open = () => {
-      enterGuestViewMode(item);
+      // In caso di multi prenotazioni: mantiene contesto e mostra elenco nella scheda
+      if (group.bookings && group.bookings.length > 1){
+        state.guestGroupBookings = group.bookings;
+        state.guestGroupKey = group.key;
+        state.guestGroupActiveId = guestIdOf(first);
+      } else {
+        state.guestGroupBookings = null;
+        state.guestGroupKey = null;
+        state.guestGroupActiveId = null;
+        try{ clearGuestMulti(); }catch(_){ }
+      }
+      enterGuestViewMode(first);
       showPage("ospite");
     };
     card.addEventListener("click", open);

@@ -41,7 +41,7 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.026"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.028"),
     radial-gradient(900px 600px at 10% 0%, rgba(43,124,180,0.10), transparent 62%),
     radial-gradient(800px 520px at 90% 8%, rgba(201,119,43,0.10), transparent 64%),
     radial-gradient(900px 700px at 20% 100%, rgba(111,183,214,0.10), transparent 62%),
@@ -777,7 +777,7 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.026"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.028"),
     radial-gradient(900px 650px at 12% 8%, rgba(43,124,180,0.18), transparent 62%),
     radial-gradient(820px 560px at 92% 14%, rgba(201,119,43,0.16), transparent 62%),
     radial-gradient(900px 700px at 18% 96%, rgba(111,183,214,0.16), transparent 62%),
@@ -3264,6 +3264,92 @@ body[data-page="ospiti"] .guest-card .actions {
   font-weight:800;
   opacity:0.75;
   white-space: nowrap;
+}
+
+/* dDAE_2.028 — Multi prenotazioni per stesso nome (scheda unica con blocchi multipli) */
+#page-ospiti .guest-bookings{
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+.guest-booking-block{
+  border-radius: 16px;
+  padding: 10px 10px;
+  border: 1px solid rgba(15,23,42,0.06);
+  background: rgba(255,255,255,0.55);
+}
+
+body.perf-lite .guest-booking-block{
+  background: rgba(255,255,255,0.88) !important;
+}
+
+.guest-booking-block.is-active{
+  box-shadow: inset 0 0 0 2px rgba(43,124,180,0.28);
+}
+
+.guest-booking-top{
+  display:flex;
+  align-items:flex-start;
+  justify-content:space-between;
+  gap: 12px;
+}
+
+.guest-booking-left{
+  min-width:0;
+}
+
+.guest-booking-people{
+  font-size: 12px;
+  font-weight: 900;
+  opacity: 0.82;
+}
+
+.guest-booking-dates{
+  font-size: 12px;
+  font-weight: 800;
+  opacity: 0.70;
+  margin-top: 2px;
+  white-space: nowrap;
+}
+
+.guest-booking-rooms{
+  margin-top: 8px;
+}
+
+.guest-booking-actions{
+  display:flex;
+  align-items:center;
+  gap: 8px;
+  flex: 0 0 auto;
+}
+
+.guest-booking-actions .mini-btn{
+  border: 1px solid rgba(15,23,42,0.10);
+  background: rgba(255,255,255,0.70);
+  border-radius: 12px;
+  padding: 8px 10px;
+  font-weight: 900;
+  font-size: 12px;
+  line-height: 1;
+}
+
+.guest-booking-actions .mini-btn:active{ transform: scale(0.99); }
+
+/* Contenitore multi nella pagina ospite (sotto la prima prenotazione) */
+#guestMulti{
+  margin-top: 12px;
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+}
+
+#guestMulti .guest-multi-title{
+  font-size: 12px;
+  font-weight: 950;
+  opacity: 0.65;
+  margin: 2px 2px 0;
 }
 
 #page-ospite .guest-hd-actions{
