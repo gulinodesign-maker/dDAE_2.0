@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.045";
+const BUILD_VERSION = "dDAE_2.047";
 
 
 function __parseBuildVersion(v){
@@ -1681,7 +1681,7 @@ const lav = e.target.closest && e.target.closest("#goLavanderia") || e.target.cl
     const s3 = e.target.closest && e.target.closest("#goStatSpese");
     if (s3){ hideLauncher(); showPage("statspese"); return; }
     const s4 = e.target.closest && e.target.closest("#goStatPrenotazioni");
-    if (s4){ hideLauncher(); toast("Statistiche prenotazioni: in arrivo"); return; }
+    if (s4){ hideLauncher(); showPage("statprenotazioni"); return; }
 
   });
 }
@@ -1842,6 +1842,11 @@ state.page = page;
     statSpeseTopTools.hidden = (page !== "statspese");
   }
 
+  const statPrenTopTools = $("#statPrenTopTools");
+  if (statPrenTopTools){
+    statPrenTopTools.hidden = (page !== "statprenotazioni");
+  }
+
 // render on demand
   if (page === "spese") {
     const _nav = navId;
@@ -1909,6 +1914,16 @@ state.page = page;
     const _nav = navId;
     ensurePeriodData({ showLoader:true })
       .then(()=>{ if (state.navId !== _nav || state.page !== "statspese") return; renderStatSpese(); })
+      .catch(e=>toast(e.message));
+  }
+
+  if (page === "statprenotazioni") {
+    const _nav = navId;
+    Promise.all([
+      ensurePeriodData({ showLoader:true }),
+      loadOspiti({ ...(state.period || {}), force:false }),
+    ])
+      .then(()=>{ if (state.navId !== _nav || state.page !== "statprenotazioni") return; renderStatPrenotazioni(); })
       .catch(e=>toast(e.message));
   }
 
@@ -2067,7 +2082,7 @@ if (goCalendarioTopOspiti){
   const s3 = $("#goStatSpese");
   if (s3){ bindFastTap(s3, () => { hideLauncher(); showPage("statspese"); }); }
   const s4 = $("#goStatPrenotazioni");
-  if (s4){ bindFastTap(s4, () => toast("Statistiche prenotazioni: in arrivo")); }
+  if (s4){ bindFastTap(s4, () => { hideLauncher(); showPage("statprenotazioni"); }); }
 
   // STATGEN: topbar tools
   const btnBackStats = $("#btnBackStatistiche");
@@ -2104,6 +2119,8 @@ if (goCalendarioTopOspiti){
   // STATISTICHE: Spese generali topbar tools
   const btnBackStatsSpese = $("#btnBackStatisticheSpese");
   if (btnBackStatsSpese){ bindFastTap(btnBackStatsSpese, () => { closeStatSpesePieModal(); showPage("statistiche"); }); }
+  const btnBackStatsPren = $("#btnBackStatistichePrenotazioni");
+  if (btnBackStatsPren){ bindFastTap(btnBackStatsPren, () => { showPage("statistiche"); }); }
   const btnPieSpese = $("#btnStatSpesePie");
   if (btnPieSpese){ bindFastTap(btnPieSpese, () => { openStatSpesePieModal(); }); }
 
@@ -3080,6 +3097,72 @@ function renderStatMensili(){
     }
   });
 }
+
+
+// ===== Statistiche: Prenotazioni (booking compilato vs non compilato) =====
+function computeStatPrenotazioni(){
+  const guests = Array.isArray(state.guests) ? state.guests : [];
+
+  const money = (v) => {
+    if (v === null || v === undefined) return 0;
+    if (typeof v === "number") return isFinite(v) ? v : 0;
+    let s = String(v).trim();
+    if (!s) return 0;
+    if (s.includes(",") && s.includes(".")) {
+      s = s.replace(/\./g, "").replace(",", ".");
+    } else if (s.includes(",")) {
+      s = s.replace(",", ".");
+    }
+    const n = Number(s);
+    return isFinite(n) ? n : 0;
+  };
+
+  let withBooking = 0;
+  let withoutBooking = 0;
+
+  for (const g of guests){
+    const pren = money(g?.importo_prenotazione ?? g?.importo_prenota ?? g?.importoPrenotazione ?? g?.importoPrenota ?? 0);
+    const rawBooking = (g?.importo_booking ?? g?.importoBooking ?? g?.booking ?? null);
+    const bookingVal = money(rawBooking);
+    const bookingFilled = bookingVal > 0;
+    if (bookingFilled) withBooking += pren;
+    else withoutBooking += pren;
+  }
+
+  return { withBooking, withoutBooking };
+}
+
+function renderStatPrenotazioni(){
+  const s = computeStatPrenotazioni();
+  state.statPrenotazioni = s;
+
+  const slices = [
+    { label: "Con importo booking", value: s.withBooking, color: "#2b7cb4" },
+    { label: "Senza importo booking", value: s.withoutBooking, color: "#cf9458" },
+  ];
+
+  drawPie("statPrenCanvas", slices);
+
+  const leg = document.getElementById("statPrenLegend");
+  if (leg){
+    const total = slices.reduce((a,x)=>a+Math.max(0,Number(x.value||0)),0);
+    leg.innerHTML = "";
+    slices.forEach((sl)=>{
+      const v = Math.max(0, Number(sl.value || 0));
+      const pct = total > 0 ? (v/total*100) : 0;
+      const row = document.createElement("div");
+      row.className = "legrow";
+      row.innerHTML = `
+        <div class="legleft">
+          <div class="dot" style="background:${sl.color}"></div>
+          <div class="legname">${escapeHtml(sl.label)}</div>
+        </div>
+        <div class="legright">${pct.toFixed(1)}% · ${euro(v)}</div>
+      `;
+      leg.appendChild(row);
+    });
+  }
+}
 function openStatPieModal(){
   try{
     if (!state.statGen) state.statGen = computeStatGen();
@@ -3156,22 +3239,9 @@ function openStatMensiliPieModal(){
 
   const leg = document.getElementById("statMensiliPieLegend");
   if (leg){
-    const total = slices.reduce((a,x)=>a+Math.max(0,Number(x.value||0)),0);
     leg.innerHTML = "";
-    slices.forEach((sl)=>{
-      const v = Math.max(0, Number(sl.value || 0));
-      const pct = total > 0 ? (v/total*100) : 0;
-      const row = document.createElement("div");
-      row.className = "legrow";
-      row.innerHTML = `
-        <div class="legleft">
-          <div class="dot" style="background:${sl.color}"></div>
-          <div class="legname">${escapeHtml(sl.label)}</div>
-        </div>
-        <div class="legright">${pct.toFixed(1)}% · ${euro(v)}</div>
-      `;
-      leg.appendChild(row);
-    });
+    leg.style.display = "none";
+    leg.setAttribute("aria-hidden", "true");
   }
 }
 
