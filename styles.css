@@ -5644,3 +5644,21 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 /* dDAE_2.052 — HOME: sposta pill+icone più in basso (evita overlap topbar) */
 #page-home .year-pill{ margin-top: 10px; }
 #page-home .home-page{ padding-top: 6px; }
+
+/* Operatore modal: messaggi conferma */
+.operator-msg{
+  margin-top: 6px;
+  padding: 10px 12px;
+  border-radius: 14px;
+  font-size: 14px;
+  line-height: 1.25;
+  background: rgba(255,255,255,0.22);
+  border: 1px solid rgba(255,255,255,0.18);
+  color: rgba(0,0,0,0.72);
+}
+.operator-msg.is-ok{
+  background: rgba(255,255,255,0.24);
+}
+.operator-msg.is-err{
+  background: rgba(255,255,255,0.24);
+}

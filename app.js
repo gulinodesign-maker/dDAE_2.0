@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.053";
+const BUILD_VERSION = "dDAE_2.054";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -1413,14 +1413,28 @@ function setupImpostazioni() {
   const opForm = document.getElementById("operatorModalForm");
   const opCreate = document.getElementById("operatorCreateBtn");
   const opEdit = document.getElementById("operatorEditBtn");
+  const opDelete = document.getElementById("operatorDeleteBtn");
   const opBack = document.getElementById("opFormBack");
   const opConfirm = document.getElementById("opFormConfirm");
   const opUser = document.getElementById("opFormUsername");
   const opPass = document.getElementById("opFormPassword");
   const opOwnerPass = document.getElementById("opFormOwnerPassword");
   const opPassLabel = document.getElementById("opFormPasswordLabel");
+  const opMsg = document.getElementById("operatorModalMsg");
+  const opPassWrap = opPass ? (opPass.closest?.(".field") || opPass.parentElement) : null;
 
-  let __opMode = ""; // "create" | "edit"
+  let __opMode = ""; // "create" | "edit" | "delete"
+
+  function __opSetMsg(msg, kind){
+    try{
+      if (!opMsg) return;
+      opMsg.textContent = String(msg || "");
+      opMsg.classList.remove("is-ok","is-err");
+      if (kind === "ok") opMsg.classList.add("is-ok");
+      if (kind === "err") opMsg.classList.add("is-err");
+      opMsg.hidden = !opMsg.textContent;
+    }catch(_){ }
+  }
 
   function __opShowMenu(){
     __opMode = "";
@@ -1429,6 +1443,8 @@ function setupImpostazioni() {
     if (opUser) opUser.value = "";
     if (opPass) opPass.value = "";
     if (opOwnerPass) opOwnerPass.value = "";
+    if (opPassWrap) opPassWrap.hidden = false;
+    __opSetMsg("", null);
     try{ refreshFloatingLabels(); }catch(_){ }
   }
 
@@ -1439,8 +1455,10 @@ function setupImpostazioni() {
     if (opUser) opUser.value = "";
     if (opPass) opPass.value = "";
     if (opOwnerPass) opOwnerPass.value = "";
-    if (opPassLabel) opPassLabel.textContent = (mode === "edit") ? "Nuova password" : "Password operatore";
-    if (opConfirm) opConfirm.textContent = (mode === "edit") ? "Salva" : "Crea";
+    if (opPassLabel) opPassLabel.textContent = (mode === "edit") ? "Nuova password" : (mode === "delete" ? "Password operatore" : "Password operatore");
+    if (opConfirm) opConfirm.textContent = (mode === "edit") ? "Salva" : (mode === "delete" ? "Elimina" : "Crea");
+    if (opPassWrap) opPassWrap.hidden = (mode === "delete");
+    __opSetMsg("", null);
     try{ refreshFloatingLabels(); }catch(_){ }
     try{ setTimeout(()=>{ try{ opUser && opUser.focus(); }catch(_){ } }, 30); }catch(_){ }
   }
@@ -1462,17 +1480,18 @@ function setupImpostazioni() {
   async function __opSubmit(){
     try{
       const s = state.session || loadSession();
-      if (!s || !s.username){ toast("Nessun account"); return; }
-      if (isOperatoreSession(s)){ toast("Non disponibile per operatori"); return; }
+      if (!s || !s.username){ __opSetMsg("Nessun account", "err"); return; }
+      if (isOperatoreSession(s)){ __opSetMsg("Non disponibile per operatori", "err"); return; }
 
       const ownerUsername = String(s.username || "").trim();
       const operatorUsername = String(opUser?.value || "").trim();
       const operatorPassword = String(opPass?.value || "");
       const ownerPassword = String(opOwnerPass?.value || "");
 
-      if (!operatorUsername) { toast("Username operatore mancante"); return; }
-      if (!operatorPassword) { toast((__opMode === "edit") ? "Nuova password mancante" : "Password operatore mancante"); return; }
-      if (!ownerPassword) { toast("Password owner mancante"); return; }
+      __opSetMsg("", null);
+      if (!operatorUsername) { __opSetMsg("Username operatore mancante", "err"); return; }
+      if (__opMode !== "delete" && !operatorPassword) { __opSetMsg((__opMode === "edit") ? "Nuova password mancante" : "Password operatore mancante", "err"); return; }
+      if (!ownerPassword) { __opSetMsg("Password owner mancante", "err"); return; }
 
       if (__opMode === "create"){
         await api("utenti", {
@@ -1486,8 +1505,10 @@ function setupImpostazioni() {
           },
           showLoader:true,
         });
-        toast("Operatore creato");
-        __opClose();
+        __opSetMsg("Operatore creato", "ok");
+        try{ if (opPass) opPass.value = ""; }catch(_){ }
+        try{ if (opOwnerPass) opOwnerPass.value = ""; }catch(_){ }
+        try{ refreshFloatingLabels(); }catch(_){ }
         return;
       }
 
@@ -1503,19 +1524,41 @@ function setupImpostazioni() {
           },
           showLoader:true,
         });
-        toast("Operatore aggiornato");
-        __opClose();
+        __opSetMsg("Operatore aggiornato", "ok");
+        try{ if (opPass) opPass.value = ""; }catch(_){ }
+        try{ if (opOwnerPass) opOwnerPass.value = ""; }catch(_){ }
+        try{ refreshFloatingLabels(); }catch(_){ }
         return;
       }
 
-      toast("Operazione non valida");
-    }catch(e){ toast(e.message || "Errore"); }
+      if (__opMode === "delete"){
+        const ok = confirm(`Eliminare l'operatore "${operatorUsername}"?`);
+        if (!ok) return;
+        await api("utenti", {
+          method:"POST",
+          body:{
+            op:"delete_operator",
+            username: ownerUsername,
+            password: ownerPassword,
+            operator_username: operatorUsername,
+          },
+          showLoader:true,
+        });
+        __opSetMsg("Operatore eliminato", "ok");
+        try{ if (opOwnerPass) opOwnerPass.value = ""; }catch(_){ }
+        try{ refreshFloatingLabels(); }catch(_){ }
+        return;
+      }
+
+      __opSetMsg("Operazione non valida", "err");
+    }catch(e){ __opSetMsg(e.message || "Errore", "err"); }
   }
 
   if (opBtn) bindFastTap(opBtn, __opOpen);
   if (opModalClose) bindFastTap(opModalClose, __opClose);
   if (opCreate) bindFastTap(opCreate, ()=>__opShowForm("create"));
   if (opEdit) bindFastTap(opEdit, ()=>__opShowForm("edit"));
+  if (opDelete) bindFastTap(opDelete, ()=>__opShowForm("delete"));
   if (opBack) bindFastTap(opBack, __opShowMenu);
   if (opConfirm) bindFastTap(opConfirm, __opSubmit);
 }
@@ -1970,6 +2013,15 @@ state.page = page;
     backBtnTop.hidden = !(page === "orepulizia" || page === "calendario");
   }
 
+  // Logout top (solo HOME operatore)
+  try{
+    const opLogout = document.getElementById("opLogoutTop");
+    if (opLogout){
+      const isOp = !!(state.session && isOperatoreSession(state.session));
+      opLogout.hidden = !(isOp && page === "home");
+    }
+  }catch(_){ }
+
 
   // Top tools (solo Pulizie) — lavanderia + ore lavoro accanto al tasto Home
   const pulizieTopTools = $("#pulizieTopTools");
@@ -2110,6 +2162,15 @@ state.page = page;
 function setupHeader(){
   const hb = $("#hamburgerBtn");
   if (hb) hb.addEventListener("click", () => { hideLauncher(); showPage("home"); });
+
+  const opLogout = document.getElementById("opLogoutTop");
+  if (opLogout) bindFastTap(opLogout, () => {
+    try{ clearSession(); }catch(_){ }
+    try{ state.session = null; }catch(_){ }
+    try{ applyRoleMode(); }catch(_){ }
+    try{ invalidateApiCache(); }catch(_){ }
+    try{ showPage("auth"); }catch(_){ }
+  });
 
   // Back (ore pulizia + calendario)
   const bb = $("#backBtnTop");
