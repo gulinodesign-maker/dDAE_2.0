@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.051";
+const BUILD_VERSION = "dDAE_2.052";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -1385,6 +1385,49 @@ function setupImpostazioni() {
     try{ invalidateApiCache(); }catch(_){ }
     try{ showPage("auth"); }catch(_){ }
   });
+
+
+  // Crea utente operatore (solo owner)
+  const createOpBtn = document.getElementById("settingsCreateOperatorBtn");
+  if (createOpBtn){
+    try{
+      const s0 = state.session || loadSession();
+      if (s0 && isOperatoreSession(s0)){
+        try{ createOpBtn.hidden = true; }catch(_){ }
+        try{ createOpBtn.style.display = "none"; }catch(_){ }
+      }else{
+        bindFastTap(createOpBtn, async () => {
+          try{
+            const s = state.session || loadSession();
+            if (!s || !s.username || !s.user_id){ toast("Nessun account"); return; }
+            if (isOperatoreSession(s)){ toast("Permesso negato"); return; }
+
+            const ou = prompt("Username operatore:");
+            if (ou === null) return;
+            const operator_username = String(ou || "").trim();
+            if (!operator_username){ toast("Username mancante"); return; }
+
+            const opw = prompt("Password operatore:");
+            if (opw === null) return;
+            const operator_password = String(opw || "");
+            if (!operator_password){ toast("Password mancante"); return; }
+
+            const on = prompt("Nome operatore (opzionale):");
+            if (on === null) return;
+            const nome = String(on || "");
+
+            const pw = prompt("Password owner (conferma):");
+            if (pw === null) return;
+            const password = String(pw || "");
+            if (!password){ toast("Password mancante"); return; }
+
+            await api("utenti", { method:"POST", body:{ op:"create_operator", username:String(s.username||"").trim(), password, operator_username, operator_password, nome }, showLoader:true });
+            toast("Operatore creato");
+          }catch(e){ toast(e.message || "Errore"); }
+        });
+      }
+    }catch(_){ }
+  }
 
 
   // Anno di esercizio
