@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.037";
+const BUILD_VERSION = "dDAE_2.038";
 
 
 function __parseBuildVersion(v){
@@ -3927,6 +3927,15 @@ function setupOspite(){
 
       // Indaco: vai al calendario
       if (btn.hasAttribute("data-guest-cal")){
+        // In sola lettura: apri il calendario centrato sulla stessa prenotazione
+        try{
+          const ciRaw = (document.getElementById("guestCheckIn")?.value || "").trim();
+          const ci = ciRaw || (state.guestViewItem?.check_in || state.guestViewItem?.checkIn || "");
+          if (ci){
+            if (!state.calendar) state.calendar = { anchor: new Date(), ready: false, guests: [], rangeKey: "" };
+            state.calendar.anchor = new Date(ci + "T00:00:00");
+          }
+        }catch(_){ }
         showPage("calendario");
         return;
       }
@@ -5253,8 +5262,10 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
+  const prevMonthBtn = document.getElementById("calPrevMonthBtn");
   const prevBtn = document.getElementById("calPrevBtn");
   const nextBtn = document.getElementById("calNextBtn");
+  const nextMonthBtn = document.getElementById("calNextMonthBtn");
   const syncBtn = document.getElementById("calSyncBtn");
   const input = document.getElementById("calDateInput");
 
@@ -5290,22 +5301,56 @@ function setupCalendario(){
   };
 
   if (pickBtn) pickBtn.addEventListener("click", openPicker);
-  if (input) input.addEventListener("change", () => {
+  if (input) input.addEventListener("change", async () => {
     if (!input.value) return;
-    state.calendar.anchor = new Date(input.value + "T00:00:00");
-    renderCalendario();
+    const d = new Date(input.value + "T00:00:00");
+    await (async()=>{
+      state.calendar.anchor = d;
+      try{ await ensureCalendarData({ force:false }); }catch(_){ }
+      renderCalendario();
+    })();
   });
-  if (todayBtn) todayBtn.addEventListener("click", () => {
-    state.calendar.anchor = new Date();
-    renderCalendario();
+  if (todayBtn) todayBtn.addEventListener("click", async () => {
+    const d = new Date();
+    d.setHours(0,0,0,0);
+    await (async()=>{
+      state.calendar.anchor = d;
+      try{ await ensureCalendarData({ force:false }); }catch(_){ }
+      renderCalendario();
+    })();
   });
-  if (prevBtn) prevBtn.addEventListener("click", () => {
-    state.calendar.anchor = addDays(state.calendar.anchor, -7);
+
+  const addMonthsClamped = (dt, delta) => {
+    const d = new Date(dt);
+    const day = d.getDate();
+    // vai al primo del mese per evitare overflow (es. 31 -> mese con 30)
+    d.setHours(0,0,0,0);
+    d.setDate(1);
+    d.setMonth(d.getMonth() + delta);
+    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
+    d.setDate(Math.min(day, last));
+    d.setHours(0,0,0,0);
+    return d;
+  };
+
+  const shiftAnchorAndRender = async (newAnchor) => {
+    state.calendar.anchor = newAnchor;
+    try{ await ensureCalendarData({ force:false }); }catch(_){ }
     renderCalendario();
+  };
+
+  if (prevMonthBtn) prevMonthBtn.addEventListener("click", async () => {
+    await shiftAnchorAndRender(addMonthsClamped(state.calendar.anchor, -1));
   });
-  if (nextBtn) nextBtn.addEventListener("click", () => {
-    state.calendar.anchor = addDays(state.calendar.anchor, 7);
-    renderCalendario();
+  if (prevBtn) prevBtn.addEventListener("click", async () => {
+    await shiftAnchorAndRender(addDays(state.calendar.anchor, -7));
+  });
+  if (nextBtn) nextBtn.addEventListener("click", async () => {
+    await shiftAnchorAndRender(addDays(state.calendar.anchor, 7));
+  });
+
+  if (nextMonthBtn) nextMonthBtn.addEventListener("click", async () => {
+    await shiftAnchorAndRender(addMonthsClamped(state.calendar.anchor, 1));
   });
 }
 
@@ -5335,6 +5380,7 @@ async function ensureCalendarData({ force = false } = {}) {
 function renderCalendario(){
   const grid = document.getElementById("calGrid");
   const title = document.getElementById("calWeekTitle");
+  const input = document.getElementById("calDateInput");
   if (!grid) return;
 
   grid.replaceChildren();
@@ -5344,8 +5390,11 @@ function renderCalendario(){
   const start = startOfWeekMonday(anchor);
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
 
+  // Mantieni input data sincronizzato con l'anchor (utile quando navighi con le frecce)
+  try{ if (input) input.value = formatISODateLocal(anchor) || todayISO(); }catch(_){ }
+
   if (title) {
-    const month = monthNameIT(start).toUpperCase();
+    const month = monthNameIT(anchor).toUpperCase();
     title.textContent = month;
   }
 
