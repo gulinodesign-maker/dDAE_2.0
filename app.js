@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.032";
+const BUILD_VERSION = "dDAE_2.033";
 
 
 function __parseBuildVersion(v){
@@ -3424,14 +3424,28 @@ function enterGuestEditMode(ospite){
     setTimeout(run, 180);
   } catch (_) {}
 
-  // Multi prenotazioni: mostra lista prenotazioni e abilita selezione
+  // Multi prenotazioni: in modifica mostra sempre il riquadro (anche se singolo) + tasto +
   try{
-    if (Array.isArray(state.guestGroupBookings) && state.guestGroupBookings.length > 1){
-      state.guestGroupActiveId = guestIdOf(ospite);
-      renderGuestMulti({ mode: "edit" });
-    } else {
-      clearGuestMulti();
+    // Se non abbiamo contesto gruppo, ricostruiscilo dal dataset corrente
+    if (!Array.isArray(state.guestGroupBookings) || !state.guestGroupBookings.length){
+      const items = Array.isArray(state.ospiti) && state.ospiti.length ? state.ospiti : (Array.isArray(state.guests) ? state.guests : []);
+      const groups = groupGuestsByName(items || []);
+      const nk = normalizeGuestNameKey(ospite?.nome ?? ospite?.name ?? "");
+      const g = nk ? groups.find(x => String(x.key) === nk) : null;
+      if (g && Array.isArray(g.bookings) && g.bookings.length){
+        state.guestGroupBookings = g.bookings;
+        state.guestGroupKey = g.key;
+      } else {
+        state.guestGroupBookings = [ospite];
+        state.guestGroupKey = nk || null;
+      }
+    } else if (!state.guestGroupKey){
+      const nk = normalizeGuestNameKey(ospite?.nome ?? ospite?.name ?? "");
+      state.guestGroupKey = nk || state.guestGroupKey || null;
     }
+
+    state.guestGroupActiveId = guestIdOf(ospite);
+    renderGuestMulti({ mode: "edit" });
   }catch(_){ }
 }
 
@@ -3529,7 +3543,7 @@ function renderRoomsReadOnly(ospite){
   `;
 }
 
-// ===== dDAE_2.032 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.033 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -3604,27 +3618,41 @@ function renderGuestMulti({ mode="view" } = {}){
   const list = Array.isArray(state.guestGroupBookings) ? state.guestGroupBookings : [];
   const activeId = String(state.guestGroupActiveId || state.guestEditId || "").trim();
 
-  if (!list || list.length <= 1){
+  if (!list || !list.length){
     clearGuestMulti();
     return;
   }
 
-  // In sola lettura: mostra solo le prenotazioni aggiuntive (sotto la prima)
-  const showSelect = (mode === "edit");
-  const shown = (mode === "view") ? list.filter(x => guestIdOf(x) !== activeId) : list;
+  // In modifica: mostra SEMPRE il riquadro (anche se singolo) + tasto "+" per aggiungere prenotazione
+  if (mode === "edit"){
+    const showSelect = true;
+    const title = `<div class="guest-multi-title">Prenotazioni</div>`;
+    const blocks = list.map(g => buildGuestBookingBlockHTML(g, { mode, showSelect, activeId })).join("");
+    const plus = `<button class="guest-add-booking" type="button" data-guest-add-booking aria-label="Aggiungi prenotazione">+</button>`;
+    el.innerHTML = `${title}${blocks}${plus}`;
+    el.hidden = false;
+    return;
+  }
 
+  // In sola lettura: mostra solo le prenotazioni aggiuntive (sotto la prima)
+  if (list.length <= 1){
+    clearGuestMulti();
+    return;
+  }
+
+  const shown = list.filter(x => guestIdOf(x) !== activeId);
   if (!shown.length){
     clearGuestMulti();
     return;
   }
 
-  const title = showSelect ? `<div class="guest-multi-title">Prenotazioni</div>` : ``;
-  const blocks = shown.map(g => buildGuestBookingBlockHTML(g, { mode, showSelect, activeId })).join("");
-  el.innerHTML = `${title}${blocks}`;
+  const blocks = shown.map(g => buildGuestBookingBlockHTML(g, { mode, showSelect:false, activeId })).join("");
+  el.innerHTML = `${blocks}`;
   el.hidden = false;
 }
 
 function updateOspiteHdActions(){
+
   const hdActions = document.getElementById("ospiteHdActions");
   if (!hdActions) return;
 
@@ -3925,6 +3953,46 @@ function setupOspite(){
         }catch(err){
           toast(err?.message || "Errore");
         }
+        return;
+      }
+
+      // Aggiungi nuova prenotazione allo stesso ospite (tasto +)
+      const addBtn = e.target.closest("button[data-guest-add-booking]");
+      if (addBtn && multi.contains(addBtn)) {
+        e.preventDefault();
+        e.stopPropagation();
+
+        const nameNow = (document.getElementById("guestName")?.value || "").trim();
+        const adultsNow = parseInt(document.getElementById("guestAdults")?.value || "0", 10) || 0;
+        const kidsNow = parseInt(document.getElementById("guestKidsU10")?.value || "0", 10) || 0;
+        const marriageNow = !!(document.getElementById("guestMarriage")?.checked);
+
+        const depTypeNow = state.guestDepositType || "contante";
+        const saldoTypeNow = state.guestSaldoType || "contante";
+        const psNow = !!state.guestPSRegistered;
+        const istNow = !!state.guestISTATRegistered;
+
+        // Passa a CREATE precompilato
+        enterGuestCreateMode();
+        try {
+          document.getElementById("guestName").value = nameNow;
+          document.getElementById("guestAdults").value = adultsNow;
+          document.getElementById("guestKidsU10").value = kidsNow;
+          setMarriage(marriageNow);
+
+          state.guestDepositType = depTypeNow;
+          setPayType("depositType", depTypeNow);
+          state.guestSaldoType = saldoTypeNow;
+          setPayType("saldoType", saldoTypeNow);
+
+          state.guestPSRegistered = psNow;
+          state.guestISTATRegistered = istNow;
+          setRegFlags("regTags", psNow, istNow);
+
+          refreshFloatingLabels();
+        } catch (_) {}
+
+        showPage("ospite");
         return;
       }
 
