@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.047";
+const BUILD_VERSION = "dDAE_2.048";
 
 
 function __parseBuildVersion(v){
@@ -64,7 +64,7 @@ function updateYearPill(){
   if (!pill) return;
   const y = state.exerciseYear;
   if (!y){ pill.hidden = true; return; }
-  pill.textContent = `ANNO ${y}`;
+  pill.textContent = `${y}`;
   pill.hidden = false;
   try{ updateSettingsTabs(); }catch(_){ }
 }
