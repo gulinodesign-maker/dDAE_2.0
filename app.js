@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.031";
+const BUILD_VERSION = "dDAE_2.032";
 
 
 function __parseBuildVersion(v){
@@ -3529,7 +3529,7 @@ function renderRoomsReadOnly(ospite){
   `;
 }
 
-// ===== dDAE_2.031 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.032 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -3556,8 +3556,22 @@ function buildGuestBookingBlockHTML(ospite, { mode="view", showSelect=false, act
 
   const isActive = (activeId && gid && String(activeId) === String(gid));
   const actionsHTML = (showSelect && gid)
-    ? `<div class="guest-booking-actions">
-        <button class="mini-btn" type="button" data-guest-select="${gid}" ${isActive ? "disabled" : ""}>${isActive ? "In modifica" : "Modifica"}</button>
+    ? `<div class="guest-booking-actions" aria-label="Azioni prenotazione">
+        <button class="icon-round-btn is-edit" type="button" data-guest-select="${gid}" aria-label="Modifica prenotazione" ${isActive ? "disabled" : ""}>
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M12 20h9" />
+            <path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z" />
+          </svg>
+        </button>
+        <button class="icon-round-btn is-del" type="button" data-guest-del-booking="${gid}" aria-label="Elimina prenotazione">
+          <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
+            <path d="M3 6h18" />
+            <path d="M8 6V4h8v2" />
+            <path d="M19 6l-1 14H6L5 6" />
+            <path d="M10 11v6" />
+            <path d="M14 11v6" />
+          </svg>
+        </button>
       </div>`
     : ``;
 
@@ -3633,8 +3647,8 @@ function updateOspiteHdActions(){
   // Giallo: solo in sola lettura (azione: passa a modifica)
   if (btnEdit) btnEdit.hidden = (mode !== "view");
 
-  // Rosso: in sola lettura e in modifica (azione: elimina ospite)
-  if (btnDel) btnDel.hidden = !(mode === "view" || mode === "edit");
+  // Rosso: solo in sola lettura (azione: elimina ospite)
+  if (btnDel) btnDel.hidden = (mode !== "view");
 }
 
 
@@ -3855,11 +3869,66 @@ function setupOspite(){
     });
 }
 
-  // Selezione prenotazione (multi) in modifica
+  // Selezione/Eliminazione prenotazione (multi) in modifica
   const multi = document.getElementById("guestMulti");
   if (multi && !multi.__bound){
     multi.__bound = true;
-    multi.addEventListener("click", (e) => {
+    multi.addEventListener("click", async (e) => {
+      // Elimina singola prenotazione (solo il gruppo selezionato)
+      const delBtn = e.target.closest("button[data-guest-del-booking]");
+      if (delBtn && multi.contains(delBtn)){
+        e.preventDefault();
+        e.stopPropagation();
+        const delId = String(delBtn.getAttribute("data-guest-del-booking") || "").trim();
+        if (!delId) return;
+        if (!confirm("Eliminare questa prenotazione?")) return;
+
+        try{
+          await api("ospiti", { method:"DELETE", params:{ id: delId }});
+          toast("Prenotazione eliminata");
+          invalidateApiCache("ospiti|");
+          invalidateApiCache("stanze|");
+          try{ if (state.calendar){ state.calendar.ready = false; state.calendar.rangeKey = ""; } }catch(_){ }
+
+          // ricarica dati e ripristina contesto multi
+          await loadOspiti({ ...(state.period || {}), force:true });
+
+          const items = Array.isArray(state.ospiti) && state.ospiti.length ? state.ospiti : (Array.isArray(state.guests) ? state.guests : []);
+          const groups = groupGuestsByName(items || []);
+
+          const keyWanted = String(state.guestGroupKey || "").trim();
+          let group = keyWanted ? groups.find(g => String(g.key) === keyWanted) : null;
+          if (!group){
+            // fallback: prova con il nome attuale nel form
+            const nameNow = String(document.getElementById("guestName")?.value || "").trim();
+            const nk = normalizeGuestNameKey(nameNow);
+            group = groups.find(g => String(g.key) === nk);
+          }
+
+          if (group && Array.isArray(group.bookings) && group.bookings.length){
+            state.guestGroupBookings = group.bookings;
+            state.guestGroupKey = group.key;
+
+            // Se abbiamo eliminato quella in modifica, passa alla prima disponibile
+            const next = group.bookings.find(b => String(guestIdOf(b)) !== delId) || group.bookings[0];
+            state.guestGroupActiveId = guestIdOf(next);
+            enterGuestEditMode(next);
+            showPage("ospite");
+          } else {
+            // non esiste piu' alcuna prenotazione per quel nome
+            state.guestGroupBookings = null;
+            state.guestGroupKey = null;
+            state.guestGroupActiveId = null;
+            try{ clearGuestMulti(); }catch(_){ }
+            showPage("ospiti");
+          }
+        }catch(err){
+          toast(err?.message || "Errore");
+        }
+        return;
+      }
+
+      // Seleziona prenotazione da modificare
       const btn = e.target.closest("button[data-guest-select]");
       if (!btn || !multi.contains(btn)) return;
       const id = String(btn.getAttribute("data-guest-select") || "").trim();
