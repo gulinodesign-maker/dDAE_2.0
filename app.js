@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.041";
+const BUILD_VERSION = "dDAE_2.043";
 
 
 function __parseBuildVersion(v){
@@ -3348,10 +3348,48 @@ function updateGuestRemaining(){
   try { refreshFloatingLabels(); } catch (_) {}
 }
 
+function updateGuestPriceVisibility(){
+  try{
+    const hide = (String(state.guestMode || '').toLowerCase() === 'create' && !!state.guestCreateFromGroup);
+
+    // Campi prezzi: nascondi l'intera riga/campo
+    ['guestTotal','guestBooking','guestDeposit','guestSaldo'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const field = el.closest('.field');
+      if (field) field.hidden = hide;
+    });
+
+    // Rimanenza: in create-from-group nascondi l'intera riga (niente pillole registrazioni)
+    const rem = document.getElementById('guestRemaining');
+    if (rem){
+      const row = rem.closest('.field.two-col.payment-row');
+      if (row) row.hidden = hide;
+      else {
+        const sub = rem.closest('.subfield');
+        if (sub) sub.hidden = hide;
+      }
+    }
+
+    // Multi prenotazioni: quando si crea un nuovo gruppo dentro una prenotazione esistente,
+    // non mostrare le pillole (Acconto/Saldo/Registrazioni).
+    ['depositType','saldoType','regTags'].forEach((id) => {
+      const el = document.getElementById(id);
+      if (!el) return;
+      const row = el.closest('.field.two-col.payment-row');
+      if (row) row.hidden = hide;
+    });
+  }catch(_){ }
+}
+
+
 function enterGuestCreateMode(){
   setGuestFormViewOnly(false);
 
   state.guestViewItem = null;
+
+  // Multi prenotazioni: quando si crea da un gruppo esistente, possiamo nascondere i prezzi
+  state.guestCreateFromGroup = false;
 
   // Multi prenotazioni: reset contesto
   state.guestGroupBookings = null;
@@ -3409,11 +3447,16 @@ function enterGuestCreateMode(){
   } catch (_) {}
   try { updateOspiteHdActions(); } catch (_) {}
 
+
+  try { updateGuestPriceVisibility(); } catch (_) {}
+
   // (Create mode) nulla da fare sulle stanze: la disponibilita' si aggiorna quando l'utente inserisce le date.
 }
 
 function enterGuestEditMode(ospite){
   setGuestFormViewOnly(false);
+
+  state.guestCreateFromGroup = false;
 
   state.guestViewItem = null;
 
@@ -3561,6 +3604,9 @@ function enterGuestEditMode(ospite){
     state.guestGroupActiveId = guestIdOf(ospite);
     renderGuestMulti({ mode: "edit" });
   }catch(_){ }
+
+
+  try { updateGuestPriceVisibility(); } catch (_) {}
 }
 
 function _guestIdOf(item){
@@ -4201,6 +4247,9 @@ function setupOspite(){
 
         // Passa a CREATE precompilato
         enterGuestCreateMode();
+        state.guestCreateFromGroup = true;
+        try { updateGuestPriceVisibility(); } catch (_) {}
+
         try {
           document.getElementById("guestName").value = nameNow;
           document.getElementById("guestAdults").value = adultsNow;
