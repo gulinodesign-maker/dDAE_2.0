@@ -41,7 +41,7 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.028"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.029"),
     radial-gradient(900px 600px at 10% 0%, rgba(43,124,180,0.10), transparent 62%),
     radial-gradient(800px 520px at 90% 8%, rgba(201,119,43,0.10), transparent 64%),
     radial-gradient(900px 700px at 20% 100%, rgba(111,183,214,0.10), transparent 62%),
@@ -777,7 +777,7 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.028"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.029"),
     radial-gradient(900px 650px at 12% 8%, rgba(43,124,180,0.18), transparent 62%),
     radial-gradient(820px 560px at 92% 14%, rgba(201,119,43,0.16), transparent 62%),
     radial-gradient(900px 700px at 18% 96%, rgba(111,183,214,0.16), transparent 62%),
@@ -2296,14 +2296,15 @@ body[data-page="ospiti"] .guest-card .actions {
 .stay-pill{
   padding: 8px 12px;
   border-radius: 999px;
-  background: var(--brand-orange);
-  color: rgba(255,255,255,0.98);
+  /* arancione chiaro */
+  background: rgba(214,178,134,0.92);
+  color: rgba(15,23,42,0.92);
   display:flex;
   align-items:center;
   gap:8px;
   font-weight: 950;
   font-size: 12px;
-  border: 1px solid var(--brand-orange-2);
+  border: 1px solid rgba(214,178,134,0.55);
   box-shadow: 0 8px 18px rgba(15,23,42,0.10);
   flex: 0 0 auto;
   white-space: nowrap;
@@ -3266,7 +3267,7 @@ body[data-page="ospiti"] .guest-card .actions {
   white-space: nowrap;
 }
 
-/* dDAE_2.028 — Multi prenotazioni per stesso nome (scheda unica con blocchi multipli) */
+/* dDAE_2.029 — Multi prenotazioni per stesso nome (scheda unica con blocchi multipli) */
 #page-ospiti .guest-bookings{
   margin-top: 10px;
   display: flex;
@@ -3300,6 +3301,14 @@ body.perf-lite .guest-booking-block{
   min-width:0;
 }
 
+.guest-booking-stay{
+  margin-top: 8px;
+  display: flex;
+  align-items: center;
+  gap: 10px;
+  flex-wrap: wrap;
+}
+
 .guest-booking-people{
   font-size: 12px;
   font-weight: 900;
@@ -3312,6 +3321,29 @@ body.perf-lite .guest-booking-block{
   opacity: 0.70;
   margin-top: 2px;
   white-space: nowrap;
+}
+
+/* dDAE_2.029 — iPhone: evita taglio dei tab/pillole sulla destra */
+@media (max-width: 430px){
+  #page-ospite .field.two-col.payment-row{
+    grid-template-columns: minmax(0,1fr) !important;
+  }
+  #page-ospite .field.two-col.payment-row .subfield.paywrap{
+    width: auto !important;
+    justify-self: start !important;
+    justify-content: flex-start !important;
+  }
+  #page-ospite .pay-pill{
+    width: 100% !important;
+    max-width: 340px;
+  }
+
+  #page-ospite .guest-hd-actions{
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+
+  .guest-booking-dates{ white-space: normal; }
 }
 
 .guest-booking-rooms{
@@ -5464,4 +5496,32 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   background:var(--mcol,#ff3b30);
   transition:width 720ms cubic-bezier(.2,.8,.2,1);
   box-shadow:0 8px 18px rgba(15,23,42,0.18);
+}
+
+
+/* dDAE_2.029 — iPhone: evita taglio pillole/tabs a destra nella scheda ospite */
+@media (max-width: 430px){
+  #page-ospite .field.two-col.payment-row{
+    grid-template-columns: minmax(0,1fr) !important;
+  }
+  #page-ospite .field.two-col.payment-row .subfield.paywrap{
+    width: 100% !important;
+    justify-self: stretch !important;
+  }
+  #page-ospite .pay-pill{
+    width: 100% !important;
+    max-width: 320px;
+    margin-left: auto;
+    margin-right: auto;
+  }
+  #page-ospite .guest-hd-actions{
+    flex-wrap: wrap;
+    justify-content: flex-end;
+  }
+  .guest-booking-dates{ white-space: normal; }
+  .rooms-readonly-wrap{ flex-wrap: wrap; }
+  .rooms-readonly-wrap .stay-right{
+    width: 100%;
+    justify-content: flex-end;
+  }
 }

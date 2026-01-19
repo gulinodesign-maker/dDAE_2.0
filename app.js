@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.028";
+const BUILD_VERSION = "dDAE_2.029";
 
 
 function __parseBuildVersion(v){
@@ -3514,10 +3514,17 @@ function renderRoomsReadOnly(ospite){
     ? `<div class="stay-right">${marriageOn ? `<span class="marriage-dot" aria-label="Matrimonio">M</span>` : ``}${pillHTML}</div>`
     : ``;
 
-  ro.innerHTML = `<div class="rooms-readonly-wrap">${stackHTML}${rightHTML}</div>`;
+  // Coerenza UI: usa lo stesso riquadro smussato delle prenotazioni multiple
+  ro.innerHTML = `
+    <div class="guest-booking-block guest-booking-block--primary">
+      <div class="guest-booking-rooms guest-booking-ro">
+        <div class="rooms-readonly-wrap">${stackHTML}${rightHTML}</div>
+      </div>
+    </div>
+  `;
 }
 
-// ===== dDAE_2.028 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.029 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -3526,9 +3533,6 @@ function buildGuestBookingBlockHTML(ospite, { mode="view", showSelect=false, act
   const gid = guestIdOf(ospite);
   const roomsArr = _parseRoomsArr(ospite?.stanze);
   const roomsHTML = buildRoomsStackHTML(gid, roomsArr);
-
-  const adults = Math.max(0, parseInt(ospite?.adulti ?? ospite?.adults ?? 0, 10) || 0);
-  const kids = Math.max(0, parseInt(ospite?.bambini_u10 ?? ospite?.kidsU10 ?? 0, 10) || 0);
 
   const ci = formatLongDateIT(ospite?.check_in ?? ospite?.checkIn ?? "") || "—";
   const co = formatLongDateIT(ospite?.check_out ?? ospite?.checkOut ?? "") || "—";
@@ -3547,8 +3551,8 @@ function buildGuestBookingBlockHTML(ospite, { mode="view", showSelect=false, act
   }
 
   const marriageOn = !!(ospite?.matrimonio);
-  const rightHTML = (stayHTML || marriageOn)
-    ? `<div class="stay-right">${marriageOn ? `<span class="marriage-dot" aria-label="Matrimonio">M</span>` : ``}${stayHTML}</div>`
+  const stayLineHTML = (stayHTML || marriageOn)
+    ? `<div class="guest-booking-stay">${marriageOn ? `<span class="marriage-dot" aria-label="Matrimonio">M</span>` : ``}${stayHTML}</div>`
     : ``;
 
   const isActive = (activeId && gid && String(activeId) === String(gid));
@@ -3561,12 +3565,12 @@ function buildGuestBookingBlockHTML(ospite, { mode="view", showSelect=false, act
   return `<div class="guest-booking-block ${isActive ? "is-active" : ""}" data-booking-id="${gid}">
     <div class="guest-booking-top">
       <div class="guest-booking-left">
-        <div class="guest-booking-people">${adults}A • ${kids}B</div>
         <div class="guest-booking-dates">${ci} → ${co}</div>
+        ${stayLineHTML}
       </div>
-      ${actionsHTML || rightHTML}
+      ${actionsHTML || ``}
     </div>
-    ${actionsHTML ? `<div class="guest-booking-rooms">${roomsHTML}${rightHTML ? `<div style="margin-top:8px;">${rightHTML}</div>` : ``}</div>` : `<div class="guest-booking-rooms">${roomsHTML}</div>`}
+    <div class="guest-booking-rooms">${roomsHTML}</div>
   </div>`;
 }
 
