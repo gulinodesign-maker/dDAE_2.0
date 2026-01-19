@@ -41,7 +41,7 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.048"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.049"),
     radial-gradient(900px 600px at 10% 0%, rgba(43,124,180,0.10), transparent 62%),
     radial-gradient(800px 520px at 90% 8%, rgba(201,119,43,0.10), transparent 64%),
     radial-gradient(900px 700px at 20% 100%, rgba(111,183,214,0.10), transparent 62%),
@@ -777,7 +777,7 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.048"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.049"),
     radial-gradient(900px 650px at 12% 8%, rgba(43,124,180,0.18), transparent 62%),
     radial-gradient(820px 560px at 92% 14%, rgba(201,119,43,0.16), transparent 62%),
     radial-gradient(900px 700px at 18% 96%, rgba(111,183,214,0.16), transparent 62%),
@@ -914,7 +914,7 @@ body[data-page="home"]{
   font-size: 42px !important;
 }
 /* Alza il gruppo (card) più in alto */
-.home-page .home-spacer:first-of-type{ flex: 0.35 !important; }
+.home-page .home-spacer:first-of-type{ flex: 0.55 !important; }
 /* Card un filo più compatta con icone grandi */
 .home-card{
   width: min(460px, 94vw) !important;
@@ -967,7 +967,7 @@ body::before{
 .home-grid{ gap: 12px !important; }
 
 /* alza la card (più in alto) */
-.home-page .home-spacer:first-of-type{ flex: 0.35 !important; }
+.home-page .home-spacer:first-of-type{ flex: 0.55 !important; }
 .home-page .home-spacer:last-of-type{ flex: 1.15 !important; }
 
 /* build: in fondo display, sopra safe-area */
@@ -5608,3 +5608,8 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 
 /* Calendario: render immediato + refresh in background */
 #calGrid.is-loading{opacity:.6;transition:opacity .12s ease;}
+
+
+/* dDAE_2.049 — HOME: sposta pill+icone più in basso (evita overlap topbar) */
+#page-home .year-pill{ margin-top: 10px; }
+#page-home .home-page{ padding-top: 6px; }
