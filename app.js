@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.049";
+const BUILD_VERSION = "dDAE_2.037";
 
 
 function __parseBuildVersion(v){
@@ -64,7 +64,7 @@ function updateYearPill(){
   if (!pill) return;
   const y = state.exerciseYear;
   if (!y){ pill.hidden = true; return; }
-  pill.textContent = `${y}`;
+  pill.textContent = `ANNO ${y}`;
   pill.hidden = false;
   try{ updateSettingsTabs(); }catch(_){ }
 }
@@ -516,12 +516,10 @@ const COLORS = {
 const loadingState = {
   requestCount: 0,
   showTimer: null,
-  hideTimer: null,
   shownAt: 0,
   isVisible: false,
-  delayMs: 800,       // evita loader per richieste brevi
-  minVisibleMs: 450,  // se compare, resta un minimo (evita “lampeggi”)
-  hideGraceMs: 260,   // unisce richieste sequenziali (evita molte comparse)
+  delayMs: 500,      // opzionale: evita flicker se rapidissimo
+  minVisibleMs: 300, // opzionale: se compare non sparisce subito
 };
 
 function showLoading(){
@@ -542,12 +540,6 @@ function hideLoading(){
 function beginRequest(){
   loadingState.requestCount += 1;
   if (loadingState.requestCount !== 1) return;
-
-  // Se stavamo per nascondere il loader, annulla: richieste ravvicinate = una sola sessione di loading
-  if (loadingState.hideTimer){
-    clearTimeout(loadingState.hideTimer);
-    loadingState.hideTimer = null;
-  }
 
   // Programma la comparsa dopo delayMs
   if (loadingState.showTimer) clearTimeout(loadingState.showTimer);
@@ -580,18 +572,15 @@ function endRequest(){
   if (!loadingState.isVisible) return;
 
   const elapsed = performance.now() - (loadingState.shownAt || performance.now());
-  const minRemain = loadingState.minVisibleMs - elapsed;
-  const delay = Math.max(loadingState.hideGraceMs || 0, minRemain > 0 ? minRemain : 0);
-
-  if (loadingState.hideTimer) {
-    clearTimeout(loadingState.hideTimer);
-    loadingState.hideTimer = null;
+  const remaining = loadingState.minVisibleMs - elapsed;
+  if (remaining > 0) {
+    setTimeout(() => {
+      // Ricontrollo: potrebbe essere partita un'altra richiesta.
+      if (loadingState.requestCount === 0) hideLoading();
+    }, remaining);
+  } else {
+    hideLoading();
   }
-
-  loadingState.hideTimer = setTimeout(() => {
-    loadingState.hideTimer = null;
-    if (loadingState.requestCount === 0) hideLoading();
-  }, delay);
 }
 
 function euro(n){
@@ -1571,32 +1560,13 @@ function __lsSet(key, data){
 
 
 // GET con cache in-memory (non tocca SW): evita chiamate duplicate e loader continui
-async function cachedGet(action, params = {}, { ttlMs = 30000, swrMs = null, showLoader = true, force = false } = {}){
+async function cachedGet(action, params = {}, { ttlMs = 30000, showLoader = true, force = false } = {}){
   const ctxParams = __applyCtxToParams(action, params);
   const key = __cacheKey(action, ctxParams);
-  const now = Date.now();
-  const swrWindow = (swrMs === null || swrMs === undefined) ? ttlMs : swrMs;
 
   if (!force) {
     const hit = __apiCache.get(key);
-    if (hit) {
-      const age = now - hit.t;
-      if (age < ttlMs) return hit.data;
-
-      // Stale-while-revalidate: torna subito il dato “stale” e aggiorna in background
-      if (age < swrWindow) {
-        if (!__apiInflight.has(key)) {
-          const bg = (async () => {
-            const data = await api(action, { params: ctxParams, showLoader:false });
-            __apiCache.set(key, { t: Date.now(), data });
-            return data;
-          })();
-          __apiInflight.set(key, bg);
-          bg.finally(() => { try{ __apiInflight.delete(key); }catch(_){ } });
-        }
-        return hit.data;
-      }
-    }
+    if (hit && (Date.now() - hit.t) < ttlMs) return hit.data;
   }
 
   if (__apiInflight.has(key)) return __apiInflight.get(key);
@@ -1681,7 +1651,7 @@ const lav = e.target.closest && e.target.closest("#goLavanderia") || e.target.cl
     const s3 = e.target.closest && e.target.closest("#goStatSpese");
     if (s3){ hideLauncher(); showPage("statspese"); return; }
     const s4 = e.target.closest && e.target.closest("#goStatPrenotazioni");
-    if (s4){ hideLauncher(); showPage("statprenotazioni"); return; }
+    if (s4){ hideLauncher(); toast("Statistiche prenotazioni: in arrivo"); return; }
 
   });
 }
@@ -1830,7 +1800,7 @@ state.page = page;
     statGenTopTools.hidden = (page !== "statgen");
   }
 
-  // Top tools (Statistiche → Fatturati mensili)
+  // Top tools (Statistiche → Incassi mensili)
   const statMensiliTopTools = $("#statMensiliTopTools");
   if (statMensiliTopTools){
     statMensiliTopTools.hidden = (page !== "statmensili");
@@ -1840,11 +1810,6 @@ state.page = page;
   const statSpeseTopTools = $("#statSpeseTopTools");
   if (statSpeseTopTools){
     statSpeseTopTools.hidden = (page !== "statspese");
-  }
-
-  const statPrenTopTools = $("#statPrenTopTools");
-  if (statPrenTopTools){
-    statPrenTopTools.hidden = (page !== "statprenotazioni");
   }
 
 // render on demand
@@ -1871,7 +1836,7 @@ state.page = page;
     // Entrando in Calendario vogliamo SEMPRE dati freschi.
     // 1) invalida lo stato "ready" e bypassa la cache in-memory (ttl) con force:true.
     try{ if (state.calendar) state.calendar.ready = false; }catch(_){ }
-    ensureCalendarData({ force:true, showLoader:false })
+    ensureCalendarData({ force:true })
       .then(()=>{ if (state.navId !== _nav || state.page !== "calendario") return; renderCalendario(); })
       .catch(e=>toast(e.message));
   }
@@ -1914,16 +1879,6 @@ state.page = page;
     const _nav = navId;
     ensurePeriodData({ showLoader:true })
       .then(()=>{ if (state.navId !== _nav || state.page !== "statspese") return; renderStatSpese(); })
-      .catch(e=>toast(e.message));
-  }
-
-  if (page === "statprenotazioni") {
-    const _nav = navId;
-    Promise.all([
-      ensurePeriodData({ showLoader:true }),
-      loadOspiti({ ...(state.period || {}), force:false }),
-    ])
-      .then(()=>{ if (state.navId !== _nav || state.page !== "statprenotazioni") return; renderStatPrenotazioni(); })
       .catch(e=>toast(e.message));
   }
 
@@ -2082,7 +2037,7 @@ if (goCalendarioTopOspiti){
   const s3 = $("#goStatSpese");
   if (s3){ bindFastTap(s3, () => { hideLauncher(); showPage("statspese"); }); }
   const s4 = $("#goStatPrenotazioni");
-  if (s4){ bindFastTap(s4, () => { hideLauncher(); showPage("statprenotazioni"); }); }
+  if (s4){ bindFastTap(s4, () => toast("Statistiche prenotazioni: in arrivo")); }
 
   // STATGEN: topbar tools
   const btnBackStats = $("#btnBackStatistiche");
@@ -2119,8 +2074,6 @@ if (goCalendarioTopOspiti){
   // STATISTICHE: Spese generali topbar tools
   const btnBackStatsSpese = $("#btnBackStatisticheSpese");
   if (btnBackStatsSpese){ bindFastTap(btnBackStatsSpese, () => { closeStatSpesePieModal(); showPage("statistiche"); }); }
-  const btnBackStatsPren = $("#btnBackStatistichePrenotazioni");
-  if (btnBackStatsPren){ bindFastTap(btnBackStatsPren, () => { showPage("statistiche"); }); }
   const btnPieSpese = $("#btnStatSpesePie");
   if (btnPieSpese){ bindFastTap(btnPieSpese, () => { openStatSpesePieModal(); }); }
 
@@ -2398,34 +2351,9 @@ async function loadOspiti({ from="", to="", force=false } = {}){
 
   // ✅ Necessario per mostrare i "pallini letti" stanza-per-stanza nelle schede ospiti
   const p = load({ showLoader:false });
-  const hasLocal = !!(hit && Array.isArray(hit.data) && hit.data.length);
+  const pOspiti = cachedGet("ospiti", { from, to }, { showLoader:true, ttlMs: 30*1000, force });
 
-  // Se ho già dati locali, aggiorna in background (senza loader e senza bloccare la navigazione)
-  const refresh = async () => {
-    const data = await cachedGet("ospiti", { from, to }, {
-      showLoader: !hasLocal,
-      ttlMs: 2*60*1000,
-      swrMs: 10*60*1000,
-      force,
-    });
-    return data;
-  };
-
-  if (hasLocal && !force) {
-    // fire-and-forget
-    Promise.all([p, refresh()])
-      .then(([ , data ]) => {
-        // aggiorna solo se l'utente è ancora nella lista ospiti
-        if (state.page !== "ospiti") return;
-        state.guests = Array.isArray(data) ? data : [];
-        __lsSet(lsKey, state.guests);
-        try{ requestAnimationFrame(renderGuestCards); }catch(_){ renderGuestCards(); }
-      })
-      .catch(() => {});
-    return;
-  }
-
-  const [ , data ] = await Promise.all([p, refresh()]);
+  const [ , data ] = await Promise.all([p, pOspiti]);
   state.guests = Array.isArray(data) ? data : [];
   __lsSet(lsKey, state.guests);
   renderGuestCards();
@@ -2440,57 +2368,14 @@ async function ensurePeriodData({ showLoader=true, force=false } = {}){
     return;
   }
 
-  // Prefill immediato da cache locale (perceived speed) — poi refresh SWR
-  const lsSpeseKey = `spese|${from}|${to}`;
-  const lsReportKey = `report|${from}|${to}`;
-  const hitS = !force ? __lsGet(lsSpeseKey) : null;
-  const hitR = !force ? __lsGet(lsReportKey) : null;
-  const hasLocal = !!((hitS && hitS.data) || (hitR && hitR.data));
-
-  if (!force) {
-    if (hitS && Array.isArray(hitS.data)) state.spese = hitS.data;
-    if (hitR && hitR.data) state.report = hitR.data;
-    if (hasLocal) state._dataKey = key;
-  }
-
-  const fetchAll = () => Promise.all([
-    cachedGet("report", { from, to }, { showLoader: showLoader && !hasLocal, ttlMs: 2*60*1000, swrMs: 10*60*1000, force }),
-    cachedGet("spese", { from, to }, { showLoader: showLoader && !hasLocal, ttlMs: 2*60*1000, swrMs: 10*60*1000, force }),
+  const [report, spese] = await Promise.all([
+    cachedGet("report", { from, to }, { showLoader, ttlMs: 15*1000, force }),
+    cachedGet("spese", { from, to }, { showLoader, ttlMs: 15*1000, force }),
   ]);
 
-  // Se ho cache locale e non forzo, non bloccare la navigazione: aggiorna in background
-  if (hasLocal && !force) {
-    fetchAll()
-      .then(([report, spese]) => {
-        const kNow = `${state.period.from}|${state.period.to}`;
-        if (kNow !== key) return;
-        state.report = report;
-        state.spese = Array.isArray(spese) ? spese : [];
-        state._dataKey = key;
-        __lsSet(lsReportKey, report);
-        __lsSet(lsSpeseKey, state.spese);
-
-        // refresh UI se siamo su pagine che dipendono da questi dati
-        try{
-          if (state.page === "spese") {
-            if (state.speseView === "list") renderSpese();
-            else { renderRiepilogo(); renderGrafico(); }
-          }
-          if (state.page === "statgen") renderStatGen();
-          if (state.page === "statmensili") renderStatMensili();
-          if (state.page === "statspese") renderStatSpese();
-        }catch(_){ }
-      })
-      .catch(() => {});
-    return;
-  }
-
-  const [report, spese] = await fetchAll();
   state.report = report;
-  state.spese = Array.isArray(spese) ? spese : [];
+  state.spese = spese;
   state._dataKey = key;
-  __lsSet(lsReportKey, report);
-  __lsSet(lsSpeseKey, state.spese);
 }
 
 // Compat: vecchi call-site
@@ -2811,75 +2696,45 @@ function computeStatGen(){
   const guests = Array.isArray(state.guests) ? state.guests : [];
   const report = state.report || null;
 
-  const money = (v) => {
-    if (v === null || v === undefined) return 0;
-    if (typeof v === "number") return isFinite(v) ? v : 0;
-    let s = String(v).trim();
-    if (!s) return 0;
-    // Normalizza numeri tipo "1.234,56" o "1234,56"
-    if (s.includes(",") && s.includes(".")) {
-      s = s.replace(/\./g, "").replace(",", ".");
-    } else if (s.includes(",")) {
-      s = s.replace(",", ".");
-    }
-    const n = Number(s);
-    return isFinite(n) ? n : 0;
-  };
-
-  // Fatturato totale = somma di tutte le voci "importo prenotazione"
   let fatturato = 0;
-
-  // Giacenza in cassa = somma di tutti gli importi "acconto + saldo"
-  let giacenza = 0;
-
-  // (Restano utili per le righe con/senza ricevuta)
+  let cash = 0;
   let conRicevuta = 0;
   let senzaRicevuta = 0;
 
   for (const g of guests){
-    const pren = money(g?.importo_prenotazione ?? g?.importo_prenota ?? g?.importoPrenotazione ?? g?.importoPrenota ?? 0);
-    fatturato += pren;
-
-    const dep = money(g?.acconto_importo ?? g?.accontoImporto ?? 0);
-    const saldo = money(g?.saldo_pagato ?? g?.saldoPagato ?? g?.saldo ?? 0);
-
-    giacenza += (dep + saldo);
+    const dep = Number(g?.acconto_importo || 0) || 0;
+    const saldo = Number(g?.saldo_pagato ?? g?.saldoPagato ?? g?.saldo ?? 0) || 0;
+    const depType = String(g?.acconto_tipo || g?.depositType || "contante").toLowerCase();
+    const saldoType = String(g?.saldo_tipo || g?.saldoTipo || g?.saldoType || "").toLowerCase();
 
     // receipt flags
     const depRec = truthy(g?.acconto_ricevuta ?? g?.accontoRicevuta ?? g?.ricevuta_acconto ?? g?.ricevutaAcconto ?? g?.acconto_ricevutain);
     const saldoRec = truthy(g?.saldo_ricevuta ?? g?.saldoRicevuta ?? g?.ricevuta_saldo ?? g?.ricevutaSaldo ?? g?.saldo_ricevutain);
 
+    fatturato += dep + saldo;
+
     if (dep > 0){
       if (depRec) conRicevuta += dep;
       else senzaRicevuta += dep;
+      if (!depType.includes("elet")) cash += dep;
     }
     if (saldo > 0){
       if (saldoRec) conRicevuta += saldo;
       else senzaRicevuta += saldo;
+      if (!saldoType.includes("elet")) cash += saldo;
     }
   }
 
-  const speseTot = money(report?.totals?.importoLordo ?? 0);
+  const speseTot = Number(report?.totals?.importoLordo || 0) || 0;
 
-  // IVA da versare = (10% del fatturato alloggi) - (somma IVA di tutte le spese al 4/10/22)
-  let ivaSpese = money(report?.totals?.iva ?? 0);
-  if (!isFinite(ivaSpese) || ivaSpese === 0){
-    ivaSpese = money(report?.totals?.ivaDetraibile ?? 0);
-  }
-
+  // IVA da versare = IVA su incassi (10%) - IVA detraibile su spese (4/10/22)
+  let ivaSpese = Number(report?.totals?.ivaDetraibile || 0) || 0;
   if (!isFinite(ivaSpese) || ivaSpese === 0){
     try{
       const items = Array.isArray(state.spese) ? state.spese : [];
       let sum = 0;
       for (const s of items){
-        // Se c'e' gia' un campo iva, usa quello
-        const ivaField = money(s?.iva ?? s?.IVA ?? 0);
-        if (ivaField > 0){
-          sum += ivaField;
-          continue;
-        }
-
-        const lordo = money(s?.importoLordo ?? s?.lordo ?? 0);
+        const lordo = Number(s?.importoLordo || 0);
         if (!isFinite(lordo) || lordo <= 0) continue;
 
         const catRaw = (s?.categoria ?? s?.cat ?? "").toString().trim().toLowerCase();
@@ -2907,7 +2762,7 @@ function computeStatGen(){
     }catch(_){ }
   }
 
-  const ivaDaVersare = (fatturato * 0.10) - (money(ivaSpese) || 0);
+  const ivaDaVersare = (conRicevuta * 0.10) - (Number(ivaSpese) || 0);
   const guadagno = fatturato - speseTot;
 
   return {
@@ -2917,7 +2772,7 @@ function computeStatGen(){
     conRicevuta,
     ivaDaVersare,
     guadagnoTotale: guadagno,
-    giacenzaCassa: giacenza,
+    giacenzaCassa: cash,
   };
 }
 
@@ -2941,7 +2796,7 @@ function renderStatGen(){
 
 
 
-// ===== Statistiche: Fatturati mensili =====
+// ===== Statistiche: Incassi mensili =====
 function __hslToHex(h, s, l){
   h = ((h % 360) + 360) % 360;
   s = Math.max(0, Math.min(100, s)) / 100;
@@ -2972,29 +2827,14 @@ function __hslToHex(h, s, l){
 
 function __mensiliPalette12(){
   if (__mensiliPalette12._cache) return __mensiliPalette12._cache;
-  const root = document.documentElement;
-  const cs = getComputedStyle(root);
-  const pick = (name, fallback) => {
-    try{
-      const v = (cs.getPropertyValue(name) || "").trim();
-      return v || fallback;
-    }catch(_){ return fallback; }
-  };
-
-  // Palette coerente con l'app (CSS variables in :root)
-  const base = [
-    pick("--p1", "#2B7CB4"),
-    pick("--p2", "#4D9CC5"),
-    pick("--p3", "#6FB7D6"),
-    pick("--p4", "#96BFC7"),
-    pick("--p5", "#BFBEA9"),
-    pick("--p6", "#D6B286"),
-    pick("--p7", "#CF9458"),
-    pick("--p8", "#C9772B"),
-  ];
-
   const out = [];
-  for (let i = 0; i < 12; i++) out.push(base[i % base.length]);
+  const h0 = 0;     // rosso
+  const h1 = 275;   // indaco
+  for (let i = 0; i < 12; i++){
+    const t = (12 === 1) ? 0 : (i / 11);
+    const h = h0 + (h1 - h0) * t;
+    out.push(__hslToHex(h, 86, 55));
+  }
   __mensiliPalette12._cache = out;
   return out;
 }
@@ -3007,21 +2847,6 @@ const __MONTHS_IT = [
 function computeStatMensili(){
   const guests = Array.isArray(state.guests) ? state.guests : [];
   const byMonth = new Array(12).fill(0);
-
-  const money = (v) => {
-    if (v === null || v === undefined) return 0;
-    if (typeof v === "number") return isFinite(v) ? v : 0;
-    let s = String(v).trim();
-    if (!s) return 0;
-    // Normalizza numeri tipo "1.234,56" o "1234,56"
-    if (s.includes(",") && s.includes(".")) {
-      s = s.replace(/\./g, "").replace(",", ".");
-    } else if (s.includes(",")) {
-      s = s.replace(",", ".");
-    }
-    const n = Number(s);
-    return isFinite(n) ? n : 0;
-  };
 
   for (const gg of guests){
     let iso = "";
@@ -3044,11 +2869,12 @@ function computeStatMensili(){
     const mm = parseInt(iso.slice(5,7), 10);
     if (!Number.isFinite(mm) || mm < 1 || mm > 12) continue;
 
-    // Fatturati mensili = somma di tutte le voci "importo prenotazione" (stessa regola del fatturato totale)
-    const pren = money(gg?.importo_prenotazione ?? gg?.importo_prenota ?? gg?.importoPrenotazione ?? gg?.importoPrenota ?? 0);
-    if (!isFinite(pren) || pren === 0) continue;
+    const dep = Number(gg?.acconto_importo || 0) || 0;
+    const saldo = Number(gg?.saldo_pagato ?? gg?.saldoPagato ?? gg?.saldo ?? 0) || 0;
+    const tot = dep + saldo;
+    if (!isFinite(tot) || tot === 0) continue;
 
-    byMonth[mm - 1] += pren;
+    byMonth[mm - 1] += tot;
   }
 
   return { byMonth };
@@ -3096,72 +2922,6 @@ function renderStatMensili(){
       try{ f.el.style.width = `${f.pct.toFixed(2)}%`; }catch(_){ }
     }
   });
-}
-
-
-// ===== Statistiche: Prenotazioni (booking compilato vs non compilato) =====
-function computeStatPrenotazioni(){
-  const guests = Array.isArray(state.guests) ? state.guests : [];
-
-  const money = (v) => {
-    if (v === null || v === undefined) return 0;
-    if (typeof v === "number") return isFinite(v) ? v : 0;
-    let s = String(v).trim();
-    if (!s) return 0;
-    if (s.includes(",") && s.includes(".")) {
-      s = s.replace(/\./g, "").replace(",", ".");
-    } else if (s.includes(",")) {
-      s = s.replace(",", ".");
-    }
-    const n = Number(s);
-    return isFinite(n) ? n : 0;
-  };
-
-  let withBooking = 0;
-  let withoutBooking = 0;
-
-  for (const g of guests){
-    const pren = money(g?.importo_prenotazione ?? g?.importo_prenota ?? g?.importoPrenotazione ?? g?.importoPrenota ?? 0);
-    const rawBooking = (g?.importo_booking ?? g?.importoBooking ?? g?.booking ?? null);
-    const bookingVal = money(rawBooking);
-    const bookingFilled = bookingVal > 0;
-    if (bookingFilled) withBooking += pren;
-    else withoutBooking += pren;
-  }
-
-  return { withBooking, withoutBooking };
-}
-
-function renderStatPrenotazioni(){
-  const s = computeStatPrenotazioni();
-  state.statPrenotazioni = s;
-
-  const slices = [
-    { label: "Con importo booking", value: s.withBooking, color: "#2b7cb4" },
-    { label: "Senza importo booking", value: s.withoutBooking, color: "#cf9458" },
-  ];
-
-  drawPie("statPrenCanvas", slices);
-
-  const leg = document.getElementById("statPrenLegend");
-  if (leg){
-    const total = slices.reduce((a,x)=>a+Math.max(0,Number(x.value||0)),0);
-    leg.innerHTML = "";
-    slices.forEach((sl)=>{
-      const v = Math.max(0, Number(sl.value || 0));
-      const pct = total > 0 ? (v/total*100) : 0;
-      const row = document.createElement("div");
-      row.className = "legrow";
-      row.innerHTML = `
-        <div class="legleft">
-          <div class="dot" style="background:${sl.color}"></div>
-          <div class="legname">${escapeHtml(sl.label)}</div>
-        </div>
-        <div class="legright">${pct.toFixed(1)}% · ${euro(v)}</div>
-      `;
-      leg.appendChild(row);
-    });
-  }
 }
 function openStatPieModal(){
   try{
@@ -3239,9 +2999,22 @@ function openStatMensiliPieModal(){
 
   const leg = document.getElementById("statMensiliPieLegend");
   if (leg){
+    const total = slices.reduce((a,x)=>a+Math.max(0,Number(x.value||0)),0);
     leg.innerHTML = "";
-    leg.style.display = "none";
-    leg.setAttribute("aria-hidden", "true");
+    slices.forEach((sl)=>{
+      const v = Math.max(0, Number(sl.value || 0));
+      const pct = total > 0 ? (v/total*100) : 0;
+      const row = document.createElement("div");
+      row.className = "legrow";
+      row.innerHTML = `
+        <div class="legleft">
+          <div class="dot" style="background:${sl.color}"></div>
+          <div class="legname">${escapeHtml(sl.label)}</div>
+        </div>
+        <div class="legright">${pct.toFixed(1)}% · ${euro(v)}</div>
+      `;
+      leg.appendChild(row);
+    });
   }
 }
 
@@ -3477,48 +3250,10 @@ function updateGuestRemaining(){
   try { refreshFloatingLabels(); } catch (_) {}
 }
 
-function updateGuestPriceVisibility(){
-  try{
-    const hide = (String(state.guestMode || '').toLowerCase() === 'create' && !!state.guestCreateFromGroup);
-
-    // Campi prezzi: nascondi l'intera riga/campo
-    ['guestTotal','guestBooking','guestDeposit','guestSaldo'].forEach((id) => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      const field = el.closest('.field');
-      if (field) field.hidden = hide;
-    });
-
-    // Rimanenza: in create-from-group nascondi l'intera riga (niente pillole registrazioni)
-    const rem = document.getElementById('guestRemaining');
-    if (rem){
-      const row = rem.closest('.field.two-col.payment-row');
-      if (row) row.hidden = hide;
-      else {
-        const sub = rem.closest('.subfield');
-        if (sub) sub.hidden = hide;
-      }
-    }
-
-    // Multi prenotazioni: quando si crea un nuovo gruppo dentro una prenotazione esistente,
-    // non mostrare le pillole (Acconto/Saldo/Registrazioni).
-    ['depositType','saldoType','regTags'].forEach((id) => {
-      const el = document.getElementById(id);
-      if (!el) return;
-      const row = el.closest('.field.two-col.payment-row');
-      if (row) row.hidden = hide;
-    });
-  }catch(_){ }
-}
-
-
 function enterGuestCreateMode(){
   setGuestFormViewOnly(false);
 
   state.guestViewItem = null;
-
-  // Multi prenotazioni: quando si crea da un gruppo esistente, possiamo nascondere i prezzi
-  state.guestCreateFromGroup = false;
 
   // Multi prenotazioni: reset contesto
   state.guestGroupBookings = null;
@@ -3576,16 +3311,11 @@ function enterGuestCreateMode(){
   } catch (_) {}
   try { updateOspiteHdActions(); } catch (_) {}
 
-
-  try { updateGuestPriceVisibility(); } catch (_) {}
-
   // (Create mode) nulla da fare sulle stanze: la disponibilita' si aggiorna quando l'utente inserisce le date.
 }
 
 function enterGuestEditMode(ospite){
   setGuestFormViewOnly(false);
-
-  state.guestCreateFromGroup = false;
 
   state.guestViewItem = null;
 
@@ -3733,9 +3463,6 @@ function enterGuestEditMode(ospite){
     state.guestGroupActiveId = guestIdOf(ospite);
     renderGuestMulti({ mode: "edit" });
   }catch(_){ }
-
-
-  try { updateGuestPriceVisibility(); } catch (_) {}
 }
 
 function _guestIdOf(item){
@@ -4200,15 +3927,6 @@ function setupOspite(){
 
       // Indaco: vai al calendario
       if (btn.hasAttribute("data-guest-cal")){
-        // In sola lettura: apri il calendario centrato sulla stessa prenotazione
-        try{
-          const ciRaw = (document.getElementById("guestCheckIn")?.value || "").trim();
-          const ci = ciRaw || (state.guestViewItem?.check_in || state.guestViewItem?.checkIn || "");
-          if (ci){
-            if (!state.calendar) state.calendar = { anchor: new Date(), ready: false, guests: [], rangeKey: "" };
-            state.calendar.anchor = new Date(ci + "T00:00:00");
-          }
-        }catch(_){ }
         showPage("calendario");
         return;
       }
@@ -4376,9 +4094,6 @@ function setupOspite(){
 
         // Passa a CREATE precompilato
         enterGuestCreateMode();
-        state.guestCreateFromGroup = true;
-        try { updateGuestPriceVisibility(); } catch (_) {}
-
         try {
           document.getElementById("guestName").value = nameNow;
           document.getElementById("guestAdults").value = adultsNow;
@@ -4577,157 +4292,33 @@ function setupOspite(){
     }catch(_){ return null; }
   }
 
-  // Stanze:
-  // - tap breve su stanza spenta => seleziona + apre popup letti
-  // - tap breve su stanza accesa => apre popup letti (cambio tipologia)
-  // - pressione lunga (>=0.5s) su stanza accesa => deseleziona (SENZA popup)
-  let __roomPressTimer = null;
-  let __roomPressBtn = null;
-  let __roomLongFired = false;
-  let __roomSuppressClickUntil = 0;
+  roomsWrap?.addEventListener("click", (e) => {
+    const b = __pickRoomDotFromEvent(e);
+    if (!b) return;
 
-  function __room_now(){
-    try{ return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); }
-    catch(_){ return Date.now(); }
-  }
-  function __room_markSuppress(ms){
-    try{ __roomSuppressClickUntil = __room_now() + (ms || 650); }catch(_){ }
-  }
-  function __room_isSuppressed(){
-    try{ return __room_now() < __roomSuppressClickUntil; }catch(_){ return false; }
-  }
-  function __room_clearPress(){
-    try{ if (__roomPressTimer){ clearTimeout(__roomPressTimer); } }catch(_){ }
-    __roomPressTimer = null;
-    __roomPressBtn = null;
-    __roomLongFired = false;
-  }
+    // Matrimonio: flag separato
+    if (b.id === "roomMarriage") { setMarriage(!state.guestMarriage); return; }
 
-  function __room_getDotFromEvent(e){
-    try{
-      const b = __pickRoomDotFromEvent(e);
-      if (!b) return null;
-      if (!roomsWrap || !roomsWrap.contains(b)) return null;
-      if (!b.classList || !b.classList.contains('room-dot')) return null;
-      return b;
-    }catch(_){ return null; }
-  }
-
-  function __room_canInteract(b){
     const range = _getGuestDateRange();
     if (!range){
-      try{ toast('Seleziona prima check-in e check-out'); }catch(_){ }
-      return false;
-    }
-    if (b.classList.contains('occupied') || b.disabled){
-      try{ toast('Stanza occupata'); }catch(_){ }
-      return false;
-    }
-    return true;
-  }
-
-  function __room_handleShortTap(b){
-    // Matrimonio: flag separato
-    if (b.id === 'roomMarriage') { setMarriage(!state.guestMarriage); return; }
-    if (!__room_canInteract(b)) return;
-
-    const n = parseInt(b.getAttribute('data-room'), 10);
-    if (!isFinite(n)) return;
-
-    // Se era spenta, accendi
-    if (!state.guestRooms.has(n)) {
-      state.guestRooms.add(n);
-      renderRooms();
+      try{ toast("Seleziona prima check-in e check-out"); }catch(_){}
+      return;
     }
 
-    // Tap breve su stanza accesa/spenta => apre popup configurazione letti
-    try{ openRoomConfig(n); }catch(_){ }
-  }
+    // Se occupata (rossa) => popup
+    if (b.classList.contains("occupied") || b.disabled){
+      try{ toast("Stanza occupata"); }catch(_){}
+      return;
+    }
 
-  function __room_handleLongPress(b){
-    // Matrimonio: nessun long-press
-    if (b.id === 'roomMarriage') return;
-    if (!__room_canInteract(b)) return;
-
-    const n = parseInt(b.getAttribute('data-room'), 10);
-    if (!isFinite(n)) return;
-
-    // Deselezione SOLO con pressione lunga e SOLO se era accesa
+    const n = parseInt(b.getAttribute("data-room"), 10);
     if (state.guestRooms.has(n)) {
       state.guestRooms.delete(n);
       if (state.lettiPerStanza) delete state.lettiPerStanza[String(n)];
-      renderRooms();
-
-      // Se il popup era aperto su questa stanza, chiudilo
-      try{
-        if (typeof __rc_room !== 'undefined' && String(__rc_room) === String(n)){
-          const m = document.getElementById('roomConfigModal');
-          if (m) m.hidden = true;
-          try{ __rc_room = null; }catch(_){ }
-        }
-      }catch(_){ }
-    }
-  }
-
-  function __room_onPressStart(e){
-    const b = __room_getDotFromEvent(e);
-    if (!b) return;
-
-    // Evita click "fantasma" dopo touch/pointer
-    __room_markSuppress(900);
-
-    // Evita callout/scroll strani su iOS durante pressione lunga
-    try{ e.preventDefault(); }catch(_){ }
-
-    __room_clearPress();
-    __roomPressBtn = b;
-
-    __roomPressTimer = setTimeout(() => {
-      __roomLongFired = true;
-      __room_handleLongPress(b);
-    }, 500);
-  }
-
-  function __room_onPressEnd(e){
-    if (!__roomPressBtn) return;
-    const b = __roomPressBtn;
-    const wasLong = __roomLongFired;
-
-    __room_clearPress();
-
-    // Sopprimi click generato da touchend
-    __room_markSuppress(900);
-    try{ e.preventDefault(); }catch(_){ }
-
-    if (wasLong) return;
-    __room_handleShortTap(b);
-  }
-
-  function __room_onPressCancel(_e){
-    __room_clearPress();
-  }
-
-  // Pointer events (preferiti) + fallback touch/mouse
-  try{
-    if (window.PointerEvent) {
-      roomsWrap?.addEventListener('pointerdown', __room_onPressStart, { passive:false });
-      roomsWrap?.addEventListener('pointerup', __room_onPressEnd, { passive:false });
-      roomsWrap?.addEventListener('pointercancel', __room_onPressCancel, { passive:true });
     } else {
-      roomsWrap?.addEventListener('touchstart', __room_onPressStart, { passive:false });
-      roomsWrap?.addEventListener('touchend', __room_onPressEnd, { passive:false });
-      roomsWrap?.addEventListener('touchcancel', __room_onPressCancel, { passive:true });
-      roomsWrap?.addEventListener('mousedown', __room_onPressStart, { passive:false });
-      roomsWrap?.addEventListener('mouseup', __room_onPressEnd, { passive:false });
+      state.guestRooms.add(n);
     }
-  }catch(_){ }
-
-  // Click (tastiera/desktop). Ignorato se appena gestito da touch/pointer.
-  roomsWrap?.addEventListener('click', (e) => {
-    if (__room_isSuppressed()) return;
-    const b = __room_getDotFromEvent(e);
-    if (!b) return;
-    __room_handleShortTap(b);
+    renderRooms();
   });
 
   function bindPayPill(containerId, kind){
@@ -5032,7 +4623,6 @@ async function init(){
   state.exerciseYear = loadExerciseYear();
   updateYearPill();
 
-  // Imposta una pagina di default (poi showPage verrà chiamata UNA sola volta)
   document.body.dataset.page = (state.session && state.session.user_id) ? "home" : "auth";
   setupHeader();
   setupAuth();
@@ -5043,7 +4633,12 @@ async function init(){
     setupOspite();
   initFloatingLabels();
 
-  // Non chiamare showPage qui: evitiamo doppie navigazioni/render all'avvio
+  // Pagina iniziale
+  if (!state.session || !state.session.user_id) {
+    showPage("auth");
+  } else {
+    showPage("home");
+  }
 // periodo iniziale
   if (__restore && __restore.preset) state.periodPreset = __restore.preset;
   if (__restore && __restore.period && __restore.period.from && __restore.period.to) {
@@ -5097,10 +4692,11 @@ async function init(){
   });
 
 
-  // prefetch leggero (no await): evita blocchi e “clessidra” ripetute all'avvio
+  // prefetch leggero (evita lentezza all'avvio) — solo dopo login
   if (state.session && state.session.user_id){
-    try { loadMotivazioni().catch(() => {}); } catch(_){ }
-    try { ensureSettingsLoaded({ force:false, showLoader:false }).catch(() => {}); } catch(_){ }
+    try { await loadMotivazioni(); } catch(e){ toast(e.message); }
+    // Impostazioni: carica in background (serve per tassa soggiorno / operatori)
+    try { await ensureSettingsLoaded({ force:false, showLoader:false }); } catch(_) {}
   }
 
   // avvio: ripristina sezione se il SW ha forzato un reload su iOS
@@ -5657,41 +5253,14 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
-  const prevMonthBtn = document.getElementById("calPrevMonthBtn");
   const prevBtn = document.getElementById("calPrevBtn");
   const nextBtn = document.getElementById("calNextBtn");
-  const nextMonthBtn = document.getElementById("calNextMonthBtn");
   const syncBtn = document.getElementById("calSyncBtn");
   const input = document.getElementById("calDateInput");
 
   if (!state.calendar) {
     state.calendar = { anchor: new Date(), ready: false, guests: [] };
   }
-
-  const __scheduleCalendarFetch = (() => {
-    let t = null;
-    return ({ force=false, showLoader=false } = {}) => {
-      if (!state.calendar) return;
-      if (t) { try{ clearTimeout(t); }catch(_){} }
-      const req = (state.calendar._reqId = (state.calendar._reqId || 0) + 1);
-      state.calendar.loading = true;
-      t = setTimeout(async () => {
-        const my = req;
-        try{
-          await ensureCalendarData({ force, showLoader });
-        }catch(e){
-          console.error(e);
-        }finally{
-          try{ if (state.calendar && state.calendar._reqId === my) state.calendar.loading = false; }catch(_){}
-        }
-        try{
-          if (state.page === "calendario" && state.calendar && state.calendar._reqId === my){
-            renderCalendario();
-          }
-        }catch(_){ }
-      }, 120);
-    };
-  })();
 
   // Sync: forza lettura database (tap-safe iOS PWA)
   if (syncBtn){
@@ -5701,7 +5270,7 @@ function setupCalendario(){
         syncBtn.disabled = true;
         syncBtn.classList.add("is-loading");
         if (state.calendar) state.calendar.ready = false;
-        await ensureCalendarData({ force:true, showLoader:false });
+        await ensureCalendarData({ force:true });
         renderCalendario();
         try{ toast("Aggiornato"); }catch(_){ }
       }catch(e){
@@ -5723,57 +5292,25 @@ function setupCalendario(){
   if (pickBtn) pickBtn.addEventListener("click", openPicker);
   if (input) input.addEventListener("change", () => {
     if (!input.value) return;
-    const d = new Date(input.value + "T00:00:00");
-    state.calendar.anchor = d;
+    state.calendar.anchor = new Date(input.value + "T00:00:00");
     renderCalendario();
-    __scheduleCalendarFetch({ force:false, showLoader:false });
   });
   if (todayBtn) todayBtn.addEventListener("click", () => {
-    const d = new Date();
-    d.setHours(0,0,0,0);
-    state.calendar.anchor = d;
+    state.calendar.anchor = new Date();
     renderCalendario();
-    __scheduleCalendarFetch({ force:false, showLoader:false });
-  });
-
-  const addMonthsClamped = (dt, delta) => {
-    const d = new Date(dt);
-    const day = d.getDate();
-    // vai al primo del mese per evitare overflow (es. 31 -> mese con 30)
-    d.setHours(0,0,0,0);
-    d.setDate(1);
-    d.setMonth(d.getMonth() + delta);
-    const last = new Date(d.getFullYear(), d.getMonth() + 1, 0).getDate();
-    d.setDate(Math.min(day, last));
-    d.setHours(0,0,0,0);
-    return d;
-  };
-
-  const shiftAnchorAndRender = (newAnchor, { force=false } = {}) => {
-    state.calendar.anchor = newAnchor;
-    // Render immediato: prima cambia pagina, poi aggiorna i dati
-    renderCalendario();
-    // Refresh in background (no loader)
-    __scheduleCalendarFetch({ force, showLoader:false });
-  };
-
-  if (prevMonthBtn) prevMonthBtn.addEventListener("click", () => {
-    shiftAnchorAndRender(addMonthsClamped(state.calendar.anchor, -1));
   });
   if (prevBtn) prevBtn.addEventListener("click", () => {
-    shiftAnchorAndRender(addDays(state.calendar.anchor, -7));
+    state.calendar.anchor = addDays(state.calendar.anchor, -7);
+    renderCalendario();
   });
   if (nextBtn) nextBtn.addEventListener("click", () => {
-    shiftAnchorAndRender(addDays(state.calendar.anchor, 7));
-  });
-
-  if (nextMonthBtn) nextMonthBtn.addEventListener("click", () => {
-    shiftAnchorAndRender(addMonthsClamped(state.calendar.anchor, 1));
+    state.calendar.anchor = addDays(state.calendar.anchor, 7);
+    renderCalendario();
   });
 }
 
 
-async function ensureCalendarData({ force = false, showLoader = false } = {}) {
+async function ensureCalendarData({ force = false } = {}) {
   if (!state.calendar) state.calendar = { anchor: new Date(), ready: false, guests: [], rangeKey: "" };
 
   const anchor = (state.calendar && state.calendar.anchor) ? state.calendar.anchor : new Date();
@@ -5787,24 +5324,17 @@ async function ensureCalendarData({ force = false, showLoader = false } = {}) {
   // Se ho già i dati per questa finestra, non ricarico
   if (!force && state.calendar.ready && state.calendar.rangeKey === rangeKey) return;
 
-  // Carica configurazione letti ("stanze") solo se serve (evita loader ad ogni navigazione)
-  if (!state.stanzeRows || !state.stanzeRows.length){
-    try{ await load({ showLoader }); }catch(_){ }
-  }
-
-  const data = await cachedGet("ospiti", { from: winFrom, to: winTo }, { showLoader, ttlMs: 60*1000, force });
+  await load({ showLoader: true }); // necessario per i pallini letti
+    const data = await cachedGet("ospiti", { from: winFrom, to: winTo }, { showLoader: true, ttlMs: 30*1000, force });
   state.calendar.guests = Array.isArray(data) ? data : [];
   state.calendar.ready = true;
   state.calendar.rangeKey = rangeKey;
-  state.calendar.fetchedAt = Date.now();
 }
 
 
 function renderCalendario(){
   const grid = document.getElementById("calGrid");
-  try{ if (grid) grid.classList.toggle("is-loading", !!(state.calendar && state.calendar.loading)); }catch(_){ }
   const title = document.getElementById("calWeekTitle");
-  const input = document.getElementById("calDateInput");
   if (!grid) return;
 
   grid.replaceChildren();
@@ -5814,11 +5344,8 @@ function renderCalendario(){
   const start = startOfWeekMonday(anchor);
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
 
-  // Mantieni input data sincronizzato con l'anchor (utile quando navighi con le frecce)
-  try{ if (input) input.value = formatISODateLocal(anchor) || todayISO(); }catch(_){ }
-
   if (title) {
-    const month = monthNameIT(anchor).toUpperCase();
+    const month = monthNameIT(start).toUpperCase();
     title.textContent = month;
   }
 
@@ -6379,7 +5906,7 @@ async function __onAppResume(){
   try{
     if (state.page === "calendario") {
       if (state.calendar){ state.calendar.ready = false; }
-      await ensureCalendarData({ force:true, showLoader:false });
+      await ensureCalendarData({ force:true });
       renderCalendario();
     }
   }catch(_){ }
@@ -6456,6 +5983,13 @@ function openRoomConfig(room){
   document.getElementById('roomConfigModal').hidden = false;
 }
 
+document.addEventListener('click', (e)=>{
+  const b = e.target.closest && e.target.closest('[data-room]');
+  if(!b) return;
+  // Le celle del calendario settimanale usano data-room: qui NON deve aprirsi la config stanza
+  if (b.closest && b.closest('#calGrid')) return;
+  openRoomConfig(b.getAttribute('data-room'));
+});
 
 document.getElementById('rc_save')?.addEventListener('click', ()=>{
   const matrimoniale = document.querySelector('#rc_matrimoniale .dot')?.classList.contains('on')||false;
