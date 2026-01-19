@@ -8,12 +8,12 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="Cache-Control"/>
 <meta content="no-cache" http-equiv="Pragma"/>
 <meta content="0" http-equiv="Expires"/>
-<link href="./styles.css?v=dDAE_2.037" rel="stylesheet"/>
-<link href="./manifest.json?v=dDAE_2.037" rel="manifest"/>
-<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.037" rel="apple-touch-icon" sizes="180x180"/>
-<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.037" rel="apple-touch-icon-precomposed" sizes="180x180"/>
-<link href="./assets/icons/favicon-32.png?v=dDAE_2.037" rel="icon" sizes="32x32" type="image/png"/>
-<link href="./assets/icons/favicon-16.png?v=dDAE_2.037" rel="icon" sizes="16x16" type="image/png"/>
+<link href="./styles.css?v=dDAE_2.047" rel="stylesheet"/>
+<link href="./manifest.json?v=dDAE_2.047" rel="manifest"/>
+<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.047" rel="apple-touch-icon" sizes="180x180"/>
+<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.047" rel="apple-touch-icon-precomposed" sizes="180x180"/>
+<link href="./assets/icons/favicon-32.png?v=dDAE_2.047" rel="icon" sizes="32x32" type="image/png"/>
+<link href="./assets/icons/favicon-16.png?v=dDAE_2.047" rel="icon" sizes="16x16" type="image/png"/>
 <meta content="#ffffff" name="theme-color"/>
 <meta content="yes" name="apple-mobile-web-app-capable"/>
 <meta content="Daedalium PMS" name="apple-mobile-web-app-title"/>
@@ -23,7 +23,7 @@
 <header class="topbar">
 <div class="brand">
 <div class="brand-left">
-<img alt="Daedalium logo" class="logo" src="./assets/logo.jpg?v=dDAE_2.037"/>
+<img alt="Daedalium logo" class="logo" src="./assets/logo.jpg?v=dDAE_2.047"/>
 <h1>Daedalium PMS</h1>
 </div>
 <div class="brand-right">
@@ -107,6 +107,15 @@
 </svg>
 </button>
 </div>
+
+<div hidden="" id="statPrenTopTools">
+<button aria-label="Torna a Statistiche" class="icon-btn icon-btn-whiteorange" id="btnBackStatistichePrenotazioni" type="button">
+<svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24">
+<path d="M15 18l-6-6 6-6"></path>
+<path d="M9 12h12"></path>
+</svg>
+</button>
+</div>
 <button aria-label="Home" class="icon-btn-whiteblack icon-btn" id="hamburgerBtn"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5"></path><path d="M5 10v11h14V10"></path><path d="M9 21v-6h6v6"></path></svg></button>
 </div>
 </div>
@@ -117,7 +126,7 @@
 <div class="auth-page">
 <div class="auth-card">
 <div class="auth-logo-wrap">
-<img alt="Daedalium" class="auth-logo" src="./assets/logo.jpg?v=dDAE_2.037"/>
+<img alt="Daedalium" class="auth-logo" src="./assets/logo.jpg?v=dDAE_2.047"/>
 </div>
 <div class="field float">
 <input autocomplete="username" id="authUsername" placeholder=" "/>
@@ -254,7 +263,7 @@
 
 
 
-</div><div class="build" id="buildText">dDAE_2.037</div></div></section>
+</div><div class="build" id="buildText">dDAE_2.047</div></div></section>
 
 <!-- STATISTICHE -->
 <section class="page" hidden="" id="page-statistiche">
@@ -272,7 +281,7 @@
         <div class="home-main-label">Conteggio generale</div>
       </button>
 
-      <button aria-label="Incassi mensili" class="home-main" id="goStatMensili" type="button">
+      <button aria-label="Fatturati mensili" class="home-main" id="goStatMensili" type="button">
         <div aria-hidden="true" class="home-main-glyph alt"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24">
           <path d="M4 19V5"></path>
           <path d="M4 19h16"></path>
@@ -280,7 +289,7 @@
           <path d="M12 17V7"></path>
           <path d="M16 17v-3"></path>
         </svg></div>
-        <div class="home-main-label">Incassi mensili</div>
+        <div class="home-main-label">Fatturati mensili</div>
       </button>
 
       <button aria-label="Spese" class="home-main" id="goStatSpese" type="button">
@@ -349,7 +358,7 @@
 <!-- STATISTICHE: INCASSI MENSILI -->
 <section class="page" hidden="" id="page-statmensili">
   <div class="stats-gen">
-    <div class="stats-title">Incassi mensili</div>
+    <div class="stats-title">Fatturati mensili</div>
     <div class="stats-divider" aria-hidden="true"></div>
     <div class="month-stack" id="smList"></div>
   </div>
@@ -384,6 +393,16 @@
         <span class="stat-val" id="ssIva4">€0,00</span>
       </button>
     </div>
+  </div>
+</section>
+
+<!-- STATISTICHE: PRENOTAZIONI -->
+<section class="page" hidden="" id="page-statprenotazioni">
+  <div class="stats-gen">
+    <div class="stats-title">Prenotazioni</div>
+    <div class="stats-divider" aria-hidden="true"></div>
+    <div class="chart-wrap"><canvas id="statPrenCanvas"></canvas></div>
+    <div class="legend" id="statPrenLegend"></div>
   </div>
 </section>
 
@@ -721,6 +740,11 @@
 <div class="cal-nav">
 <div aria-label="Navigazione calendario" class="cal-nav-row" role="group">
 <div aria-label="Navigazione settimana" class="cal-nav-center">
+<button aria-label="Mese precedente" class="cal-nav-btn" id="calPrevMonthBtn" type="button">
+<svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24">
+<path d="M15 18l-6-6 6-6"></path>
+</svg>
+</button>
 <button aria-label="Settimana precedente" class="cal-nav-btn" id="calPrevBtn" type="button">
 <svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24">
 <path d="M15 18l-6-6 6-6"></path>
@@ -733,6 +757,11 @@
 </svg>
 </button>
 <button aria-label="Settimana successiva" class="cal-nav-btn" id="calNextBtn" type="button">
+<svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24">
+<path d="M9 18l6-6-6-6"></path>
+</svg>
+</button>
+<button aria-label="Mese successivo" class="cal-nav-btn" id="calNextMonthBtn" type="button">
 <svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24">
 <path d="M9 18l6-6-6-6"></path>
 </svg>
@@ -1037,8 +1066,8 @@
 </div>
 </div>
 </div>
-<script defer="" src="./config.js?v=dDAE_2.037"></script>
-<script defer="" src="./app.js?v=dDAE_2.037"></script>
+<script defer="" src="./config.js?v=dDAE_2.047"></script>
+<script defer="" src="./app.js?v=dDAE_2.047"></script>
 <!-- TAX REPORT MODAL -->
 <div aria-hidden="true" class="modal" hidden="" id="taxReportModal">
 <div aria-labelledby="taxReportTitle" aria-modal="true" class="modal-card tax-report-card" role="dialog">

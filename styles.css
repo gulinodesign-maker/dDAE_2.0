@@ -41,7 +41,7 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.037"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.045"),
     radial-gradient(900px 600px at 10% 0%, rgba(43,124,180,0.10), transparent 62%),
     radial-gradient(800px 520px at 90% 8%, rgba(201,119,43,0.10), transparent 64%),
     radial-gradient(900px 700px at 20% 100%, rgba(111,183,214,0.10), transparent 62%),
@@ -777,7 +777,7 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.037"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.045"),
     radial-gradient(900px 650px at 12% 8%, rgba(43,124,180,0.18), transparent 62%),
     radial-gradient(820px 560px at 92% 14%, rgba(201,119,43,0.16), transparent 62%),
     radial-gradient(900px 700px at 18% 96%, rgba(111,183,214,0.16), transparent 62%),
@@ -1274,6 +1274,11 @@ body::before{
   justify-content:center;
   padding: 0;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+
 }
 .room-dot.selected{
   border-color: rgba(43,124,180,0.35);
@@ -5495,7 +5500,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 
 .stat-modal-close:active{ transform: scale(0.96); }
 
-/* ===== Statistiche: Incassi mensili (progress) ===== */
+/* ===== Statistiche: Fatturati mensili (progress) ===== */
 .month-stack{
   display:flex;
   flex-direction:column;
@@ -5601,3 +5606,6 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
     justify-content: flex-end;
   }
 }
+
+/* Calendario: render immediato + refresh in background */
+#calGrid.is-loading{opacity:.6;transition:opacity .12s ease;}
