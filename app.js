@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.034";
+const BUILD_VERSION = "dDAE_2.035";
 
 
 function __parseBuildVersion(v){
@@ -3319,6 +3319,22 @@ function enterGuestEditMode(ospite){
 
   state.guestViewItem = null;
 
+  // ✅ FIX dDAE: evita "leak" delle stanze tra prenotazioni multiple (multi booking).
+  // Quando si passa da un gruppo all'altro, se il nuovo record non ha 'stanze' valorizzate,
+  // lo stato precedente poteva rimanere e finire dentro il nuovo salvataggio.
+  try {
+    state.guestRooms = state.guestRooms || new Set();
+    state.guestRooms.clear();
+    state.lettiPerStanza = {};
+    state.bedsDirty = false;
+    state.stanzeSnapshotOriginal = "";
+    document.querySelectorAll("#roomsPicker .room-dot").forEach(btn => {
+      if (btn.id === "roomMarriage") return;
+      btn.classList.remove("selected");
+      btn.setAttribute("aria-pressed", "false");
+    });
+  } catch (_) {}
+
   state.guestMode = "edit";
   try{ updateGuestFormModeClass(); }catch(_){ }
   state.guestEditId = ospite?.id ?? null;
@@ -3543,7 +3559,7 @@ function renderRoomsReadOnly(ospite){
   `;
 }
 
-// ===== dDAE_2.034 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.035 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
