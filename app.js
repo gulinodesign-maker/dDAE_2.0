@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.040";
+const BUILD_VERSION = "dDAE_2.041";
 
 
 function __parseBuildVersion(v){
@@ -4399,33 +4399,157 @@ function setupOspite(){
     }catch(_){ return null; }
   }
 
-  roomsWrap?.addEventListener("click", (e) => {
-    const b = __pickRoomDotFromEvent(e);
-    if (!b) return;
+  // Stanze:
+  // - tap breve su stanza spenta => seleziona + apre popup letti
+  // - tap breve su stanza accesa => apre popup letti (cambio tipologia)
+  // - pressione lunga (>=0.5s) su stanza accesa => deseleziona (SENZA popup)
+  let __roomPressTimer = null;
+  let __roomPressBtn = null;
+  let __roomLongFired = false;
+  let __roomSuppressClickUntil = 0;
 
-    // Matrimonio: flag separato
-    if (b.id === "roomMarriage") { setMarriage(!state.guestMarriage); return; }
+  function __room_now(){
+    try{ return (typeof performance !== 'undefined' && performance.now) ? performance.now() : Date.now(); }
+    catch(_){ return Date.now(); }
+  }
+  function __room_markSuppress(ms){
+    try{ __roomSuppressClickUntil = __room_now() + (ms || 650); }catch(_){ }
+  }
+  function __room_isSuppressed(){
+    try{ return __room_now() < __roomSuppressClickUntil; }catch(_){ return false; }
+  }
+  function __room_clearPress(){
+    try{ if (__roomPressTimer){ clearTimeout(__roomPressTimer); } }catch(_){ }
+    __roomPressTimer = null;
+    __roomPressBtn = null;
+    __roomLongFired = false;
+  }
 
+  function __room_getDotFromEvent(e){
+    try{
+      const b = __pickRoomDotFromEvent(e);
+      if (!b) return null;
+      if (!roomsWrap || !roomsWrap.contains(b)) return null;
+      if (!b.classList || !b.classList.contains('room-dot')) return null;
+      return b;
+    }catch(_){ return null; }
+  }
+
+  function __room_canInteract(b){
     const range = _getGuestDateRange();
     if (!range){
-      try{ toast("Seleziona prima check-in e check-out"); }catch(_){}
-      return;
+      try{ toast('Seleziona prima check-in e check-out'); }catch(_){ }
+      return false;
+    }
+    if (b.classList.contains('occupied') || b.disabled){
+      try{ toast('Stanza occupata'); }catch(_){ }
+      return false;
+    }
+    return true;
+  }
+
+  function __room_handleShortTap(b){
+    // Matrimonio: flag separato
+    if (b.id === 'roomMarriage') { setMarriage(!state.guestMarriage); return; }
+    if (!__room_canInteract(b)) return;
+
+    const n = parseInt(b.getAttribute('data-room'), 10);
+    if (!isFinite(n)) return;
+
+    // Se era spenta, accendi
+    if (!state.guestRooms.has(n)) {
+      state.guestRooms.add(n);
+      renderRooms();
     }
 
-    // Se occupata (rossa) => popup
-    if (b.classList.contains("occupied") || b.disabled){
-      try{ toast("Stanza occupata"); }catch(_){}
-      return;
-    }
+    // Tap breve su stanza accesa/spenta => apre popup configurazione letti
+    try{ openRoomConfig(n); }catch(_){ }
+  }
 
-    const n = parseInt(b.getAttribute("data-room"), 10);
+  function __room_handleLongPress(b){
+    // Matrimonio: nessun long-press
+    if (b.id === 'roomMarriage') return;
+    if (!__room_canInteract(b)) return;
+
+    const n = parseInt(b.getAttribute('data-room'), 10);
+    if (!isFinite(n)) return;
+
+    // Deselezione SOLO con pressione lunga e SOLO se era accesa
     if (state.guestRooms.has(n)) {
       state.guestRooms.delete(n);
       if (state.lettiPerStanza) delete state.lettiPerStanza[String(n)];
-    } else {
-      state.guestRooms.add(n);
+      renderRooms();
+
+      // Se il popup era aperto su questa stanza, chiudilo
+      try{
+        if (typeof __rc_room !== 'undefined' && String(__rc_room) === String(n)){
+          const m = document.getElementById('roomConfigModal');
+          if (m) m.hidden = true;
+          try{ __rc_room = null; }catch(_){ }
+        }
+      }catch(_){ }
     }
-    renderRooms();
+  }
+
+  function __room_onPressStart(e){
+    const b = __room_getDotFromEvent(e);
+    if (!b) return;
+
+    // Evita click "fantasma" dopo touch/pointer
+    __room_markSuppress(900);
+
+    // Evita callout/scroll strani su iOS durante pressione lunga
+    try{ e.preventDefault(); }catch(_){ }
+
+    __room_clearPress();
+    __roomPressBtn = b;
+
+    __roomPressTimer = setTimeout(() => {
+      __roomLongFired = true;
+      __room_handleLongPress(b);
+    }, 500);
+  }
+
+  function __room_onPressEnd(e){
+    if (!__roomPressBtn) return;
+    const b = __roomPressBtn;
+    const wasLong = __roomLongFired;
+
+    __room_clearPress();
+
+    // Sopprimi click generato da touchend
+    __room_markSuppress(900);
+    try{ e.preventDefault(); }catch(_){ }
+
+    if (wasLong) return;
+    __room_handleShortTap(b);
+  }
+
+  function __room_onPressCancel(_e){
+    __room_clearPress();
+  }
+
+  // Pointer events (preferiti) + fallback touch/mouse
+  try{
+    if (window.PointerEvent) {
+      roomsWrap?.addEventListener('pointerdown', __room_onPressStart, { passive:false });
+      roomsWrap?.addEventListener('pointerup', __room_onPressEnd, { passive:false });
+      roomsWrap?.addEventListener('pointercancel', __room_onPressCancel, { passive:true });
+    } else {
+      roomsWrap?.addEventListener('touchstart', __room_onPressStart, { passive:false });
+      roomsWrap?.addEventListener('touchend', __room_onPressEnd, { passive:false });
+      roomsWrap?.addEventListener('touchcancel', __room_onPressCancel, { passive:true });
+      roomsWrap?.addEventListener('mousedown', __room_onPressStart, { passive:false });
+      roomsWrap?.addEventListener('mouseup', __room_onPressEnd, { passive:false });
+    }
+  }catch(_){ }
+
+  // Click (tastiera/desktop). Ignorato se appena gestito da touch/pointer.
+  roomsWrap?.addEventListener('click', (e) => {
+    if (__room_isSuppressed()) return;
+    const b = __room_getDotFromEvent(e);
+    if (!b) return;
+    __room_handleShortTap(b);
   });
 
   function bindPayPill(containerId, kind){
@@ -6154,13 +6278,6 @@ function openRoomConfig(room){
   document.getElementById('roomConfigModal').hidden = false;
 }
 
-document.addEventListener('click', (e)=>{
-  const b = e.target.closest && e.target.closest('[data-room]');
-  if(!b) return;
-  // Le celle del calendario settimanale usano data-room: qui NON deve aprirsi la config stanza
-  if (b.closest && b.closest('#calGrid')) return;
-  openRoomConfig(b.getAttribute('data-room'));
-});
 
 document.getElementById('rc_save')?.addEventListener('click', ()=>{
   const matrimoniale = document.querySelector('#rc_matrimoniale .dot')?.classList.contains('on')||false;
