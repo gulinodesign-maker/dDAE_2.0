@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.046";
+const BUILD_VERSION = "dDAE_2.049";
 
 
 function __parseBuildVersion(v){
@@ -64,7 +64,7 @@ function updateYearPill(){
   if (!pill) return;
   const y = state.exerciseYear;
   if (!y){ pill.hidden = true; return; }
-  pill.textContent = `ANNO ${y}`;
+  pill.textContent = `${y}`;
   pill.hidden = false;
   try{ updateSettingsTabs(); }catch(_){ }
 }
@@ -3123,7 +3123,8 @@ function computeStatPrenotazioni(){
   for (const g of guests){
     const pren = money(g?.importo_prenotazione ?? g?.importo_prenota ?? g?.importoPrenotazione ?? g?.importoPrenota ?? 0);
     const rawBooking = (g?.importo_booking ?? g?.importoBooking ?? g?.booking ?? null);
-    const bookingFilled = !(rawBooking === null || rawBooking === undefined || String(rawBooking).trim() === "");
+    const bookingVal = money(rawBooking);
+    const bookingFilled = bookingVal > 0;
     if (bookingFilled) withBooking += pren;
     else withoutBooking += pren;
   }
@@ -3238,22 +3239,9 @@ function openStatMensiliPieModal(){
 
   const leg = document.getElementById("statMensiliPieLegend");
   if (leg){
-    const total = slices.reduce((a,x)=>a+Math.max(0,Number(x.value||0)),0);
     leg.innerHTML = "";
-    slices.forEach((sl)=>{
-      const v = Math.max(0, Number(sl.value || 0));
-      const pct = total > 0 ? (v/total*100) : 0;
-      const row = document.createElement("div");
-      row.className = "legrow";
-      row.innerHTML = `
-        <div class="legleft">
-          <div class="dot" style="background:${sl.color}"></div>
-          <div class="legname">${escapeHtml(sl.label)}</div>
-        </div>
-        <div class="legright">${pct.toFixed(1)}% · ${euro(v)}</div>
-      `;
-      leg.appendChild(row);
-    });
+    leg.style.display = "none";
+    leg.setAttribute("aria-hidden", "true");
   }
 }
 
