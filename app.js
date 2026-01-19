@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.039";
+const BUILD_VERSION = "dDAE_2.040";
 
 
 function __parseBuildVersion(v){
@@ -1866,7 +1866,7 @@ state.page = page;
     // Entrando in Calendario vogliamo SEMPRE dati freschi.
     // 1) invalida lo stato "ready" e bypassa la cache in-memory (ttl) con force:true.
     try{ if (state.calendar) state.calendar.ready = false; }catch(_){ }
-    ensureCalendarData({ force:true })
+    ensureCalendarData({ force:true, showLoader:false })
       .then(()=>{ if (state.navId !== _nav || state.page !== "calendario") return; renderCalendario(); })
       .catch(e=>toast(e.message));
   }
@@ -5366,6 +5366,31 @@ function setupCalendario(){
     state.calendar = { anchor: new Date(), ready: false, guests: [] };
   }
 
+  const __scheduleCalendarFetch = (() => {
+    let t = null;
+    return ({ force=false, showLoader=false } = {}) => {
+      if (!state.calendar) return;
+      if (t) { try{ clearTimeout(t); }catch(_){} }
+      const req = (state.calendar._reqId = (state.calendar._reqId || 0) + 1);
+      state.calendar.loading = true;
+      t = setTimeout(async () => {
+        const my = req;
+        try{
+          await ensureCalendarData({ force, showLoader });
+        }catch(e){
+          console.error(e);
+        }finally{
+          try{ if (state.calendar && state.calendar._reqId === my) state.calendar.loading = false; }catch(_){}
+        }
+        try{
+          if (state.page === "calendario" && state.calendar && state.calendar._reqId === my){
+            renderCalendario();
+          }
+        }catch(_){ }
+      }, 120);
+    };
+  })();
+
   // Sync: forza lettura database (tap-safe iOS PWA)
   if (syncBtn){
     syncBtn.setAttribute("aria-label", "Forza lettura database");
@@ -5374,7 +5399,7 @@ function setupCalendario(){
         syncBtn.disabled = true;
         syncBtn.classList.add("is-loading");
         if (state.calendar) state.calendar.ready = false;
-        await ensureCalendarData({ force:true });
+        await ensureCalendarData({ force:true, showLoader:false });
         renderCalendario();
         try{ toast("Aggiornato"); }catch(_){ }
       }catch(e){
@@ -5394,23 +5419,19 @@ function setupCalendario(){
   };
 
   if (pickBtn) pickBtn.addEventListener("click", openPicker);
-  if (input) input.addEventListener("change", async () => {
+  if (input) input.addEventListener("change", () => {
     if (!input.value) return;
     const d = new Date(input.value + "T00:00:00");
-    await (async()=>{
-      state.calendar.anchor = d;
-      try{ await ensureCalendarData({ force:false }); }catch(_){ }
-      renderCalendario();
-    })();
+    state.calendar.anchor = d;
+    renderCalendario();
+    __scheduleCalendarFetch({ force:false, showLoader:false });
   });
-  if (todayBtn) todayBtn.addEventListener("click", async () => {
+  if (todayBtn) todayBtn.addEventListener("click", () => {
     const d = new Date();
     d.setHours(0,0,0,0);
-    await (async()=>{
-      state.calendar.anchor = d;
-      try{ await ensureCalendarData({ force:false }); }catch(_){ }
-      renderCalendario();
-    })();
+    state.calendar.anchor = d;
+    renderCalendario();
+    __scheduleCalendarFetch({ force:false, showLoader:false });
   });
 
   const addMonthsClamped = (dt, delta) => {
@@ -5426,29 +5447,31 @@ function setupCalendario(){
     return d;
   };
 
-  const shiftAnchorAndRender = async (newAnchor) => {
+  const shiftAnchorAndRender = (newAnchor, { force=false } = {}) => {
     state.calendar.anchor = newAnchor;
-    try{ await ensureCalendarData({ force:false }); }catch(_){ }
+    // Render immediato: prima cambia pagina, poi aggiorna i dati
     renderCalendario();
+    // Refresh in background (no loader)
+    __scheduleCalendarFetch({ force, showLoader:false });
   };
 
-  if (prevMonthBtn) prevMonthBtn.addEventListener("click", async () => {
-    await shiftAnchorAndRender(addMonthsClamped(state.calendar.anchor, -1));
+  if (prevMonthBtn) prevMonthBtn.addEventListener("click", () => {
+    shiftAnchorAndRender(addMonthsClamped(state.calendar.anchor, -1));
   });
-  if (prevBtn) prevBtn.addEventListener("click", async () => {
-    await shiftAnchorAndRender(addDays(state.calendar.anchor, -7));
+  if (prevBtn) prevBtn.addEventListener("click", () => {
+    shiftAnchorAndRender(addDays(state.calendar.anchor, -7));
   });
-  if (nextBtn) nextBtn.addEventListener("click", async () => {
-    await shiftAnchorAndRender(addDays(state.calendar.anchor, 7));
+  if (nextBtn) nextBtn.addEventListener("click", () => {
+    shiftAnchorAndRender(addDays(state.calendar.anchor, 7));
   });
 
-  if (nextMonthBtn) nextMonthBtn.addEventListener("click", async () => {
-    await shiftAnchorAndRender(addMonthsClamped(state.calendar.anchor, 1));
+  if (nextMonthBtn) nextMonthBtn.addEventListener("click", () => {
+    shiftAnchorAndRender(addMonthsClamped(state.calendar.anchor, 1));
   });
 }
 
 
-async function ensureCalendarData({ force = false } = {}) {
+async function ensureCalendarData({ force = false, showLoader = false } = {}) {
   if (!state.calendar) state.calendar = { anchor: new Date(), ready: false, guests: [], rangeKey: "" };
 
   const anchor = (state.calendar && state.calendar.anchor) ? state.calendar.anchor : new Date();
@@ -5462,16 +5485,22 @@ async function ensureCalendarData({ force = false } = {}) {
   // Se ho già i dati per questa finestra, non ricarico
   if (!force && state.calendar.ready && state.calendar.rangeKey === rangeKey) return;
 
-  await load({ showLoader: true }); // necessario per i pallini letti
-    const data = await cachedGet("ospiti", { from: winFrom, to: winTo }, { showLoader: true, ttlMs: 30*1000, force });
+  // Carica configurazione letti ("stanze") solo se serve (evita loader ad ogni navigazione)
+  if (!state.stanzeRows || !state.stanzeRows.length){
+    try{ await load({ showLoader }); }catch(_){ }
+  }
+
+  const data = await cachedGet("ospiti", { from: winFrom, to: winTo }, { showLoader, ttlMs: 60*1000, force });
   state.calendar.guests = Array.isArray(data) ? data : [];
   state.calendar.ready = true;
   state.calendar.rangeKey = rangeKey;
+  state.calendar.fetchedAt = Date.now();
 }
 
 
 function renderCalendario(){
   const grid = document.getElementById("calGrid");
+  try{ if (grid) grid.classList.toggle("is-loading", !!(state.calendar && state.calendar.loading)); }catch(_){ }
   const title = document.getElementById("calWeekTitle");
   const input = document.getElementById("calDateInput");
   if (!grid) return;
@@ -6048,7 +6077,7 @@ async function __onAppResume(){
   try{
     if (state.page === "calendario") {
       if (state.calendar){ state.calendar.ready = false; }
-      await ensureCalendarData({ force:true });
+      await ensureCalendarData({ force:true, showLoader:false });
       renderCalendario();
     }
   }catch(_){ }
