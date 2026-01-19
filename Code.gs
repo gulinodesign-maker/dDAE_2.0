@@ -21,6 +21,36 @@ const SHEETS = {
   MOTIVAZIONI: "motivazioni",
 };
 
+// =========================
+// TENANT / RUOLI
+// =========================
+
+function getUserById_(userId){
+  const id = String(userId || "").trim();
+  if (!id) return null;
+  try{
+    const sh = getSheet_(SHEETS.UTENTI);
+    const data = readAll_(sh);
+    const rows = data && data.rows ? data.rows : [];
+    for (const r of rows){
+      const rid = String(r.id ?? r.ID ?? "").trim();
+      if (rid && rid === id) return r;
+    }
+  }catch(_){ }
+  return null;
+}
+
+function operatorAllowed_(actionLc, method){
+  const a = String(actionLc || "").toLowerCase();
+  const m = String(method || "GET").toUpperCase();
+  if (a === "pulizie" || a === "lavanderia" || a === "operatori") return true;
+  if (a === "calendario") return true;
+  if (a === "ospiti" || a === "stanze") return m === "GET";
+  if (a === "impostazioni") return m === "GET";
+  if (a === "ping") return true;
+  return false;
+}
+
 /* =========================
    ENTRY POINT
 ========================= */
@@ -64,9 +94,32 @@ function handleRequest_(e, method) {
       "report",
     ].indexOf(actionLc) >= 0;
 
+    // Auth utente + tenant scoping + permessi
     if (needsUser) {
-      const uid = String(e.parameter.user_id || e.parameter.userId || "").trim();
-      if (!uid) return jsonError_("user_id mancante");
+      const actorId = String(e.parameter.user_id || e.parameter.userId || "").trim();
+      if (!actorId) return jsonError_("user_id mancante");
+
+      const u = getUserById_(actorId);
+      if (!u) return jsonError_("Utente non valido");
+      if (String(u.attivo ?? "true").toLowerCase() === "false") return jsonError_("Account disattivato");
+
+      const ruolo = String(u.ruolo || "user").trim().toLowerCase();
+      const tenant = String(u.tenant_id || u.tenantId || "").trim();
+      const effectiveUserId = (tenant ? tenant : actorId);
+
+      // Parametri interni (audit / UI)
+      try{ e.parameter._actor_id = actorId; }catch(_){ }
+      try{ e.parameter._ruolo = ruolo; }catch(_){ }
+
+      // Multi-account: gli operatori lavorano sempre sul tenant proprietario
+      if (ruolo === "operatore") {
+        try{ e.parameter.user_id = effectiveUserId; }catch(_){ }
+        try{ e.parameter.userId = effectiveUserId; }catch(_){ }
+
+        if (!operatorAllowed_(actionLc, method)) {
+          return jsonError_("Permesso negato");
+        }
+      }
     }
     if (needsAnno) {
       const yr = String(e.parameter.anno || e.parameter.year || "").trim();
@@ -1276,6 +1329,7 @@ function sanitizeUserOut_(row){
     user_id: String(u.id || u.user_id || ""),
     username: String(u.username || ""),
     ruolo: String(u.ruolo || ""),
+    tenant_id: String(u.tenant_id || u.tenantId || ""),
     attivo: String(u.attivo || "1"),
     nome: String(u.nome || ""),
     telefono: String(u.telefono || ""),
@@ -1366,6 +1420,11 @@ function handleUtenti_(e, method){
   const username = String(body.username || "").trim();
   const password = String(body.password || "");
 
+  // Operatore (gestito dall'owner)
+  const operator_username = String(body.operator_username || body.operatorUsername || "").trim();
+  const operator_password = String(body.operator_password || body.operatorPassword || "");
+  const operator_new_password = String(body.newPassword || body.operator_new_password || body.operatorNewPassword || "");
+
   if (!op) return jsonError_("Parametro op mancante (utenti)");
   if (!username || !password) return jsonError_("Username/password mancanti");
 
@@ -1375,11 +1434,13 @@ function handleUtenti_(e, method){
   if (op === "create"){
     if (existing) return jsonError_("Username già esistente");
     const id = String("u_" + Date.now() + "_" + Math.floor(Math.random()*100000));
+    const tenant = String(body.tenant_id || body.tenantId || "").trim() || id;
     const obj = {
       id: id,
       username: username,
       password_hash: sha256Hex_(password),
       ruolo: "admin",
+      tenant_id: tenant,
       attivo: "1",
       nome: String(body.nome || ""),
       telefono: String(body.telefono || ""),
@@ -1398,6 +1459,65 @@ function handleUtenti_(e, method){
   if (sha256Hex_(password) !== storedHash) return jsonError_("Credenziali non valide");
 
   if (String(existing.attivo || "1") === "0") return jsonError_("Account disattivato");
+
+  // =========================
+  // OWNER -> CREA/MODIFICA OPERATORE
+  // =========================
+  if (op === "create_operator"){
+    if (!operator_username || !operator_password) return jsonError_("Dati operatore mancanti");
+
+    const role = String(existing.ruolo || "").trim().toLowerCase();
+    if (role === "operatore") return jsonError_("Operazione non consentita");
+
+    const already = findUserByUsername_(rows, operator_username);
+    if (already) return jsonError_("Username operatore già esistente");
+
+    const ownerId = String(existing.id || existing.ID || "").trim();
+    const tenant = String(existing.tenant_id || existing.tenantId || "").trim() || ownerId;
+    if (!tenant) return jsonError_("Tenant owner mancante");
+
+    const id = String("u_" + Date.now() + "_" + Math.floor(Math.random()*100000));
+    const obj = {
+      id: id,
+      username: operator_username,
+      password_hash: sha256Hex_(operator_password),
+      ruolo: "operatore",
+      tenant_id: tenant,
+      attivo: "1",
+      nome: String(body.nome || ""),
+      telefono: String(body.telefono || ""),
+      email: String(body.email || ""),
+      last_login: nowIso,
+      createdAt: nowIso,
+      updatedAt: nowIso,
+    };
+    upsertById_(sh, obj, "id");
+    return jsonOk_({ user: sanitizeUserOut_(obj) });
+  }
+
+  if (op === "update_operator"){
+    if (!operator_username || !operator_new_password) return jsonError_("Dati operatore mancanti");
+
+    const role = String(existing.ruolo || "").trim().toLowerCase();
+    if (role === "operatore") return jsonError_("Operazione non consentita");
+
+    const ownerId = String(existing.id || existing.ID || "").trim();
+    const tenant = String(existing.tenant_id || existing.tenantId || "").trim() || ownerId;
+    if (!tenant) return jsonError_("Tenant owner mancante");
+
+    const target = findUserByUsername_(rows, operator_username);
+    if (!target) return jsonError_("Operatore non trovato");
+    const tRole = String(target.ruolo || "").trim().toLowerCase();
+    if (tRole !== "operatore") return jsonError_("Utente non è un operatore");
+    const tTenant = String(target.tenant_id || target.tenantId || "").trim();
+    if (tTenant !== tenant) return jsonError_("Operatore non appartiene a questo account");
+
+    const upd = Object.assign({}, target);
+    upd.password_hash = sha256Hex_(operator_new_password);
+    upd.updatedAt = nowIso;
+    upsertById_(sh, upd, "id");
+    return jsonOk_({ user: sanitizeUserOut_(upd) });
+  }
 
   if (op === "login"){
     // aggiorna last_login

@@ -5268,8 +5268,39 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 /* colori: azzurro / grigio / arancione (40% opacita') */
 .settings-btn-save{ background: rgba(111,183,214,0.40); }
 .settings-btn-reload{ background: rgba(31,41,55,0.40); }
+.settings-btn-operator{ background: rgba(99,102,241,0.40); }
 .settings-btn-delete{ background: rgba(220,38,38,0.40); }
 .settings-btn-logout{ background: rgba(201,119,43,0.40); }
+
+/* OPERATORE MODAL (crea / modifica) */
+.operator-card{
+  width: calc(100% - 28px);
+  max-width: 460px;
+}
+.operator-hd{
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+  margin-bottom: 10px;
+}
+.operator-title{
+  font-weight: 950;
+  font-size: 18px;
+  color: rgba(15,23,42,0.92);
+}
+.operator-close{
+  min-width: 44px;
+  padding: 0 10px;
+}
+.operator-menu{
+  display:flex;
+  flex-direction:column;
+  gap: 10px;
+}
+.operator-form{
+  margin-top: 2px;
+}
 
 /* =========================
  * STATISTICHE (dDAE_2.019)

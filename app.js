@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.052";
+const BUILD_VERSION = "dDAE_2.053";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -1387,49 +1387,6 @@ function setupImpostazioni() {
   });
 
 
-  // Crea utente operatore (solo owner)
-  const createOpBtn = document.getElementById("settingsCreateOperatorBtn");
-  if (createOpBtn){
-    try{
-      const s0 = state.session || loadSession();
-      if (s0 && isOperatoreSession(s0)){
-        try{ createOpBtn.hidden = true; }catch(_){ }
-        try{ createOpBtn.style.display = "none"; }catch(_){ }
-      }else{
-        bindFastTap(createOpBtn, async () => {
-          try{
-            const s = state.session || loadSession();
-            if (!s || !s.username || !s.user_id){ toast("Nessun account"); return; }
-            if (isOperatoreSession(s)){ toast("Permesso negato"); return; }
-
-            const ou = prompt("Username operatore:");
-            if (ou === null) return;
-            const operator_username = String(ou || "").trim();
-            if (!operator_username){ toast("Username mancante"); return; }
-
-            const opw = prompt("Password operatore:");
-            if (opw === null) return;
-            const operator_password = String(opw || "");
-            if (!operator_password){ toast("Password mancante"); return; }
-
-            const on = prompt("Nome operatore (opzionale):");
-            if (on === null) return;
-            const nome = String(on || "");
-
-            const pw = prompt("Password owner (conferma):");
-            if (pw === null) return;
-            const password = String(pw || "");
-            if (!password){ toast("Password mancante"); return; }
-
-            await api("utenti", { method:"POST", body:{ op:"create_operator", username:String(s.username||"").trim(), password, operator_username, operator_password, nome }, showLoader:true });
-            toast("Operatore creato");
-          }catch(e){ toast(e.message || "Errore"); }
-        });
-      }
-    }catch(_){ }
-  }
-
-
   // Anno di esercizio
   const selAnno = document.getElementById("setAnno");
   if (selAnno){
@@ -1445,6 +1402,122 @@ function setupImpostazioni() {
       invalidateApiCache();
     });
   }
+
+  // =========================
+  // OPERATORE: popup crea / modifica
+  // =========================
+  const opBtn = document.getElementById("settingsCreateOperatorBtn");
+  const opModal = document.getElementById("operatorModal");
+  const opModalClose = document.getElementById("operatorModalClose");
+  const opMenu = document.getElementById("operatorModalMenu");
+  const opForm = document.getElementById("operatorModalForm");
+  const opCreate = document.getElementById("operatorCreateBtn");
+  const opEdit = document.getElementById("operatorEditBtn");
+  const opBack = document.getElementById("opFormBack");
+  const opConfirm = document.getElementById("opFormConfirm");
+  const opUser = document.getElementById("opFormUsername");
+  const opPass = document.getElementById("opFormPassword");
+  const opOwnerPass = document.getElementById("opFormOwnerPassword");
+  const opPassLabel = document.getElementById("opFormPasswordLabel");
+
+  let __opMode = ""; // "create" | "edit"
+
+  function __opShowMenu(){
+    __opMode = "";
+    if (opMenu) opMenu.hidden = false;
+    if (opForm) opForm.hidden = true;
+    if (opUser) opUser.value = "";
+    if (opPass) opPass.value = "";
+    if (opOwnerPass) opOwnerPass.value = "";
+    try{ refreshFloatingLabels(); }catch(_){ }
+  }
+
+  function __opShowForm(mode){
+    __opMode = mode;
+    if (opMenu) opMenu.hidden = true;
+    if (opForm) opForm.hidden = false;
+    if (opUser) opUser.value = "";
+    if (opPass) opPass.value = "";
+    if (opOwnerPass) opOwnerPass.value = "";
+    if (opPassLabel) opPassLabel.textContent = (mode === "edit") ? "Nuova password" : "Password operatore";
+    if (opConfirm) opConfirm.textContent = (mode === "edit") ? "Salva" : "Crea";
+    try{ refreshFloatingLabels(); }catch(_){ }
+    try{ setTimeout(()=>{ try{ opUser && opUser.focus(); }catch(_){ } }, 30); }catch(_){ }
+  }
+
+  function __opOpen(){
+    const s = state.session || loadSession();
+    if (!s || !s.username){ toast("Nessun account"); return; }
+    if (isOperatoreSession(s)){ toast("Non disponibile per operatori"); return; }
+    if (!opModal) return;
+    __opShowMenu();
+    try{ opModal.hidden = false; opModal.setAttribute("aria-hidden","false"); }catch(_){ }
+  }
+
+  function __opClose(){
+    if (!opModal) return;
+    try{ opModal.hidden = true; opModal.setAttribute("aria-hidden","true"); }catch(_){ }
+  }
+
+  async function __opSubmit(){
+    try{
+      const s = state.session || loadSession();
+      if (!s || !s.username){ toast("Nessun account"); return; }
+      if (isOperatoreSession(s)){ toast("Non disponibile per operatori"); return; }
+
+      const ownerUsername = String(s.username || "").trim();
+      const operatorUsername = String(opUser?.value || "").trim();
+      const operatorPassword = String(opPass?.value || "");
+      const ownerPassword = String(opOwnerPass?.value || "");
+
+      if (!operatorUsername) { toast("Username operatore mancante"); return; }
+      if (!operatorPassword) { toast((__opMode === "edit") ? "Nuova password mancante" : "Password operatore mancante"); return; }
+      if (!ownerPassword) { toast("Password owner mancante"); return; }
+
+      if (__opMode === "create"){
+        await api("utenti", {
+          method:"POST",
+          body:{
+            op:"create_operator",
+            username: ownerUsername,
+            password: ownerPassword,
+            operator_username: operatorUsername,
+            operator_password: operatorPassword,
+          },
+          showLoader:true,
+        });
+        toast("Operatore creato");
+        __opClose();
+        return;
+      }
+
+      if (__opMode === "edit"){
+        await api("utenti", {
+          method:"POST",
+          body:{
+            op:"update_operator",
+            username: ownerUsername,
+            password: ownerPassword,
+            operator_username: operatorUsername,
+            newPassword: operatorPassword,
+          },
+          showLoader:true,
+        });
+        toast("Operatore aggiornato");
+        __opClose();
+        return;
+      }
+
+      toast("Operazione non valida");
+    }catch(e){ toast(e.message || "Errore"); }
+  }
+
+  if (opBtn) bindFastTap(opBtn, __opOpen);
+  if (opModalClose) bindFastTap(opModalClose, __opClose);
+  if (opCreate) bindFastTap(opCreate, ()=>__opShowForm("create"));
+  if (opEdit) bindFastTap(opEdit, ()=>__opShowForm("edit"));
+  if (opBack) bindFastTap(opBack, __opShowMenu);
+  if (opConfirm) bindFastTap(opConfirm, __opSubmit);
 }
 
 
