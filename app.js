@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.038";
+const BUILD_VERSION = "dDAE_2.039";
 
 
 function __parseBuildVersion(v){
@@ -516,10 +516,12 @@ const COLORS = {
 const loadingState = {
   requestCount: 0,
   showTimer: null,
+  hideTimer: null,
   shownAt: 0,
   isVisible: false,
-  delayMs: 500,      // opzionale: evita flicker se rapidissimo
-  minVisibleMs: 300, // opzionale: se compare non sparisce subito
+  delayMs: 800,       // evita loader per richieste brevi
+  minVisibleMs: 450,  // se compare, resta un minimo (evita “lampeggi”)
+  hideGraceMs: 260,   // unisce richieste sequenziali (evita molte comparse)
 };
 
 function showLoading(){
@@ -540,6 +542,12 @@ function hideLoading(){
 function beginRequest(){
   loadingState.requestCount += 1;
   if (loadingState.requestCount !== 1) return;
+
+  // Se stavamo per nascondere il loader, annulla: richieste ravvicinate = una sola sessione di loading
+  if (loadingState.hideTimer){
+    clearTimeout(loadingState.hideTimer);
+    loadingState.hideTimer = null;
+  }
 
   // Programma la comparsa dopo delayMs
   if (loadingState.showTimer) clearTimeout(loadingState.showTimer);
@@ -572,15 +580,18 @@ function endRequest(){
   if (!loadingState.isVisible) return;
 
   const elapsed = performance.now() - (loadingState.shownAt || performance.now());
-  const remaining = loadingState.minVisibleMs - elapsed;
-  if (remaining > 0) {
-    setTimeout(() => {
-      // Ricontrollo: potrebbe essere partita un'altra richiesta.
-      if (loadingState.requestCount === 0) hideLoading();
-    }, remaining);
-  } else {
-    hideLoading();
+  const minRemain = loadingState.minVisibleMs - elapsed;
+  const delay = Math.max(loadingState.hideGraceMs || 0, minRemain > 0 ? minRemain : 0);
+
+  if (loadingState.hideTimer) {
+    clearTimeout(loadingState.hideTimer);
+    loadingState.hideTimer = null;
   }
+
+  loadingState.hideTimer = setTimeout(() => {
+    loadingState.hideTimer = null;
+    if (loadingState.requestCount === 0) hideLoading();
+  }, delay);
 }
 
 function euro(n){
@@ -1560,13 +1571,32 @@ function __lsSet(key, data){
 
 
 // GET con cache in-memory (non tocca SW): evita chiamate duplicate e loader continui
-async function cachedGet(action, params = {}, { ttlMs = 30000, showLoader = true, force = false } = {}){
+async function cachedGet(action, params = {}, { ttlMs = 30000, swrMs = null, showLoader = true, force = false } = {}){
   const ctxParams = __applyCtxToParams(action, params);
   const key = __cacheKey(action, ctxParams);
+  const now = Date.now();
+  const swrWindow = (swrMs === null || swrMs === undefined) ? ttlMs : swrMs;
 
   if (!force) {
     const hit = __apiCache.get(key);
-    if (hit && (Date.now() - hit.t) < ttlMs) return hit.data;
+    if (hit) {
+      const age = now - hit.t;
+      if (age < ttlMs) return hit.data;
+
+      // Stale-while-revalidate: torna subito il dato “stale” e aggiorna in background
+      if (age < swrWindow) {
+        if (!__apiInflight.has(key)) {
+          const bg = (async () => {
+            const data = await api(action, { params: ctxParams, showLoader:false });
+            __apiCache.set(key, { t: Date.now(), data });
+            return data;
+          })();
+          __apiInflight.set(key, bg);
+          bg.finally(() => { try{ __apiInflight.delete(key); }catch(_){ } });
+        }
+        return hit.data;
+      }
+    }
   }
 
   if (__apiInflight.has(key)) return __apiInflight.get(key);
@@ -2351,9 +2381,34 @@ async function loadOspiti({ from="", to="", force=false } = {}){
 
   // ✅ Necessario per mostrare i "pallini letti" stanza-per-stanza nelle schede ospiti
   const p = load({ showLoader:false });
-  const pOspiti = cachedGet("ospiti", { from, to }, { showLoader:true, ttlMs: 30*1000, force });
+  const hasLocal = !!(hit && Array.isArray(hit.data) && hit.data.length);
 
-  const [ , data ] = await Promise.all([p, pOspiti]);
+  // Se ho già dati locali, aggiorna in background (senza loader e senza bloccare la navigazione)
+  const refresh = async () => {
+    const data = await cachedGet("ospiti", { from, to }, {
+      showLoader: !hasLocal,
+      ttlMs: 2*60*1000,
+      swrMs: 10*60*1000,
+      force,
+    });
+    return data;
+  };
+
+  if (hasLocal && !force) {
+    // fire-and-forget
+    Promise.all([p, refresh()])
+      .then(([ , data ]) => {
+        // aggiorna solo se l'utente è ancora nella lista ospiti
+        if (state.page !== "ospiti") return;
+        state.guests = Array.isArray(data) ? data : [];
+        __lsSet(lsKey, state.guests);
+        try{ requestAnimationFrame(renderGuestCards); }catch(_){ renderGuestCards(); }
+      })
+      .catch(() => {});
+    return;
+  }
+
+  const [ , data ] = await Promise.all([p, refresh()]);
   state.guests = Array.isArray(data) ? data : [];
   __lsSet(lsKey, state.guests);
   renderGuestCards();
@@ -2368,14 +2423,57 @@ async function ensurePeriodData({ showLoader=true, force=false } = {}){
     return;
   }
 
-  const [report, spese] = await Promise.all([
-    cachedGet("report", { from, to }, { showLoader, ttlMs: 15*1000, force }),
-    cachedGet("spese", { from, to }, { showLoader, ttlMs: 15*1000, force }),
+  // Prefill immediato da cache locale (perceived speed) — poi refresh SWR
+  const lsSpeseKey = `spese|${from}|${to}`;
+  const lsReportKey = `report|${from}|${to}`;
+  const hitS = !force ? __lsGet(lsSpeseKey) : null;
+  const hitR = !force ? __lsGet(lsReportKey) : null;
+  const hasLocal = !!((hitS && hitS.data) || (hitR && hitR.data));
+
+  if (!force) {
+    if (hitS && Array.isArray(hitS.data)) state.spese = hitS.data;
+    if (hitR && hitR.data) state.report = hitR.data;
+    if (hasLocal) state._dataKey = key;
+  }
+
+  const fetchAll = () => Promise.all([
+    cachedGet("report", { from, to }, { showLoader: showLoader && !hasLocal, ttlMs: 2*60*1000, swrMs: 10*60*1000, force }),
+    cachedGet("spese", { from, to }, { showLoader: showLoader && !hasLocal, ttlMs: 2*60*1000, swrMs: 10*60*1000, force }),
   ]);
 
+  // Se ho cache locale e non forzo, non bloccare la navigazione: aggiorna in background
+  if (hasLocal && !force) {
+    fetchAll()
+      .then(([report, spese]) => {
+        const kNow = `${state.period.from}|${state.period.to}`;
+        if (kNow !== key) return;
+        state.report = report;
+        state.spese = Array.isArray(spese) ? spese : [];
+        state._dataKey = key;
+        __lsSet(lsReportKey, report);
+        __lsSet(lsSpeseKey, state.spese);
+
+        // refresh UI se siamo su pagine che dipendono da questi dati
+        try{
+          if (state.page === "spese") {
+            if (state.speseView === "list") renderSpese();
+            else { renderRiepilogo(); renderGrafico(); }
+          }
+          if (state.page === "statgen") renderStatGen();
+          if (state.page === "statmensili") renderStatMensili();
+          if (state.page === "statspese") renderStatSpese();
+        }catch(_){ }
+      })
+      .catch(() => {});
+    return;
+  }
+
+  const [report, spese] = await fetchAll();
   state.report = report;
-  state.spese = spese;
+  state.spese = Array.isArray(spese) ? spese : [];
   state._dataKey = key;
+  __lsSet(lsReportKey, report);
+  __lsSet(lsSpeseKey, state.spese);
 }
 
 // Compat: vecchi call-site
@@ -4632,6 +4730,7 @@ async function init(){
   state.exerciseYear = loadExerciseYear();
   updateYearPill();
 
+  // Imposta una pagina di default (poi showPage verrà chiamata UNA sola volta)
   document.body.dataset.page = (state.session && state.session.user_id) ? "home" : "auth";
   setupHeader();
   setupAuth();
@@ -4642,12 +4741,7 @@ async function init(){
     setupOspite();
   initFloatingLabels();
 
-  // Pagina iniziale
-  if (!state.session || !state.session.user_id) {
-    showPage("auth");
-  } else {
-    showPage("home");
-  }
+  // Non chiamare showPage qui: evitiamo doppie navigazioni/render all'avvio
 // periodo iniziale
   if (__restore && __restore.preset) state.periodPreset = __restore.preset;
   if (__restore && __restore.period && __restore.period.from && __restore.period.to) {
@@ -4701,11 +4795,10 @@ async function init(){
   });
 
 
-  // prefetch leggero (evita lentezza all'avvio) — solo dopo login
+  // prefetch leggero (no await): evita blocchi e “clessidra” ripetute all'avvio
   if (state.session && state.session.user_id){
-    try { await loadMotivazioni(); } catch(e){ toast(e.message); }
-    // Impostazioni: carica in background (serve per tassa soggiorno / operatori)
-    try { await ensureSettingsLoaded({ force:false, showLoader:false }); } catch(_) {}
+    try { loadMotivazioni().catch(() => {}); } catch(_){ }
+    try { ensureSettingsLoaded({ force:false, showLoader:false }).catch(() => {}); } catch(_){ }
   }
 
   // avvio: ripristina sezione se il SW ha forzato un reload su iOS
