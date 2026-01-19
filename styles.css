@@ -41,7 +41,7 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.037"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.049"),
     radial-gradient(900px 600px at 10% 0%, rgba(43,124,180,0.10), transparent 62%),
     radial-gradient(800px 520px at 90% 8%, rgba(201,119,43,0.10), transparent 64%),
     radial-gradient(900px 700px at 20% 100%, rgba(111,183,214,0.10), transparent 62%),
@@ -777,7 +777,7 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.037"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.049"),
     radial-gradient(900px 650px at 12% 8%, rgba(43,124,180,0.18), transparent 62%),
     radial-gradient(820px 560px at 92% 14%, rgba(201,119,43,0.16), transparent 62%),
     radial-gradient(900px 700px at 18% 96%, rgba(111,183,214,0.16), transparent 62%),
@@ -914,7 +914,7 @@ body[data-page="home"]{
   font-size: 42px !important;
 }
 /* Alza il gruppo (card) più in alto */
-.home-page .home-spacer:first-of-type{ flex: 0.35 !important; }
+.home-page .home-spacer:first-of-type{ flex: 0.55 !important; }
 /* Card un filo più compatta con icone grandi */
 .home-card{
   width: min(460px, 94vw) !important;
@@ -967,7 +967,7 @@ body::before{
 .home-grid{ gap: 12px !important; }
 
 /* alza la card (più in alto) */
-.home-page .home-spacer:first-of-type{ flex: 0.35 !important; }
+.home-page .home-spacer:first-of-type{ flex: 0.55 !important; }
 .home-page .home-spacer:last-of-type{ flex: 1.15 !important; }
 
 /* build: in fondo display, sopra safe-area */
@@ -1093,13 +1093,13 @@ body::before{
 }
 
 #page-home .home-main-glyph{
-  width: clamp(64px, 18vw, 118px);
-  height: clamp(64px, 18vw, 118px);
-  border-radius: clamp(18px, 5vw, 34px);
+  width: clamp(83px, 23.4vw, 153px);
+  height: clamp(83px, 23.4vw, 153px);
+  border-radius: clamp(23px, 6.5vw, 44px);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: clamp(30px, 7vw, 54px);
+  font-size: clamp(39px, 9.1vw, 70px);
   font-weight: 950;
   color: var(--blue);
   border: 1px solid rgba(15,23,42,0.10);
@@ -1274,6 +1274,11 @@ body::before{
   justify-content:center;
   padding: 0;
   cursor: pointer;
+  touch-action: manipulation;
+  -webkit-touch-callout: none;
+  -webkit-user-select: none;
+  user-select: none;
+
 }
 .room-dot.selected{
   border-color: rgba(43,124,180,0.35);
@@ -1895,7 +1900,7 @@ body::before{
   stroke-linecap: round;
   stroke-linejoin: round;
 }
-.home-main-glyph .ui-ico{ width: 40px; height: 40px; }
+.home-main-glyph .ui-ico{ width: 52px; height: 52px; }
 .launcher .glyph .ui-ico{ width: 28px; height: 28px; }
 .seg-ico .ui-ico{ width: 22px; height: 22px; }
 .loading-hourglass .ui-ico{ width: 44px; height: 44px; }
@@ -2987,7 +2992,7 @@ body[data-page="ospiti"] .guest-card .actions {
 #page-home .home-grid{
   display: grid !important;
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  gap: 14px !important;
+  gap: 10px !important;
   justify-items: center !important;
   align-items: stretch !important;
   width: min(460px, 94vw) !important;
@@ -2997,7 +3002,7 @@ body[data-page="ospiti"] .guest-card .actions {
 #page-home .home-grid{
   display: grid !important;
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
-  gap: 14px !important;
+  gap: 10px !important;
   justify-items: center !important;
   align-items: stretch !important;
   width: min(460px, 94vw) !important;
@@ -5182,13 +5187,14 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 }
 #page-home .year-pill{
   margin: 0;
+  margin-top: -100px;
   padding: 11px 22px;
   font-size: 22px;
   letter-spacing: 1px;
   margin-bottom: 30px;
 }
 #page-home .build{
-  margin-top: 12px;
+  margin-top: 112px;
   padding-bottom: calc(10px + var(--safe-bottom));
   position: static;
 }
@@ -5313,21 +5319,19 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   display: flex;
   flex-direction: column;
   align-items: center;
-  justify-content: flex-start;
+  justify-content: center;
   gap: 8px;
   width: 100%;
 }
 
 .stats-page .home-main-glyph{
-  width: 100%;
-  max-width: 92px;
-  aspect-ratio: 1 / 1;
-  height: auto;
-  border-radius: 26px;
+  width: clamp(83px, 23.4vw, 153px);
+  height: clamp(83px, 23.4vw, 153px);
+  border-radius: clamp(23px, 6.5vw, 44px);
   display: flex;
   align-items: center;
   justify-content: center;
-  font-size: 54px;
+  font-size: clamp(39px, 9.1vw, 70px);
   font-weight: 950;
   color: var(--blue);
   border: 1px solid rgba(15,23,42,0.10);
@@ -5342,7 +5346,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 .stats-page .home-main-label{
   font-weight: 950;
   letter-spacing: 0.2px;
-  font-size: 11px;
+  font-size: 17px;
   line-height: 1.15;
   color: rgba(15,23,42,0.88);
   text-align: center;
@@ -5352,8 +5356,8 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 .stats-page .home-main-glyph.alt{ color: rgba(201,119,43,0.92); }
 
 #page-statistiche .home-main-glyph .ui-ico{
-  width: 30px;
-  height: 30px;
+  width: 52px;
+  height: 52px;
 }
 
 
@@ -5361,7 +5365,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 .stats-page .home-grid{
   margin-top: 6px;
   grid-template-columns: repeat(2, minmax(0, 1fr));
-  gap: 12px;
+  gap: 10px;
 }
 
 .stats-stack{
@@ -5495,7 +5499,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 
 .stat-modal-close:active{ transform: scale(0.96); }
 
-/* ===== Statistiche: Incassi mensili (progress) ===== */
+/* ===== Statistiche: Fatturati mensili (progress) ===== */
 .month-stack{
   display:flex;
   flex-direction:column;
@@ -5601,3 +5605,11 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
     justify-content: flex-end;
   }
 }
+
+/* Calendario: render immediato + refresh in background */
+#calGrid.is-loading{opacity:.6;transition:opacity .12s ease;}
+
+
+/* dDAE_2.049 — HOME: sposta pill+icone più in basso (evita overlap topbar) */
+#page-home .year-pill{ margin-top: 10px; }
+#page-home .home-page{ padding-top: 6px; }
