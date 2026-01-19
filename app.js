@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.035";
+const BUILD_VERSION = "dDAE_2.037";
 
 
 function __parseBuildVersion(v){
@@ -3387,11 +3387,11 @@ function enterGuestEditMode(ospite){
   state.guestPSRegistered = psReg;
   state.guestISTATRegistered = istatReg;
   setRegFlags("regTags", psReg, istatReg);
-  // stanze: backend non espone GET stanze; se in futuro arrivano su ospite.stanze li applichiamo
+  // stanze: in lettura possono arrivare in vari formati (legacy, JSON, date-convertite da Sheets)
   try {
-    if (ospite.stanze) {
-      const rooms = Array.isArray(ospite.stanze) ? ospite.stanze : String(ospite.stanze).split(",").map(x=>x.trim()).filter(Boolean);
-      state.guestRooms = new Set(rooms.map(x=>parseInt(x,10)).filter(n=>isFinite(n)));
+    const roomsArr = _parseRoomsArr(ospite?.stanze);
+    if (roomsArr.length){
+      state.guestRooms = new Set(roomsArr);
       document.querySelectorAll("#roomsPicker .room-dot").forEach(btn => {
         const n = parseInt(btn.getAttribute("data-room"), 10);
         const on = state.guestRooms.has(n);
@@ -3470,19 +3470,83 @@ function _guestIdOf(item){
 }
 
 function _parseRoomsArr(stanzeField){
-  let roomsArr = [];
+  // Restituisce sempre un array unico/sortato di stanze [1..6]
+  const norm = (arr) => Array.from(new Set((arr || [])
+    .map(n => parseInt(n, 10))
+    .filter(n => isFinite(n) && n >= 1 && n <= 6)))
+    .sort((a,b) => a - b);
+
+  const fromDateParts = (d, m, y) => {
+    const dd = parseInt(d, 10);
+    const mm = parseInt(m, 10);
+    let yy = parseInt(y, 10);
+    if (!isFinite(dd) || !isFinite(mm) || !isFinite(yy)) return null;
+    if (yy >= 100) yy = yy % 100;
+    if (dd >= 1 && dd <= 6 && mm >= 1 && mm <= 6 && yy >= 1 && yy <= 6) return [dd, mm, yy];
+    return null;
+  };
+
   try {
-    const st = stanzeField;
-    if (Array.isArray(st)) roomsArr = st;
-    else if (st != null && String(st).trim().length) {
-      const s = String(st);
-      const m = s.match(/[1-6]/g) || [];
-      roomsArr = m.map(x => parseInt(x, 10));
+    if (Array.isArray(stanzeField)) return norm(stanzeField);
+    if (stanzeField == null) return [];
+
+    // Date object (da Sheets)
+    if (stanzeField instanceof Date){
+      const parts = fromDateParts(stanzeField.getDate(), stanzeField.getMonth() + 1, stanzeField.getFullYear());
+      return parts ? norm(parts) : [];
     }
-  } catch (_) {}
-  roomsArr = Array.from(new Set((roomsArr||[]).map(n => parseInt(n,10)).filter(n => isFinite(n) && n>=1 && n<=6))).sort((a,b)=>a-b);
-  return roomsArr;
+
+    let s = String(stanzeField).trim();
+    if (!s) return [];
+
+    // JSON array: [2,3,4]
+    if (s[0] === "["){
+      try {
+        const arr = JSON.parse(s);
+        if (Array.isArray(arr)) return norm(arr);
+      } catch (_) {}
+    }
+
+    // JSON object (tolleranza): {stanze:[...]}
+    if (s[0] === "{"){
+      try {
+        const obj = JSON.parse(s);
+        const maybe = (obj && (obj.stanze ?? obj.rooms ?? obj.stanza ?? obj.room)) ?? null;
+        if (Array.isArray(maybe)) return norm(maybe);
+        if (typeof maybe === "string") s = String(maybe).trim();
+      } catch (_) {}
+    }
+
+    // Sheets conversione data con virgole: "2,3,2004"
+    let m = s.match(/^\s*(\d{1,2})\s*,\s*(\d{1,2})\s*,\s*(\d{2,4})\s*$/);
+    if (m){
+      const parts = fromDateParts(m[1], m[2], m[3]);
+      if (parts) return norm(parts);
+    }
+
+    // Data con slash: "02/03/2004" oppure "2-3-04"
+    m = s.match(/^\s*(\d{1,2})\s*[\/\-.]\s*(\d{1,2})\s*[\/\-.]\s*(\d{2,4})\s*$/);
+    if (m){
+      const parts = fromDateParts(m[1], m[2], m[3]);
+      if (parts) return norm(parts);
+    }
+
+    // ISO date: "2004-03-02" o "2004-03-02T..."
+    m = s.match(/^\s*(\d{4})-(\d{2})-(\d{2})(?:[T\s].*)?$/);
+    if (m){
+      const parts = fromDateParts(m[3], m[2], m[1]);
+      if (parts) return norm(parts);
+    }
+
+    // Lista stanze: supporta "2,3,4" e "2|3|4" (senza pescare cifre da numeri lunghi)
+    const tokens = s.split(/[|,;\s]+/).map(t => t.trim()).filter(Boolean);
+    const nums = tokens.map(t => parseInt(t, 10)).filter(n => isFinite(n) && n >= 1 && n <= 6);
+    return norm(nums);
+  } catch (_) {
+    return [];
+  }
 }
+
 
 function buildRoomsStackHTML(guestId, roomsArr){
   if (!roomsArr || !roomsArr.length) return `<span class="room-dot-badge is-empty" aria-label="Nessuna stanza">—</span>`;
@@ -3765,7 +3829,10 @@ async function saveGuest(){
   const deposit = parseFloat(document.getElementById("guestDeposit")?.value || "0") || 0;
   const saldoPagato = parseFloat(document.getElementById("guestSaldo")?.value || "0") || 0;
   const saldoTipo = state.guestSaldoType || "contante";
-  const rooms = Array.from(state.guestRooms || []).sort((a,b)=>a-b);
+  const rooms = Array.from(state.guestRooms || [])
+    .map(n => parseInt(n,10))
+    .filter(n => isFinite(n) && n>=1 && n<=6)
+    .sort((a,b)=>a-b);
   const depositType = state.guestDepositType || "contante";
   const matrimonio = !!(state.guestMarriage);
 if (!name) return toast("Inserisci il nome");
@@ -3787,7 +3854,7 @@ if (!name) return toast("Inserisci il nome");
     matrimonio,
     ps_registrato: state.guestPSRegistered ? "1" : "",
     istat_registrato: state.guestISTATRegistered ? "1" : "",
-    stanze: rooms.join(",")
+    stanze: JSON.stringify(rooms)
   };
 
 
@@ -4185,8 +4252,48 @@ function setupOspite(){
     window.__ddae_renderRooms = renderRooms;
   } catch (_) {}
 
+  // iOS/PWA: a volte, nei contenitori orizzontali, il target del tap puo' "slittare" sul pallino precedente.
+  // Per evitare che una selezione multipla aggiunga la stanza sbagliata, scegliamo SEMPRE il pallino piu' vicino
+  // alle coordinate reali del tap.
+  function __pickRoomDotFromEvent(e){
+    try{
+      if (!roomsWrap) return null;
+      // 1) coordinate (touch/pointer/mouse)
+      let x = null, y = null;
+      const te = e;
+      if (te && te.changedTouches && te.changedTouches[0]){ x = te.changedTouches[0].clientX; y = te.changedTouches[0].clientY; }
+      else if (te && te.touches && te.touches[0]){ x = te.touches[0].clientX; y = te.touches[0].clientY; }
+      else if (typeof te.clientX === 'number'){ x = te.clientX; y = te.clientY; }
+
+      // 2) fallback per tastiera: usa il closest normale
+      if (x == null || y == null){
+        const b0 = te?.target?.closest ? te.target.closest('.room-dot') : null;
+        return b0 && roomsWrap.contains(b0) ? b0 : null;
+      }
+
+      // 3) trova il bottone piu' vicino al punto del tap
+      const dots = Array.from(roomsWrap.querySelectorAll('.room-dot'));
+      let best = null;
+      let bestD = Infinity;
+      for (const d of dots){
+        if (!d) continue;
+        const r = d.getBoundingClientRect();
+        const cx = r.left + (r.width/2);
+        const cy = r.top + (r.height/2);
+        const dx = cx - x;
+        const dy = cy - y;
+        const dist = (dx*dx) + (dy*dy);
+        if (dist < bestD){ bestD = dist; best = d; }
+      }
+
+      // se il tap e' molto lontano dai pallini, ignora
+      if (!best) return null;
+      return best;
+    }catch(_){ return null; }
+  }
+
   roomsWrap?.addEventListener("click", (e) => {
-    const b = e.target.closest(".room-dot");
+    const b = __pickRoomDotFromEvent(e);
     if (!b) return;
 
     // Matrimonio: flag separato
