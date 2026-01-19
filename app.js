@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.043";
+const BUILD_VERSION = "dDAE_2.044";
 
 
 function __parseBuildVersion(v){
@@ -2794,45 +2794,75 @@ function computeStatGen(){
   const guests = Array.isArray(state.guests) ? state.guests : [];
   const report = state.report || null;
 
+  const money = (v) => {
+    if (v === null || v === undefined) return 0;
+    if (typeof v === "number") return isFinite(v) ? v : 0;
+    let s = String(v).trim();
+    if (!s) return 0;
+    // Normalizza numeri tipo "1.234,56" o "1234,56"
+    if (s.includes(",") && s.includes(".")) {
+      s = s.replace(/\./g, "").replace(",", ".");
+    } else if (s.includes(",")) {
+      s = s.replace(",", ".");
+    }
+    const n = Number(s);
+    return isFinite(n) ? n : 0;
+  };
+
+  // Fatturato totale = somma di tutte le voci "importo prenotazione"
   let fatturato = 0;
-  let cash = 0;
+
+  // Giacenza in cassa = somma di tutti gli importi "acconto + saldo"
+  let giacenza = 0;
+
+  // (Restano utili per le righe con/senza ricevuta)
   let conRicevuta = 0;
   let senzaRicevuta = 0;
 
   for (const g of guests){
-    const dep = Number(g?.acconto_importo || 0) || 0;
-    const saldo = Number(g?.saldo_pagato ?? g?.saldoPagato ?? g?.saldo ?? 0) || 0;
-    const depType = String(g?.acconto_tipo || g?.depositType || "contante").toLowerCase();
-    const saldoType = String(g?.saldo_tipo || g?.saldoTipo || g?.saldoType || "").toLowerCase();
+    const pren = money(g?.importo_prenotazione ?? g?.importo_prenota ?? g?.importoPrenotazione ?? g?.importoPrenota ?? 0);
+    fatturato += pren;
+
+    const dep = money(g?.acconto_importo ?? g?.accontoImporto ?? 0);
+    const saldo = money(g?.saldo_pagato ?? g?.saldoPagato ?? g?.saldo ?? 0);
+
+    giacenza += (dep + saldo);
 
     // receipt flags
     const depRec = truthy(g?.acconto_ricevuta ?? g?.accontoRicevuta ?? g?.ricevuta_acconto ?? g?.ricevutaAcconto ?? g?.acconto_ricevutain);
     const saldoRec = truthy(g?.saldo_ricevuta ?? g?.saldoRicevuta ?? g?.ricevuta_saldo ?? g?.ricevutaSaldo ?? g?.saldo_ricevutain);
 
-    fatturato += dep + saldo;
-
     if (dep > 0){
       if (depRec) conRicevuta += dep;
       else senzaRicevuta += dep;
-      if (!depType.includes("elet")) cash += dep;
     }
     if (saldo > 0){
       if (saldoRec) conRicevuta += saldo;
       else senzaRicevuta += saldo;
-      if (!saldoType.includes("elet")) cash += saldo;
     }
   }
 
-  const speseTot = Number(report?.totals?.importoLordo || 0) || 0;
+  const speseTot = money(report?.totals?.importoLordo ?? 0);
 
-  // IVA da versare = IVA su incassi (10%) - IVA detraibile su spese (4/10/22)
-  let ivaSpese = Number(report?.totals?.ivaDetraibile || 0) || 0;
+  // IVA da versare = (10% del fatturato alloggi) - (somma IVA di tutte le spese al 4/10/22)
+  let ivaSpese = money(report?.totals?.iva ?? 0);
+  if (!isFinite(ivaSpese) || ivaSpese === 0){
+    ivaSpese = money(report?.totals?.ivaDetraibile ?? 0);
+  }
+
   if (!isFinite(ivaSpese) || ivaSpese === 0){
     try{
       const items = Array.isArray(state.spese) ? state.spese : [];
       let sum = 0;
       for (const s of items){
-        const lordo = Number(s?.importoLordo || 0);
+        // Se c'e' gia' un campo iva, usa quello
+        const ivaField = money(s?.iva ?? s?.IVA ?? 0);
+        if (ivaField > 0){
+          sum += ivaField;
+          continue;
+        }
+
+        const lordo = money(s?.importoLordo ?? s?.lordo ?? 0);
         if (!isFinite(lordo) || lordo <= 0) continue;
 
         const catRaw = (s?.categoria ?? s?.cat ?? "").toString().trim().toLowerCase();
@@ -2860,7 +2890,7 @@ function computeStatGen(){
     }catch(_){ }
   }
 
-  const ivaDaVersare = (conRicevuta * 0.10) - (Number(ivaSpese) || 0);
+  const ivaDaVersare = (fatturato * 0.10) - (money(ivaSpese) || 0);
   const guadagno = fatturato - speseTot;
 
   return {
@@ -2870,7 +2900,7 @@ function computeStatGen(){
     conRicevuta,
     ivaDaVersare,
     guadagnoTotale: guadagno,
-    giacenzaCassa: cash,
+    giacenzaCassa: giacenza,
   };
 }
 
