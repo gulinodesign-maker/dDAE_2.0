@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.072";
+const BUILD_VERSION = "dDAE_2.073";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -5831,6 +5831,20 @@ function setupProdotti(){
       __prodDraftSetQty_(id, 0);
       renderProdotti();
       updateProdottiHomeBlink();
+
+      // Flash rosso neon SOLO sul riquadro del prodotto azzerato (0.5s)
+      try{
+        const sid = String(id || "");
+        const esc = sid.replace(/\\/g, "\\\\").replace(/\"/g, "\\\"");
+        const sel = `.prod-item-block[data-id="${esc}"]`;
+        const el = document.querySelector(sel);
+        if (el){
+          el.classList.add("prod-flash-red");
+          setTimeout(() => {
+            try{ el.classList.remove("prod-flash-red"); }catch(_){ }
+          }, 500);
+        }
+      }catch(_){ }
     }, 500);
   };
 
