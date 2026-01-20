@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.073";
+const BUILD_VERSION = "dDAE_2.074";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -1071,6 +1071,22 @@ function categoriaLabel(cat){
   })[cat] || cat;
 }
 
+function __apiProfile(action, method, body){
+  const a = String(action || "").trim().toLowerCase();
+  const m = String(method || "").trim().toUpperCase();
+  // Default: breve per evitare loader infinito su iOS
+  let timeoutMs = 15000;
+  let retries = 0;
+
+  // Lista spesa (colazione + prodotti pulizia): più lenta su rete iOS / Apps Script
+  if (a === "colazione" || a === "prodotti_pulizia"){
+    timeoutMs = (m === "GET") ? 45000 : 60000;
+    retries = 2;
+  }
+
+  return { timeoutMs, retries };
+}
+
 async function api(action, { method="GET", params={}, body=null, showLoader=true } = {}){
   if (showLoader) beginRequest();
   try {
@@ -1106,68 +1122,90 @@ async function api(action, { method="GET", params={}, body=null, showLoader=true
     url.searchParams.set("_method", method);
     realMethod = "POST";
   }
+  const { timeoutMs, retries } = __apiProfile(action, realMethod, body);
 
-  // Timeout concreto: evita loader infinito su iOS quando la rete “si pianta”
-const controller = new AbortController();
-const t = setTimeout(() => controller.abort(), 15000);
+  const baseFetchOpts = {
+    method: realMethod,
+    cache: "no-store",
+  };
 
-const fetchOpts = {
-  method: realMethod,
-  signal: controller.signal,
-  cache: "no-store",
-};
+  // Headers/body solo quando serve (riduce rischi di preflight su Safari iOS)
+  if (realMethod !== "GET") {
+    baseFetchOpts.headers = { "Content-Type": "text/plain;charset=utf-8" };
+    let payload = body;
+    // Inietta user_id/anno su POST/PUT (se mancano)
+    try{
+      if (state && state.session && state.session.user_id && action !== "utenti"){
+        const uid = String(state.session.user_id);
+        const yr = String(state.exerciseYear || "");
+        const addCtx = (o)=>{
+          if (!o || typeof o !== "object") return o;
+          if (o.user_id === undefined || o.user_id === null || String(o.user_id).trim() === "") o.user_id = uid;
+          if (o.anno === undefined || o.anno === null || String(o.anno).trim() === "") o.anno = yr;
+          return o;
+        };
 
-// Headers/body solo quando serve (riduce rischi di preflight su Safari iOS)
-if (realMethod !== "GET") {
-  fetchOpts.headers = { "Content-Type": "text/plain;charset=utf-8" };
-  let payload = body;
-  // Inietta user_id/anno su POST/PUT (se mancano)
-  try{
-    if (state && state.session && state.session.user_id && action !== "utenti"){
-      const uid = String(state.session.user_id);
-      const yr = String(state.exerciseYear || "");
-      const addCtx = (o)=>{
-        if (!o || typeof o !== "object") return o;
-        if (o.user_id === undefined || o.user_id === null || String(o.user_id).trim() === "") o.user_id = uid;
-        if (o.anno === undefined || o.anno === null || String(o.anno).trim() === "") o.anno = yr;
-        return o;
-      };
+        const deep = (x, depth = 0)=>{
+          if (!x || typeof x !== "object") return x;
+          if (Array.isArray(x)) return x.map(v => deep(v, depth));
+          addCtx(x);
+          if (depth >= 1) return x;
+          // pattern comuni: bulk payloads
+          ["rows","items","records","data","list"].forEach((k)=>{
+            const v = x[k];
+            if (Array.isArray(v)) x[k] = v.map(r => deep(r, depth + 1));
+          });
+          return x;
+        };
 
-      const deep = (x, depth = 0)=>{
-        if (!x || typeof x !== "object") return x;
-        if (Array.isArray(x)) return x.map(v => deep(v, depth));
-        addCtx(x);
-        if (depth >= 1) return x;
-        // pattern comuni: bulk payloads
-        ["rows","items","records","data","list"].forEach((k)=>{
-          const v = x[k];
-          if (Array.isArray(v)) x[k] = v.map(r => deep(r, depth + 1));
-        });
-        return x;
-      };
-
-      payload = deep(payload, 0);
-    }
-  }catch(_){ }
-  fetchOpts.body = payload ? JSON.stringify(payload) : "{}";
-}
-
-let res;
-try {
-  try {
-  res = await fetch(url.toString(), fetchOpts);
-} catch (err) {
-  const msg = String(err && err.message || err || "");
-  if (msg.toLowerCase().includes("failed to fetch")) {
-    throw new Error("Failed to fetch (API). Verifica: 1) Web App Apps Script distribuita come 'Chiunque', 2) URL /exec corretto, 3) rete iPhone ok. Se hai appena aggiornato lo script, ridistribuisci una nuova versione.");
+        payload = deep(payload, 0);
+      }
+    }catch(_){ }
+    baseFetchOpts.body = payload ? JSON.stringify(payload) : "{}";
   }
-  throw err;
-}
-} finally {
-  clearTimeout(t);
-}
 
-let json;
+  const sleep = (ms) => new Promise(r => setTimeout(r, ms));
+
+  let res;
+  for (let attempt = 0; attempt <= retries; attempt++){
+    // Timeout concreto: evita loader infinito su iOS quando la rete “si pianta”
+    const controller = new AbortController();
+    const t = setTimeout(() => controller.abort(), timeoutMs);
+
+    try{
+      res = await fetch(url.toString(), Object.assign({}, baseFetchOpts, { signal: controller.signal }));
+      break;
+    }catch(err){
+      const msg = String((err && err.message) || err || "");
+      const low = msg.toLowerCase();
+      const name = String((err && err.name) || "").toLowerCase();
+
+      const isAbort = name === "aborterror" || low.includes("fetch is aborted") || low.includes("aborted");
+      const isNet = low.includes("failed to fetch") || low.includes("networkerror") || low.includes("load failed");
+      const retryable = isAbort || isNet;
+
+      if (attempt < retries && retryable){
+        const backoff = Math.min(8000, 700 * (2 ** attempt));
+        const jitter = Math.floor(Math.random() * 200);
+        await sleep(backoff + jitter);
+        continue;
+      }
+
+      if (isAbort){
+        throw new Error("Operazione annullata: connessione lenta o instabile (timeout). Riprova.");
+      }
+
+      if (isNet){
+        throw new Error("Connessione assente o instabile. Verifica la rete e riprova. Se il problema persiste: 1) Web App Apps Script distribuita come 'Chiunque', 2) URL /exec corretto, 3) hai ridistribuito una nuova versione dello script dopo modifiche.");
+      }
+
+      throw err;
+    }finally{
+      clearTimeout(t);
+    }
+  }
+
+  let json;
 try {
   json = await res.json();
 } catch (_) {
