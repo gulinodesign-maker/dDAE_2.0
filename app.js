@@ -3,7 +3,26 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.055";
+const BUILD_VERSION = "dDAE_2.056";
+
+// Top "Home" button becomes "Impostazioni" when on HOME
+const HB_SVG_HOME = `<path d="M3 10.5L12 3l9 7.5"></path><path d="M5 10v11h14V10"></path><path d="M9 21v-6h6v6"></path>`;
+const HB_SVG_GEAR = `<path d="M12 14.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"></path><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="M4.93 4.93l1.41 1.41"></path><path d="M17.66 17.66l1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="M4.93 19.07l1.41-1.41"></path><path d="M17.66 6.34l1.41-1.41"></path>`;
+
+function updateHamburgerMode(){
+  try{
+    const hb = document.getElementById("hamburgerBtn");
+    if (!hb) return;
+    const isHome = (state.page === "home");
+    hb.setAttribute("aria-label", isHome ? "Impostazioni" : "Home");
+    hb.classList.toggle("hb-settings", isHome);
+    const svg = hb.querySelector("svg");
+    if (svg){
+      svg.innerHTML = isHome ? HB_SVG_GEAR : HB_SVG_HOME;
+    }
+  }catch(_){ }
+}
+
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -1890,8 +1909,8 @@ function bindHomeDelegation(){
 const lav = e.target.closest && e.target.closest("#goLavanderia") || e.target.closest("#goLavanderiaTop");
     if (lav){ hideLauncher(); showPage("lavanderia"); return; }
 
-    const imp = e.target.closest && e.target.closest("#goImpostazioni");
-    if (imp){ hideLauncher(); showPage("impostazioni"); return; }
+    const col = e.target.closest && e.target.closest("#goColazione");
+    if (col){ hideLauncher(); showPage("colazione"); return; }
 
     const g = e.target.closest && e.target.closest("#goStatistiche");
     if (g){ hideLauncher(); showPage("statistiche"); return; }
@@ -1984,7 +2003,7 @@ function showPage(page){
   // Gate ruolo: operatore vede solo Pulizie / Lavanderia / Calendario
   try{
     if (state.session && isOperatoreSession(state.session)){
-      const allowed = new Set(["home","pulizie","lavanderia","calendario","orepulizia","auth"]);
+      const allowed = new Set(["home","pulizie","lavanderia","calendario","orepulizia","colazione","impostazioni","auth"]);
       if (!allowed.has(page)) page = "pulizie";
     }
   }catch(_){ }
@@ -2002,6 +2021,7 @@ state.page = page;
   document.body.dataset.page = page;
 
   try { __rememberPage(page); } catch (_) {}
+  try{ updateHamburgerMode(); }catch(_){ }
   document.querySelectorAll(".page").forEach(s => s.hidden = true);
   const el = $(`#page-${page}`);
   if (el) el.hidden = false;
@@ -2009,6 +2029,12 @@ state.page = page;
   // Impostazioni: aggiorna tabs (account + anno)
   if (page === "impostazioni"){
     try{ updateSettingsTabs(); }catch(_){ }
+  }
+
+  // Colazione
+  if (page === "colazione"){
+    try{ renderColazione(); }catch(_){ }
+    try{ refreshFloatingLabels(); }catch(_){ }
   }
 
   // Sotto-viste della pagina Spese (lista ↔ grafico+riepilogo)
@@ -2182,7 +2208,11 @@ state.page = page;
 
 function setupHeader(){
   const hb = $("#hamburgerBtn");
-  if (hb) hb.addEventListener("click", () => { hideLauncher(); showPage("home"); });
+  if (hb) bindFastTap(hb, () => {
+    try{ hideLauncher(); }catch(_){ }
+    if (state.page === "home") { showPage("impostazioni"); }
+    else { showPage("home"); }
+  });
 
   const opLogout = document.getElementById("opLogoutTop");
   if (opLogout) bindFastTap(opLogout, () => {
@@ -2270,10 +2300,10 @@ if (goCalendarioTopOspiti){
 
 
 
-  // HOME: icona Impostazioni
-  const goImp = $("#goImpostazioni");
-  if (goImp){
-    bindFastTap(goImp, () => showPage("impostazioni"));
+  // HOME: icona Colazione
+  const goCol = $("#goColazione");
+  if (goCol){
+    bindFastTap(goCol, () => showPage("colazione"));
   }
 
   // HOME: icona Calendario (tap-safe su iOS PWA)
@@ -5249,6 +5279,210 @@ function renderGuestCards(){
 
 
 
+
+
+// ===== Colazione (lista spesa) =====
+const COLAZIONE_KEY = "ddae_colazione_items";
+let colazioneState = { items: [] };
+
+function loadColazioneItems(){
+  try{
+    const raw = localStorage.getItem(COLAZIONE_KEY);
+    const arr = raw ? JSON.parse(raw) : [];
+    if (Array.isArray(arr)) return arr.map(x => ({
+      text: String(x?.text ?? "").trim(),
+      qty: Math.max(0, parseInt(x?.qty ?? 0, 10) || 0),
+      checked: !!x?.checked,
+      saved: !!x?.saved
+    })).filter(x => x.text);
+  }catch(_){ }
+  return [];
+}
+
+function saveColazioneItems(items){
+  try{ localStorage.setItem(COLAZIONE_KEY, JSON.stringify(items)); }catch(_){ }
+}
+
+function updateColazioneHomeIndicator(){
+  try{
+    const btn = document.getElementById("goColazione");
+    if (!btn) return;
+    const items = loadColazioneItems();
+    btn.classList.toggle("colazione-alert", items.length > 0);
+  }catch(_){ }
+}
+
+function renderColazione(){
+  const list = document.getElementById("colList");
+  if (!list) return;
+  const items = loadColazioneItems();
+  colazioneState.items = items;
+
+  list.innerHTML = "";
+  if (!items.length){
+    const empty = document.createElement("div");
+    empty.className = "col-empty";
+    empty.textContent = "";
+    list.appendChild(empty);
+    updateColazioneHomeIndicator();
+    return;
+  }
+
+  for (let i=0;i<items.length;i++){
+    const it = items[i];
+    const row = document.createElement("div");
+    row.className = "col-item";
+    row.dataset.idx = String(i);
+
+    const qtyBtn = document.createElement("button");
+    qtyBtn.type = "button";
+    qtyBtn.className = "col-qty" + ((it.saved && it.qty>0) ? " saved" : "");
+    qtyBtn.textContent = it.qty>0 ? String(it.qty) : "•";
+    qtyBtn.setAttribute("aria-label", "Quantità");
+
+    const text = document.createElement("div");
+    text.className = "col-text";
+    text.textContent = it.text;
+
+    const checkBtn = document.createElement("button");
+    checkBtn.type = "button";
+    checkBtn.className = "col-check" + (it.checked ? " checked" : "");
+    checkBtn.textContent = it.checked ? "✓" : "";
+    checkBtn.setAttribute("aria-label", "Nel carrello");
+
+    row.appendChild(qtyBtn);
+    row.appendChild(text);
+    row.appendChild(checkBtn);
+    list.appendChild(row);
+  }
+
+  updateColazioneHomeIndicator();
+}
+
+function setupColazione(){
+  try{ updateColazioneHomeIndicator(); }catch(_){ }
+
+  const addBtn = document.getElementById("colAddBtn");
+  const input = document.getElementById("colNewItem");
+  const resetBtn = document.getElementById("colResetBtn");
+  const saveBtn = document.getElementById("colSaveBtn");
+  const list = document.getElementById("colList");
+
+  function addItem(){
+    if (!input) return;
+    const v = String(input.value ?? "").trim();
+    if (!v) return;
+    const items = loadColazioneItems();
+    items.push({ text: v, qty: 0, checked: false, saved: false });
+    saveColazioneItems(items);
+    input.value = "";
+    try{ refreshFloatingLabels(); }catch(_){ }
+    renderColazione();
+  }
+
+  if (addBtn) bindFastTap(addBtn, addItem);
+  if (input){
+    input.addEventListener("keydown", (e)=>{
+      if (e.key === "Enter"){
+        try{ e.preventDefault(); }catch(_){ }
+        addItem();
+      }
+    });
+  }
+
+  if (resetBtn) bindFastTap(resetBtn, ()=>{
+    const items = loadColazioneItems();
+    for (const it of items){
+      it.qty = 0;
+      it.saved = false;
+    }
+    saveColazioneItems(items);
+    renderColazione();
+  });
+
+  if (saveBtn) bindFastTap(saveBtn, ()=>{
+    const items = loadColazioneItems();
+    for (const it of items){
+      it.saved = (it.qty > 0);
+    }
+    saveColazioneItems(items);
+    renderColazione();
+  });
+
+  // Delegation: qty click, check click, long-press delete on qty
+  if (list){
+    let lpTimer = null;
+    let lpFired = false;
+    let lpIdx = null;
+
+    function clearLP(){
+      if (lpTimer){ clearTimeout(lpTimer); lpTimer = null; }
+      lpIdx = null;
+    }
+
+    function startLP(idx){
+      clearLP();
+      lpFired = false;
+      lpIdx = idx;
+      lpTimer = setTimeout(()=>{
+        lpFired = true;
+        const items = loadColazioneItems();
+        if (idx >= 0 && idx < items.length){
+          items.splice(idx, 1);
+          saveColazioneItems(items);
+          renderColazione();
+        }
+        clearLP();
+      }, 500);
+    }
+
+    list.addEventListener("pointerdown", (e)=>{
+      const q = e.target && e.target.closest && e.target.closest(".col-qty");
+      if (!q) return;
+      const row = q.closest(".col-item");
+      const idx = row ? parseInt(row.dataset.idx || "-1", 10) : -1;
+      if (idx >= 0) startLP(idx);
+    });
+    list.addEventListener("pointerup", ()=>{ clearLP(); });
+    list.addEventListener("pointercancel", ()=>{ clearLP(); });
+    list.addEventListener("pointerleave", ()=>{ clearLP(); });
+
+    list.addEventListener("click", (e)=>{
+      const q = e.target && e.target.closest && e.target.closest(".col-qty");
+      if (q){
+        if (lpFired) { lpFired = false; return; }
+        const row = q.closest(".col-item");
+        const idx = row ? parseInt(row.dataset.idx || "-1", 10) : -1;
+        if (idx < 0) return;
+        const items = loadColazioneItems();
+        const it = items[idx];
+        if (!it) return;
+        it.qty = (parseInt(it.qty || 0, 10) || 0) + 1;
+        saveColazioneItems(items);
+        renderColazione();
+        return;
+      }
+
+      const c = e.target && e.target.closest && e.target.closest(".col-check");
+      if (c){
+        const row = c.closest(".col-item");
+        const idx = row ? parseInt(row.dataset.idx || "-1", 10) : -1;
+        if (idx < 0) return;
+        const items = loadColazioneItems();
+        const it = items[idx];
+        if (!it) return;
+        it.checked = !it.checked;
+        saveColazioneItems(items);
+        renderColazione();
+        return;
+      }
+    });
+  }
+
+  // initial render
+  try{ renderColazione(); }catch(_){ }
+}
+
 function initFloatingLabels(){
   const fields = document.querySelectorAll(".field.float");
   fields.forEach((f) => {
@@ -5293,6 +5527,7 @@ async function init(){
   try{ applyRoleMode(); }catch(_){ }
   setupCalendario();
   setupImpostazioni();
+  setupColazione();
 
     setupOspite();
   initFloatingLabels();
