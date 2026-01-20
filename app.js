@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.058";
+const BUILD_VERSION = "dDAE_2.059";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -538,6 +538,12 @@ guestMarriage: false,
 
   // Colazione (lista spesa permanente)
   colazione: { loaded: false, loadedAt: 0, items: [] },
+
+  // Prodotti pulizia (lista spesa permanente)
+  prodotti_pulizia: { loaded: false, loadedAt: 0, items: [] },
+
+  // UI prodotti
+  prodottiUI: { list: "colazione", sort: "frequent" },
 
   // Auth/session + anno esercizio
   session: null,
@@ -1970,6 +1976,9 @@ function setSpeseView(view, { render=false } = {}){
 
 /* NAV pages (5 pagine interne: home + 4 funzioni) */
 function showPage(page){
+  // Back-compat: vecchia pagina "colazione" ora è "prodotti"
+  if (page === "colazione") page = "prodotti";
+
   // Redirect: grafico/riepilogo ora sono dentro "Spese" (videata unica)
   if (page === "riepilogo" || page === "grafico"){
     page = "spese";
@@ -1987,7 +1996,7 @@ function showPage(page){
   // Gate ruolo: operatore vede solo Pulizie / Lavanderia / Calendario
   try{
     if (state.session && isOperatoreSession(state.session)){
-      const allowed = new Set(["home","pulizie","lavanderia","calendario","orepulizia","auth","colazione"]);
+      const allowed = new Set(["home","pulizie","lavanderia","calendario","orepulizia","auth","prodotti","colazione"]);
       if (!allowed.has(page)) page = "pulizie";
     }
   }catch(_){ }
@@ -2103,10 +2112,10 @@ state.page = page;
   }
 
 // render on demand
-  if (page === "colazione") {
+  if (page === "prodotti") {
     const _nav = navId;
-    loadColazione({ force:false, showLoader:true })
-      .then(()=>{ if (state.navId !== _nav || state.page !== "colazione") return; renderColazione(); })
+    loadProdotti({ force:false, showLoader:true })
+      .then(()=>{ if (state.navId !== _nav || state.page !== "prodotti") return; renderProdotti(); })
       .catch(e=>toast(e.message));
   }
 
@@ -2293,11 +2302,17 @@ if (goCalendarioTopOspiti){
 
 
   // HOME: icona Colazione
-  const goCol = $("#goColazione");
+  const goCol = $("#goProdotti");
   if (goCol){
-    bindFastTap(goCol, () => { hideLauncher(); showPage("colazione"); });
+    bindFastTap(goCol, () => { hideLauncher(); showPage("prodotti"); });
   }
 
+
+  // HOME: Impostazioni (top)
+  const hsTop = document.getElementById("homeSettingsTop");
+  if (hsTop){
+    bindFastTap(hsTop, () => { hideLauncher(); showPage("impostazioni"); });
+  }
 
   // HOME: icona Calendario (tap-safe su iOS PWA)
   const goCal = $("#goCalendario");
@@ -5288,11 +5303,43 @@ function __colazioneAny(){
   try{ return Array.isArray(state.colazione.items) && state.colazione.items.filter(i=>!__normBool01(i.isDeleted)).length > 0; }catch(_){ return false; }
 }
 
-function updateColazioneHomeBlink(){
-  const btn = document.getElementById("goColazione");
+function updateProdottiHomeBlink(){
+  const btn = document.getElementById("goProdotti");
   if (!btn) return;
-  const on = __colazioneAny();
-  btn.classList.toggle("colazione-attn", !!on);
+  const any = (
+    Array.isArray(state.colazione?.items) && state.colazione.items.some(i=>!__normBool01(i.isDeleted))
+  ) || (
+    Array.isArray(state.prodotti_pulizia?.items) && state.prodotti_pulizia.items.some(i=>!__normBool01(i.isDeleted))
+  );
+  btn.classList.toggle("colazione-attn", !!any);
+}
+
+function __freqKey_(action, id){
+  const uid = String(state?.session?.user_id || "").trim();
+  const yr = String(state?.exerciseYear || "").trim();
+  return `freq:${uid}:${yr}:${String(action||"")}:${String(id||"")}`;
+}
+
+function getFreq_(action, id){
+  try{
+    const k = __freqKey_(action, id);
+    state._freqCache = state._freqCache || {};
+    if (k in state._freqCache) return state._freqCache[k];
+    const v = parseInt(String(localStorage.getItem(k) || "0"), 10);
+    const n = isNaN(v) ? 0 : Math.max(0, v);
+    state._freqCache[k] = n;
+    return n;
+  }catch(_){ return 0; }
+}
+
+function incFreq_(action, id){
+  try{
+    const k = __freqKey_(action, id);
+    const n = getFreq_(action, id) + 1;
+    localStorage.setItem(k, String(n));
+    state._freqCache = state._freqCache || {};
+    state._freqCache[k] = n;
+  }catch(_){ }
 }
 
 async function loadColazione({ force=false, showLoader=true } = {}){
@@ -5300,7 +5347,7 @@ async function loadColazione({ force=false, showLoader=true } = {}){
   const now = Date.now();
   const ttl = 20000;
   if (!force && s.loaded && (now - (s.loadedAt||0) < ttl)) {
-    updateColazioneHomeBlink();
+    updateProdottiHomeBlink();
     return s.items || [];
   }
   const res = await api("colazione", { method:"GET", params:{}, showLoader });
@@ -5308,7 +5355,7 @@ async function loadColazione({ force=false, showLoader=true } = {}){
   s.items = (rows || []).filter(r => !__normBool01(r.isDeleted));
   s.loaded = true;
   s.loadedAt = now;
-  updateColazioneHomeBlink();
+  updateProdottiHomeBlink();
   return s.items;
 }
 
@@ -5355,6 +5402,378 @@ function renderColazione(){
   wrap.appendChild(frag);
 }
 
+
+// =========================
+// PRODOTTI (colazione + prodotti_pulizia)
+// =========================
+
+function __prodListKey_(){
+  return (state.prodottiUI && state.prodottiUI.list === "pulizia") ? "pulizia" : "colazione";
+}
+
+function __prodAction_(){
+  return __prodListKey_() === "pulizia" ? "prodotti_pulizia" : "colazione";
+}
+
+function __prodStateBucket_(){
+  return __prodListKey_() === "pulizia" ? state.prodotti_pulizia : state.colazione;
+}
+
+async function loadProdotti({ force=false, showLoader=true } = {}){
+  const key = __prodListKey_();
+  if (key === "pulizia") return loadProdottiList_("prodotti_pulizia", state.prodotti_pulizia, { force, showLoader });
+  return loadProdottiList_("colazione", state.colazione, { force, showLoader });
+}
+
+async function loadProdottiList_(action, bucket, { force=false, showLoader=true } = {}){
+  const s = bucket;
+  const now = Date.now();
+  const ttl = 20000;
+  if (!force && s.loaded && (now - (s.loadedAt||0) < ttl)) {
+    updateProdottiHomeBlink();
+    return s.items || [];
+  }
+  const res = await api(action, { method:"GET", params:{}, showLoader });
+  const rows = Array.isArray(res) ? res : (res && Array.isArray(res.rows) ? res.rows : (res && Array.isArray(res.data) ? res.data : []));
+  s.items = (rows || []).filter(r => !__normBool01(r.isDeleted));
+  s.loaded = true;
+  s.loadedAt = now;
+  updateProdottiHomeBlink();
+  return s.items;
+}
+
+function updateProdottiControls_(){
+  const tabC = document.getElementById("prodTabColazione");
+  const tabP = document.getElementById("prodTabPulizia");
+  const sF = document.getElementById("prodSortFreq");
+  const sA = document.getElementById("prodSortAlpha");
+  const key = __prodListKey_();
+  const sort = (state.prodottiUI && state.prodottiUI.sort) ? state.prodottiUI.sort : "frequent";
+  if (tabC) tabC.classList.toggle("is-active", key === "colazione");
+  if (tabP) tabP.classList.toggle("is-active", key === "pulizia");
+  if (sF) sF.classList.toggle("is-active", sort !== "alpha");
+  if (sA) sA.classList.toggle("is-active", sort === "alpha");
+}
+
+function renderProdotti(){
+  const wrap = document.getElementById("prodottiList");
+  if (!wrap) return;
+
+  const key = __prodListKey_();
+  const action = __prodAction_();
+  const bucket = __prodStateBucket_();
+  const items = (bucket.items || []).filter(r => !__normBool01(r.isDeleted));
+
+  let arr = items.slice();
+  const sort = (state.prodottiUI && state.prodottiUI.sort) ? state.prodottiUI.sort : "frequent";
+  if (sort === "alpha") {
+    arr.sort((a,b)=> String(a.prodotto||"").localeCompare(String(b.prodotto||""), "it", { sensitivity:"base" }));
+  } else {
+    arr.sort((a,b)=>{
+      const fa = getFreq_(action, String(a.id||""));
+      const fb = getFreq_(action, String(b.id||""));
+      if (fb !== fa) return fb - fa;
+      return String(a.prodotto||"").localeCompare(String(b.prodotto||""), "it", { sensitivity:"base" });
+    });
+  }
+
+  wrap.innerHTML = "";
+  const frag = document.createDocumentFragment();
+
+  arr.forEach((it) => {
+    const row = document.createElement("div");
+    row.className = "colazione-item";
+    row.dataset.id = String(it.id || "");
+
+    const qtyBtn = document.createElement("button");
+    qtyBtn.type = "button";
+    qtyBtn.className = "colazione-dot colazione-qtydot";
+    const qty = parseInt(String(it.qty ?? 0), 10);
+    const q = (isNaN(qty) ? 0 : Math.max(0, qty));
+    qtyBtn.textContent = q > 0 ? String(q) : "";
+
+    const saved = __normBool01(it.saved);
+    qtyBtn.classList.toggle("is-saved", saved && q > 0);
+
+    const text = document.createElement("div");
+    text.className = "colazione-text";
+    text.textContent = String(it.prodotto || "").trim();
+
+    const checkBtn = document.createElement("button");
+    checkBtn.type = "button";
+    checkBtn.className = "colazione-dot colazione-checkdot";
+    checkBtn.innerHTML = '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"></path></svg>';
+    checkBtn.classList.toggle("is-checked", __normBool01(it.checked) === 1);
+
+    row.appendChild(qtyBtn);
+    row.appendChild(text);
+    row.appendChild(checkBtn);
+    frag.appendChild(row);
+  });
+
+  wrap.appendChild(frag);
+  updateProdottiControls_();
+}
+
+function setupProdotti(){
+  const btnAdd = document.getElementById("prodAddBtn");
+  const btnReset = document.getElementById("prodResetBtn");
+  const btnSave = document.getElementById("prodSaveBtn");
+  const btnHome = document.getElementById("prodHomeBtn");
+  const list = document.getElementById("prodottiList");
+
+  const tabC = document.getElementById("prodTabColazione");
+  const tabP = document.getElementById("prodTabPulizia");
+  const sF = document.getElementById("prodSortFreq");
+  const sA = document.getElementById("prodSortAlpha");
+
+  const modal = document.getElementById("prodAddModal");
+  const close = document.getElementById("prodAddClose");
+  const input = document.getElementById("prodAddInput");
+  const toC = document.getElementById("prodAddToColazione");
+  const toP = document.getElementById("prodAddToPulizia");
+
+  const openModal = () => {
+    if (!modal) return;
+    modal.hidden = false;
+    try{ modal.setAttribute("aria-hidden", "false"); }catch(_){ }
+    try{ input && input.focus(); }catch(_){ }
+  };
+  const closeModal = () => {
+    if (!modal) return;
+    modal.hidden = true;
+    try{ modal.setAttribute("aria-hidden", "true"); }catch(_){ }
+  };
+
+  if (btnAdd) bindFastTap(btnAdd, openModal);
+  if (close) bindFastTap(close, closeModal);
+  if (modal) {
+    modal.addEventListener("click", (e)=>{ if (e.target === modal) closeModal(); });
+  }
+
+  const createItem = async (action) => {
+    const raw = String(input?.value || "");
+    const v = raw.trim();
+    if (!v) return;
+    const prodotto = v.toUpperCase();
+    if (input) input.value = "";
+    closeModal();
+    try{
+      await api(action, { method:"POST", body:{ op:"create", prodotto }, showLoader:true });
+      // aggiorna bucket relativo
+      if (action === "colazione") await loadProdottiList_("colazione", state.colazione, { force:true, showLoader:false });
+      if (action === "prodotti_pulizia") await loadProdottiList_("prodotti_pulizia", state.prodotti_pulizia, { force:true, showLoader:false });
+      renderProdotti();
+      updateProdottiHomeBlink();
+    }catch(e){ toast(e.message); }
+  };
+
+  if (toC) bindFastTap(toC, () => createItem("colazione"));
+  if (toP) bindFastTap(toP, () => createItem("prodotti_pulizia"));
+
+  if (input) {
+    input.addEventListener("keydown", (e)=>{ if (e.key === "Enter") { e.preventDefault(); createItem(__prodAction_()); } });
+  }
+
+  if (btnHome) bindFastTap(btnHome, () => { closeModal(); showPage("home"); });
+
+  if (tabC) bindFastTap(tabC, async () => {
+    state.prodottiUI = state.prodottiUI || { list:"colazione", sort:"frequent" };
+    state.prodottiUI.list = "colazione";
+    await loadProdottiList_("colazione", state.colazione, { force:false, showLoader:true });
+    renderProdotti();
+  });
+  if (tabP) bindFastTap(tabP, async () => {
+    state.prodottiUI = state.prodottiUI || { list:"colazione", sort:"frequent" };
+    state.prodottiUI.list = "pulizia";
+    await loadProdottiList_("prodotti_pulizia", state.prodotti_pulizia, { force:false, showLoader:true });
+    renderProdotti();
+  });
+  if (sF) bindFastTap(sF, () => { state.prodottiUI = state.prodottiUI || {}; state.prodottiUI.sort = "frequent"; renderProdotti(); });
+  if (sA) bindFastTap(sA, () => { state.prodottiUI = state.prodottiUI || {}; state.prodottiUI.sort = "alpha"; renderProdotti(); });
+
+  if (btnReset) bindFastTap(btnReset, async () => {
+    const action = __prodAction_();
+    try{
+      await api(action, { method:"POST", body:{ op:"resetQty" }, showLoader:true });
+      await loadProdotti({ force:true, showLoader:false });
+      ( __prodStateBucket_().items || []).forEach(it => { it.qty = 0; it.saved = 0; });
+      renderProdotti();
+      updateProdottiHomeBlink();
+    }catch(e){ toast(e.message); }
+  });
+
+  if (btnSave) bindFastTap(btnSave, async () => {
+    const action = __prodAction_();
+    try{
+      await api(action, { method:"POST", body:{ op:"save" }, showLoader:true });
+      await loadProdotti({ force:true, showLoader:false });
+      renderProdotti();
+      updateProdottiHomeBlink();
+    }catch(e){ toast(e.message); }
+  });
+
+  if (!list) return;
+
+  const findItem = (id) => {
+    const sid = String(id || "");
+    return (__prodStateBucket_().items || []).find(x => String(x.id||"") === sid);
+  };
+
+  const patchItem = async (id, patch, {showLoader=false} = {}) => {
+    const action = __prodAction_();
+    const it = findItem(id);
+    if (it) Object.assign(it, patch, { updatedAt: new Date().toISOString() });
+    renderProdotti();
+    updateProdottiHomeBlink();
+    await api(action, { method:"PUT", body: Object.assign({ id: String(id) }, patch), showLoader });
+    try{ await loadProdotti({ force:true, showLoader:false }); }catch(_){ }
+    renderProdotti();
+    updateProdottiHomeBlink();
+  };
+
+  // Qty dot: tap increment, long-press (0.5s) reset qty only
+  let qtyTimer = null;
+  let qtyTargetId = null;
+  let qtyLongFired = false;
+  let lastQtyTouch = 0;
+
+  const clearQtyPress = () => {
+    if (qtyTimer){ clearTimeout(qtyTimer); qtyTimer = null; }
+    qtyTargetId = null;
+    qtyLongFired = false;
+  };
+
+  const startQtyPress = (id) => {
+    clearQtyPress();
+    qtyTargetId = id;
+    qtyTimer = setTimeout(() => {
+      qtyLongFired = true;
+      patchItem(id, { qty: 0, saved: 0 }, { showLoader:false }).catch(()=>{});
+    }, 500);
+  };
+
+  const tapQty = (id) => {
+    const it = findItem(id);
+    const cur = parseInt(String(it?.qty ?? 0), 10);
+    const next = (isNaN(cur) ? 0 : cur) + 1;
+    incFreq_(__prodAction_(), String(id));
+    patchItem(id, { qty: next, saved: 0 }, { showLoader:false }).catch(()=>{});
+  };
+
+  // Delete: long press 2s on text
+  let delTimer = null;
+  let delTargetId = null;
+  let delFired = false;
+  let lastDelTouch = 0;
+
+  const clearDelPress = () => {
+    if (delTimer){ clearTimeout(delTimer); delTimer = null; }
+    delTargetId = null;
+    delFired = false;
+  };
+
+  const startDelPress = (id) => {
+    clearDelPress();
+    delTargetId = id;
+    delTimer = setTimeout(() => {
+      delFired = true;
+      patchItem(id, { isDeleted: 1, qty: 0, checked: 0, saved: 0 }, { showLoader:true }).catch(()=>{});
+    }, 2000);
+  };
+
+  const toggleCheck = (id) => {
+    const it = findItem(id);
+    const cur = __normBool01(it?.checked);
+    const next = cur ? 0 : 1;
+    if (next === 1) incFreq_(__prodAction_(), String(id));
+    patchItem(id, { checked: next }, { showLoader:false }).catch(()=>{});
+  };
+
+  // Delegation (touch)
+  list.addEventListener("touchstart", (e) => {
+    const row = e.target.closest && e.target.closest(".colazione-item");
+    if (!row) return;
+    const id = row.dataset.id;
+
+    if (e.target.closest && e.target.closest(".colazione-qtydot")) {
+      lastQtyTouch = Date.now();
+      startQtyPress(id);
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+
+    if (e.target.closest && e.target.closest(".colazione-text")) {
+      lastDelTouch = Date.now();
+      startDelPress(id);
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+  }, { passive:false, capture:true });
+
+  list.addEventListener("touchend", (e) => {
+    const row = e.target.closest && e.target.closest(".colazione-item");
+    if (!row) return;
+    const id = row.dataset.id;
+
+    if (e.target.closest && e.target.closest(".colazione-qtydot")) {
+      if (qtyTimer){ clearTimeout(qtyTimer); qtyTimer = null; }
+      if (!qtyLongFired) tapQty(id);
+      clearQtyPress();
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+
+    if (e.target.closest && e.target.closest(".colazione-text")) {
+      if (delTimer){ clearTimeout(delTimer); delTimer = null; }
+      clearDelPress();
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+
+    if (e.target.closest && e.target.closest(".colazione-checkdot")) {
+      toggleCheck(id);
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+  }, { passive:false, capture:true });
+
+  list.addEventListener("touchcancel", (e) => {
+    clearQtyPress();
+    clearDelPress();
+    try{ e.preventDefault(); e.stopPropagation(); }catch(_){ }
+  }, { passive:false, capture:true });
+
+  // Click (desktop) + anti ghost-click after touch
+  list.addEventListener("click", (e) => {
+    const row = e.target.closest && e.target.closest(".colazione-item");
+    if (!row) return;
+    const id = row.dataset.id;
+
+    if (e.target.closest && e.target.closest(".colazione-qtydot")) {
+      if (Date.now() - lastQtyTouch < 450) { e.preventDefault(); e.stopPropagation(); return; }
+      tapQty(id);
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+
+    if (e.target.closest && e.target.closest(".colazione-checkdot")) {
+      if (Date.now() - lastDelTouch < 450) { e.preventDefault(); e.stopPropagation(); return; }
+      toggleCheck(id);
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+  }, true);
+}
+
+
 function setupColazione(){
   const input = document.getElementById("colazioneInput");
   const btnAdd = document.getElementById("colazioneAddBtn");
@@ -5373,11 +5792,11 @@ function setupColazione(){
     const it = findItem(id);
     if (it) Object.assign(it, patch, { updatedAt: new Date().toISOString() });
     renderColazione();
-    updateColazioneHomeBlink();
+    updateProdottiHomeBlink();
     await api("colazione", { method:"PUT", body: Object.assign({ id: String(id) }, patch), showLoader });
     try{ await loadColazione({ force:true, showLoader:false }); }catch(_){ }
     renderColazione();
-    updateColazioneHomeBlink();
+    updateProdottiHomeBlink();
   };
 
   const addItem = async () => {
@@ -5390,7 +5809,7 @@ function setupColazione(){
       await api("colazione", { method:"POST", body:{ op:"create", prodotto }, showLoader:true });
       await loadColazione({ force:true, showLoader:false });
       renderColazione();
-      updateColazioneHomeBlink();
+      updateProdottiHomeBlink();
       input.focus();
     }catch(e){
       toast(e.message);
@@ -5412,7 +5831,7 @@ function setupColazione(){
       // reset locale qty/saved
       (state.colazione.items || []).forEach(it => { it.qty = 0; it.saved = 0; });
       renderColazione();
-      updateColazioneHomeBlink();
+      updateProdottiHomeBlink();
     }catch(e){ toast(e.message); }
   });
 
@@ -5421,7 +5840,7 @@ function setupColazione(){
       await api("colazione", { method:"POST", body:{ op:"save" }, showLoader:true });
       await loadColazione({ force:true, showLoader:false });
       renderColazione();
-      updateColazioneHomeBlink();
+      updateProdottiHomeBlink();
     }catch(e){ toast(e.message); }
   });
 
@@ -5610,7 +6029,9 @@ async function init(){
   try{ applyRoleMode(); }catch(_){ }
   setupCalendario();
   setupImpostazioni();
-  setupColazione();
+  setupProdotti();
+  // setupColazione legacy (non più usata)
+  try{ setupColazione(); }catch(_){}
 
     setupOspite();
   initFloatingLabels();

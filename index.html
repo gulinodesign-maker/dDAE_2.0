@@ -8,12 +8,12 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="Cache-Control"/>
 <meta content="no-cache" http-equiv="Pragma"/>
 <meta content="0" http-equiv="Expires"/>
-<link href="./styles.css?v=dDAE_2.058" rel="stylesheet"/>
-<link href="./manifest.json?v=dDAE_2.058" rel="manifest"/>
-<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.058" rel="apple-touch-icon" sizes="180x180"/>
-<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.058" rel="apple-touch-icon-precomposed" sizes="180x180"/>
-<link href="./assets/icons/favicon-32.png?v=dDAE_2.058" rel="icon" sizes="32x32" type="image/png"/>
-<link href="./assets/icons/favicon-16.png?v=dDAE_2.058" rel="icon" sizes="16x16" type="image/png"/>
+<link href="./styles.css?v=dDAE_2.059" rel="stylesheet"/>
+<link href="./manifest.json?v=dDAE_2.059" rel="manifest"/>
+<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.059" rel="apple-touch-icon" sizes="180x180"/>
+<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.059" rel="apple-touch-icon-precomposed" sizes="180x180"/>
+<link href="./assets/icons/favicon-32.png?v=dDAE_2.059" rel="icon" sizes="32x32" type="image/png"/>
+<link href="./assets/icons/favicon-16.png?v=dDAE_2.059" rel="icon" sizes="16x16" type="image/png"/>
 <meta content="#ffffff" name="theme-color"/>
 <meta content="yes" name="apple-mobile-web-app-capable"/>
 <meta content="Daedalium PMS" name="apple-mobile-web-app-title"/>
@@ -23,7 +23,7 @@
 <header class="topbar">
 <div class="brand">
 <div class="brand-left">
-<img alt="Daedalium logo" class="logo" src="./assets/logo.jpg?v=dDAE_2.058"/>
+<img alt="Daedalium logo" class="logo" src="./assets/logo.jpg?v=dDAE_2.059"/>
 <h1>Daedalium PMS</h1>
 </div>
 <div class="brand-right">
@@ -129,7 +129,7 @@
 <div class="auth-page">
 <div class="auth-card">
 <div class="auth-logo-wrap">
-<img alt="Daedalium" class="auth-logo" src="./assets/logo.jpg?v=dDAE_2.058"/>
+<img alt="Daedalium" class="auth-logo" src="./assets/logo.jpg?v=dDAE_2.059"/>
 </div>
 <div class="field float">
 <input autocomplete="username" id="authUsername" placeholder=" "/>
@@ -249,41 +249,70 @@
 </svg></div>
 <div class="home-main-label">Statistiche</div>
 </button>
-<button aria-label="Colazione" class="home-main" id="goColazione" type="button"><div aria-hidden="true" class="home-main-glyph alt"><svg aria-hidden="true" class="ui-ico" viewBox="0 0 24 24">
+<button aria-label="Prodotti" class="home-main" id="goProdotti" type="button"><div aria-hidden="true" class="home-main-glyph alt"><svg aria-hidden="true" class="ui-ico" viewBox="0 0 24 24">
 <path d="M9 6h12"></path>
 <path d="M9 12h12"></path>
 <path d="M9 18h12"></path>
 <path d="M4 6h.01"></path>
 <path d="M4 12h.01"></path>
 <path d="M4 18h.01"></path>
-</svg></div><div class="home-main-label">Colazione</div></button>
+</svg></div><div class="home-main-label">Prodotti</div></button>
 
 
 
-</div><div class="build" id="buildText">dDAE_2.058</div></div></section>
+</div><div class="build" id="buildText">dDAE_2.059</div></div></section>
 
 
 
-<!-- COLAZIONE -->
-<section class="page" hidden="" id="page-colazione">
-  <div class="colazione-page">
-    <div class="colazione-title">Colazione</div>
+<!-- PRODOTTI -->
+<section class="page" hidden id="page-prodotti">
+  <div class="prodotti-page">
 
-    <div class="colazione-add">
-      <div class="colazione-add-label">Aggiungi prodotto</div>
-      <div class="colazione-add-row">
-  <input id="colazioneInput" class="colazione-input" type="text" inputmode="text" autocapitalize="characters" autocomplete="off" placeholder="Scrivi prodotto" />
-</div>
-<div class="colazione-actions">
-  <button id="colazioneAddBtn" class="colazione-btn colazione-btn-plus" type="button" aria-label="Aggiungi">+</button>
-  <button id="colazioneResetBtn" class="colazione-btn colazione-btn-reset" type="button" aria-label="Azzera">Azzera</button>
-  <button id="colazioneSaveBtn" class="colazione-btn colazione-btn-save" type="button" aria-label="Salva">Salva</button>
-</div>
-      </div>
+    <div class="prodotti-topbar" role="toolbar" aria-label="Azioni prodotti">
+      <button id="prodAddBtn" class="icon-btn icon-btn-whiteorange" type="button" aria-label="Aggiungi prodotto">
+        <svg aria-hidden="true" class="ui-ico" viewBox="0 0 24 24"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+      </button>
 
-      <div id="colazioneList" class="colazione-list" aria-label="Lista colazione"></div>
+      <button id="prodResetBtn" class="icon-btn icon-btn-red" type="button" aria-label="Azzera quantità prodotti">
+        <svg aria-hidden="true" class="ui-ico" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v6h6"></path></svg>
+      </button>
+
+      <button id="prodSaveBtn" class="icon-btn icon-btn-green" type="button" aria-label="Salva lista prodotti">
+        <svg aria-hidden="true" class="ui-ico" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"></path></svg>
+      </button>
+
+      <button id="prodHomeBtn" class="icon-btn icon-btn-orange" type="button" aria-label="Home">
+        <svg aria-hidden="true" class="ui-ico" viewBox="0 0 24 24"><path d="M3 11 12 3l9 8"></path><path d="M5 10v10h14V10"></path></svg>
+      </button>
+    </div>
+
+    <div class="prodotti-grid" aria-label="Filtri prodotti">
+      <button id="prodTabColazione" class="prod-rectbtn" type="button">Colazione</button>
+      <button id="prodTabPulizia" class="prod-rectbtn" type="button">Prodotti</button>
+      <button id="prodSortFreq" class="prod-rectbtn" type="button">Frequenti</button>
+      <button id="prodSortAlpha" class="prod-rectbtn" type="button">Alfabetico</button>
+    </div>
+
+    <div id="prodottiList" class="colazione-list prodotti-list" aria-label="Lista prodotti"></div>
   </div>
 </section>
+
+<!-- MODAL: Aggiungi prodotto -->
+<div class="modal modal-center" hidden id="prodAddModal" role="dialog" aria-modal="true" aria-label="Aggiungi prodotto">
+  <div class="modal-card prod-add-card">
+    <div class="prod-add-top">
+      <div class="prod-add-title">Aggiungi prodotto</div>
+      <button id="prodAddClose" class="icon-btn icon-btn-whiteblack prod-add-close" type="button" aria-label="Chiudi">
+        <svg aria-hidden="true" class="ui-ico" viewBox="0 0 24 24"><path d="M18 6 6 18"></path><path d="M6 6l12 12"></path></svg>
+      </button>
+    </div>
+    <input id="prodAddInput" class="prod-add-input" type="text" inputmode="text" autocapitalize="characters" autocomplete="off" placeholder="Scrivi prodotto" />
+    <div class="prod-add-actions">
+      <button id="prodAddToColazione" class="prod-add-btn" type="button">Colazione</button>
+      <button id="prodAddToPulizia" class="prod-add-btn" type="button">Pulizia</button>
+    </div>
+  </div>
+</div>
 
 <!-- STATISTICHE -->
 <section class="page" hidden="" id="page-statistiche">
@@ -1089,8 +1118,8 @@
 </div>
 </div>
 </div>
-<script defer="" src="./config.js?v=dDAE_2.058"></script>
-<script defer="" src="./app.js?v=dDAE_2.058"></script>
+<script defer="" src="./config.js?v=dDAE_2.059"></script>
+<script defer="" src="./app.js?v=dDAE_2.059"></script>
 <!-- TAX REPORT MODAL -->
 <div aria-hidden="true" class="modal" hidden="" id="taxReportModal">
 <div aria-labelledby="taxReportTitle" aria-modal="true" class="modal-card tax-report-card" role="dialog">
