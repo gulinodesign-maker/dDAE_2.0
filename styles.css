@@ -41,7 +41,7 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.057"),
+    url("./assets/bg-daedalium.png?v=dDAE_2.058"),
     radial-gradient(900px 600px at 10% 0%, rgba(43,124,180,0.10), transparent 62%),
     radial-gradient(800px 520px at 90% 8%, rgba(201,119,43,0.10), transparent 64%),
     radial-gradient(900px 700px at 20% 100%, rgba(111,183,214,0.10), transparent 62%),
@@ -777,7 +777,7 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.057"),
+    url("./assets/bg-daedalium.png?v=dDAE_2.058"),
     radial-gradient(900px 650px at 12% 8%, rgba(43,124,180,0.18), transparent 62%),
     radial-gradient(820px 560px at 92% 14%, rgba(201,119,43,0.16), transparent 62%),
     radial-gradient(900px 700px at 18% 96%, rgba(111,183,214,0.16), transparent 62%),
@@ -5687,45 +5687,66 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   display: flex;
   align-items: stretch;
   gap: 10px;
+  margin-bottom: 10px;
 }
 .colazione-add-row input{
   flex: 1;
   min-width: 0;
   padding: 0 14px;
   border-radius: 14px;
-  border: 1px solid rgba(255,255,255,.22);
-  background: rgba(0,0,0,.10);
-  color: #fff;
-  font-size: 15px;
-  font-weight: 700;
+  border: 1px solid rgba(15,23,42,0.14);
+  background: rgba(255,255,255,0.60);
+  color: rgba(15,23,42,0.92);
+  -webkit-text-fill-color: rgba(15,23,42,0.92);
+  font-size: 16px; /* evita zoom iOS */
+  font-weight: 800;
 }
 .colazione-add-row > *{
   height: 48px;
 }
+.colazione-actions{
+  display:flex;
+  gap: 10px;
+  align-items: stretch;
+}
+
+.colazione-actions > *{
+  height: 48px;
+}
+
 .colazione-btn{
-  border: 1px solid rgba(255,255,255,.22);
+  flex: 1;
+  min-width: 0;
+  border: 1px solid rgba(15,23,42,0.14);
   border-radius: 14px;
-  background: rgba(0,0,0,.10);
-  color: #fff;
-  font-weight: 800;
-  padding: 0 14px;
-  opacity: .75;
-  touch-action: manipulation;
-}
-.colazione-btn:active{
-  transform: translateY(1px);
-}
-.colazione-btn-plus{
-  width: 48px;
+  background: rgba(255,255,255,0.60);
+  color: rgba(15,23,42,0.92);
+  -webkit-text-fill-color: rgba(15,23,42,0.92);
+  font-weight: 950;
+  font-size: 15px;
   padding: 0;
-  font-size: 22px;
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  touch-action: manipulation;
+  -webkit-tap-highlight-color: transparent;
+}
+.colazione-btn:active{ transform: scale(0.98); }
+
+.colazione-btn-plus{
+  font-size: 20px;
   line-height: 1;
 }
 .colazione-btn-reset{
-  background: rgba(255,0,0,.35);
+  /* stesso stile, nessuna differenza cromatica richiesta */
 }
 .colazione-btn-save{
-  background: rgba(0,255,0,.28);
+  /* stesso stile, nessuna differenza cromatica richiesta */
+}
+
+@media (max-width: 420px){
+  .colazione-actions{ flex-wrap: wrap; }
+  .colazione-actions .colazione-btn{ flex: 1 1 30%; }
 }
 
 .colazione-list{
@@ -5747,9 +5768,9 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   align-items: center;
   justify-content: center;
   border-radius: 999px;
-  border: 2px solid rgba(255,255,255,.55);
-  background: rgba(255,255,255,.06);
-  color: #fff;
+  border: 2px solid rgba(31,41,55,0.70); /* grigio scuro */
+  background: rgba(255,255,255,0.72);
+  color: rgba(0,0,0,0.92); /* numeri neri */
   font-weight: 900;
   user-select: none;
   -webkit-user-select: none;
@@ -5787,15 +5808,15 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   width: 18px;
   height: 18px;
   fill: none;
-  stroke: rgba(255,255,255,.8);
+  stroke: rgba(15,23,42,0.78);
   stroke-width: 3;
   stroke-linecap: round;
   stroke-linejoin: round;
   opacity: 0;
 }
 .colazione-checkdot.is-checked{
-  background: rgba(255,255,255,.14);
-  border-color: rgba(255,255,255,.75);
+  background: rgba(31,41,55,0.10);
+  border-color: rgba(31,41,55,0.78);
 }
 .colazione-checkdot.is-checked svg{
   opacity: 1;
