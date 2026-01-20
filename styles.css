@@ -41,7 +41,7 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.065"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.066"),
     radial-gradient(900px 600px at 10% 0%, rgba(43,124,180,0.10), transparent 62%),
     radial-gradient(800px 520px at 90% 8%, rgba(201,119,43,0.10), transparent 64%),
     radial-gradient(900px 700px at 20% 100%, rgba(111,183,214,0.10), transparent 62%),
@@ -81,6 +81,36 @@ body{
   display:flex;
   align-items:center;
   gap: 6px;
+}
+
+/* Topbar: LED indicatori prodotti */
+.top-leds{
+  display: inline-flex;
+  align-items: center;
+  gap: 6px;
+  margin-right: 2px;
+}
+.top-led{
+  width: 10px;
+  height: 10px;
+  border-radius: 999px;
+  background: rgba(15,23,42,0.12);
+  border: 1px solid rgba(15,23,42,0.18);
+  box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25);
+}
+.top-led-blue.is-on{
+  background: rgba(56,189,248,0.92);
+  border-color: rgba(56,189,248,0.95);
+  box-shadow:
+    0 0 0 2px rgba(56,189,248,0.18),
+    0 0 14px rgba(56,189,248,0.55);
+}
+.top-led-orange.is-on{
+  background: rgba(249,115,22,0.92);
+  border-color: rgba(249,115,22,0.95);
+  box-shadow:
+    0 0 0 2px rgba(249,115,22,0.18),
+    0 0 14px rgba(249,115,22,0.55);
 }
 
 
@@ -820,7 +850,7 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.065"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.066"),
     radial-gradient(900px 650px at 12% 8%, rgba(43,124,180,0.18), transparent 62%),
     radial-gradient(820px 560px at 92% 14%, rgba(201,119,43,0.16), transparent 62%),
     radial-gradient(900px 700px at 18% 96%, rgba(111,183,214,0.16), transparent 62%),
@@ -5804,6 +5834,28 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   gap: 12px;
   padding: 8px 6px;
   border-radius: 16px;
+}
+
+/* PRODOTTI: contenitore riga + tasto sotto */
+.prod-item-block{
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+}
+.prod-item-subbtn{
+  width: 100%;
+  border: 0;
+  border-radius: 16px;
+  padding: 10px 12px;
+  background: rgba(0,0,0,0.20);
+  color: rgba(255,255,255,0.86);
+  font-weight: 900;
+  letter-spacing: 0.2px;
+  text-align: center;
+  -webkit-tap-highlight-color: transparent;
+}
+.prod-item-subbtn:active{
+  background: rgba(0,0,0,0.26);
 }
 
 .colazione-dot{

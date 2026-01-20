@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.065";
+const BUILD_VERSION = "dDAE_2.066";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -23,6 +23,7 @@ function applyRoleMode(){
       "goTassaSoggiorno",
       "goStatistiche",
       "homeSettingsTop",
+      "prodTopLeds",
       // icone/shortcuts ospiti duplicati (se presenti)
       "goOspiti",
     ];
@@ -2046,10 +2047,12 @@ state.page = page;
   try{
     const hb2 = document.getElementById("hamburgerBtn");
     const hs2 = document.getElementById("homeSettingsTop");
+    const leds2 = document.getElementById("prodTopLeds");
     const isHome = (page === "home");
     const isOp = !!(state.session && isOperatoreSession(state.session));
     if (hb2) hb2.hidden = isHome;
     if (hs2) hs2.hidden = (!isHome) || isOp;
+    if (leds2) leds2.hidden = (!isHome) || isOp;
   }catch(_){ }
 
   // Top back button (Ore pulizia + Calendario)
@@ -5320,6 +5323,30 @@ function updateProdottiHomeBlink(){
     Array.isArray(state.prodotti_pulizia?.items) && state.prodotti_pulizia.items.some(i=>!__normBool01(i.isDeleted))
   );
   btn.classList.toggle("colazione-attn", !!any);
+
+  // Topbar LED: acceso quando esiste almeno un prodotto "salvato" (pallino rosso)
+  // nella relativa lista.
+  try{
+    const ledC = document.getElementById("prodLedColazione");
+    const ledP = document.getElementById("prodLedPulizia");
+    if (ledC && ledP){
+      const anySavedIn = (arr) => {
+        try{
+          if (!Array.isArray(arr)) return false;
+          return arr.some((i)=>{
+            if (__normBool01(i?.isDeleted)) return false;
+            const q = parseInt(String(i?.qty ?? 0), 10);
+            const qty = isNaN(q) ? 0 : Math.max(0, q);
+            return qty > 0 && __normBool01(i?.saved) === 1;
+          });
+        }catch(_){ return false; }
+      };
+      const hasC = anySavedIn(state.colazione?.items);
+      const hasP = anySavedIn(state.prodotti_pulizia?.items);
+      ledC.classList.toggle("is-on", !!hasC);
+      ledP.classList.toggle("is-on", !!hasP);
+    }
+  }catch(_){ }
 }
 
 function __freqKey_(action, id){
@@ -5493,6 +5520,10 @@ function renderProdotti(){
   const frag = document.createDocumentFragment();
 
   arr.forEach((it) => {
+    const block = document.createElement("div");
+    block.className = "prod-item-block";
+    block.dataset.id = String(it.id || "");
+
     const row = document.createElement("div");
     row.className = "colazione-item";
     row.dataset.id = String(it.id || "");
@@ -5520,7 +5551,16 @@ function renderProdotti(){
     row.appendChild(qtyBtn);
     row.appendChild(text);
     row.appendChild(checkBtn);
-    frag.appendChild(row);
+
+    const subBtn = document.createElement("button");
+    subBtn.type = "button";
+    subBtn.className = "prod-item-subbtn";
+    subBtn.textContent = "⋯";
+    try{ subBtn.setAttribute("aria-label", "Azioni prodotto"); }catch(_){ }
+
+    block.appendChild(row);
+    block.appendChild(subBtn);
+    frag.appendChild(block);
   });
 
   wrap.appendChild(frag);
