@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.055";
+const BUILD_VERSION = "dDAE_2.056";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -20,6 +20,29 @@ function __matchOperatorNameForUser_(username, names){
     const list = (names||[]).map(x=>String(x||"").trim()).filter(Boolean);
     const found = list.find(n => __normOpName_(n) === u);
     return found ? String(found).trim() : "";
+  }catch(_){ return ""; }
+}
+
+// Determina il nome operatore "vincolato" per la sessione operatore.
+// Priorita': match su username, poi su nome profilo, infine fallback sul primo operatore configurato.
+function __getOperatoreOnlyName_(names){
+  try{
+    const sess = (state && state.session) ? state.session : null;
+    if (!sess || !isOperatoreSession(sess)) return "";
+
+    const list = (Array.isArray(names) ? names : []).map(x=>String(x||"").trim()).filter(Boolean);
+    const u = String(sess.username || sess.user || "").trim();
+    const n = String(sess.nome || sess.name || "").trim();
+
+    let m = "";
+    if (u) m = __matchOperatorNameForUser_(u, list) || list.find(x => __normOpName_(x) === __normOpName_(u)) || "";
+    if (!m && n) m = __matchOperatorNameForUser_(n, list) || list.find(x => __normOpName_(x) === __normOpName_(n)) || "";
+
+    if (!m){
+      if (list.length === 1) m = list[0];
+      else if (list.length > 0) m = list[0];
+    }
+    return String(m || "").trim();
   }catch(_){ return ""; }
 }
 
@@ -1248,35 +1271,49 @@ async function ensureSettingsLoaded({ force = false, showLoader = false } = {}) 
     // Se esistono campi operatori (pulizie), mostra i nomi salvati (non editabili)
     try {
       const names = getOperatorNamesFromSettings(); // [op1, op2, op3]
-const ids = ["op1Name","op2Name","op3Name"];
-ids.forEach((id, idx) => {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const name = String(names[idx] || "").trim();
+      const ids = ["op1Name","op2Name","op3Name"];
 
-  // Nascondi completamente l'operatore se non è impostato
-  const row = el.closest ? el.closest(".clean-op-row") : null;
-  if (!name) {
-    if (row) row.style.display = "none";
-    el.textContent = "";
-    el.classList.remove("is-placeholder");
-    return;
-  } else {
-    if (row) row.style.display = "";
-  }
+      const __isOpSess = !!(state && state.session && isOperatoreSession(state.session));
+      const __opOnlyName = __isOpSess ? __getOperatoreOnlyName_(names) : "";
 
-  // Se è un input (compat), rendilo readOnly e compila
-  if (String(el.tagName || "").toUpperCase() === "INPUT") {
-    el.readOnly = true;
-    el.setAttribute("readonly", "");
-    el.value = name;
-    return;
-  }
+      ids.forEach((id, idx) => {
+        const el = document.getElementById(id);
+        if (!el) return;
+        const name = String(names[idx] || "").trim();
 
-  // Altrimenti è un testo (div/span)
-  el.textContent = name;
-  el.classList.remove("is-placeholder");
-});
+        const row = el.closest ? el.closest(".clean-op-row") : null;
+
+        // Account operatore: mostra SOLO la propria riga (evita che ensureSettingsLoaded risovrascriva la UI)
+        if (__isOpSess && __opOnlyName){
+          const keep = (__normOpName_(name) === __normOpName_(__opOnlyName));
+          if (!keep){
+            if (row) row.style.display = "none";
+            return;
+          }
+        }
+
+        // Nascondi completamente l'operatore se non è impostato
+        if (!name) {
+          if (row) row.style.display = "none";
+          el.textContent = "";
+          el.classList.remove("is-placeholder");
+          return;
+        } else {
+          if (row) row.style.display = "";
+        }
+
+        // Se è un input (compat), rendilo readOnly e compila
+        if (String(el.tagName || "").toUpperCase() === "INPUT") {
+          el.readOnly = true;
+          el.setAttribute("readonly", "");
+          el.value = name;
+          return;
+        }
+
+        // Altrimenti è un testo (div/span)
+        el.textContent = name;
+        el.classList.remove("is-placeholder");
+      });
 
 refreshFloatingLabels();
     } catch(_) {}
@@ -5498,8 +5535,7 @@ async function init(){
   const syncCleanOperators = () => {
   const names = getOperatorNamesFromSettings(); // [op1, op2, op3]
   const __isOpSess = !!(state && state.session && isOperatoreSession(state.session));
-  const __opUser = __isOpSess ? String(state.session.username || state.session.user || "").trim() : "";
-  const __opOnlyName = __isOpSess ? (__matchOperatorNameForUser_(__opUser, names) || __opUser) : "";
+  const __opOnlyName = __isOpSess ? __getOperatoreOnlyName_(names) : "";
 
   opEls.forEach((r, idx) => {
     const n = String(names[idx] || "").trim();
@@ -5818,8 +5854,7 @@ if (cleanSaveHours){
         // Operatore: salva SOLO le proprie ore senza sovrascrivere gli altri
         const date = getCleanDate();
         const names = getOperatorNamesFromSettings();
-        const __opUser = String(state.session.username || state.session.user || "").trim();
-        const __opName = __matchOperatorNameForUser_(__opUser, names) || __opUser;
+        const __opName = __getOperatoreOnlyName_(names);
         if (!__opName){
           toast("Operatore non riconosciuto");
           return;
@@ -7437,8 +7472,7 @@ async function initOrePuliziaPage(){
   let opItems = [{ value:"__ALL__", label:"TUTTI" }, ...ops.map(x=>({ value:x, label:x }))];
 
   if (__isOpSess){
-    const __opUser = String(state.session.username || state.session.user || "").trim();
-    const __opName = __matchOperatorNameForUser_(__opUser, ops) || __opUser || (ops[0] || "");
+    const __opName = __getOperatoreOnlyName_(ops) || String(state.session.username || state.session.user || "").trim() || (ops[0] || "");
     if (__opName){
       s.operatore = __opName;
       opItems = [{ value: __opName, label: __opName }];
