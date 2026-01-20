@@ -41,7 +41,7 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.png?v=dDAE_2.062"),
+    url("./assets/bg-daedalium.png?v=dDAE_2.063"),
     radial-gradient(900px 600px at 10% 0%, rgba(43,124,180,0.10), transparent 62%),
     radial-gradient(800px 520px at 90% 8%, rgba(201,119,43,0.10), transparent 64%),
     radial-gradient(900px 700px at 20% 100%, rgba(111,183,214,0.10), transparent 62%),
@@ -820,7 +820,7 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.png?v=dDAE_2.062"),
+    url("./assets/bg-daedalium.png?v=dDAE_2.063"),
     radial-gradient(900px 650px at 12% 8%, rgba(43,124,180,0.18), transparent 62%),
     radial-gradient(820px 560px at 92% 14%, rgba(201,119,43,0.16), transparent 62%),
     radial-gradient(900px 700px at 18% 96%, rgba(111,183,214,0.16), transparent 62%),
@@ -5902,10 +5902,24 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   -webkit-tap-highlight-color: transparent;
 }
 .prod-rectbtn:active{ transform: scale(.98); }
+.prod-rectbtn.prod-blue{
+  border-color: rgba(43,124,180,0.32);
+  background: rgba(43,124,180,0.22);
+}
+.prod-rectbtn.prod-orange{
+  border-color: rgba(201,119,43,0.32);
+  background: rgba(201,119,43,0.22);
+}
 .prod-rectbtn.is-active{
-  border-color: rgba(255,134,0,0.55);
   box-shadow: 0 10px 26px rgba(15,23,42,0.10);
 }
+.prod-rectbtn.prod-blue.is-active{
+  border-color: rgba(43,124,180,0.58);
+}
+.prod-rectbtn.prod-orange.is-active{
+  border-color: rgba(201,119,43,0.58);
+}
+
 
 .prodotti-list{
   margin-top: 2px;
@@ -5961,6 +5975,15 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 .prod-add-actions{
   display:flex;
   gap: 10px;
+}
+
+.prod-add-btn.prod-blue{
+  border-color: rgba(43,124,180,0.32);
+  background: rgba(43,124,180,0.22);
+}
+.prod-add-btn.prod-orange{
+  border-color: rgba(201,119,43,0.32);
+  background: rgba(201,119,43,0.22);
 }
 
 .prod-add-btn{

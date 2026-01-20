@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.062";
+const BUILD_VERSION = "dDAE_2.063";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
