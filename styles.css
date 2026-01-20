@@ -41,7 +41,7 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.056"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.057"),
     radial-gradient(900px 600px at 10% 0%, rgba(43,124,180,0.10), transparent 62%),
     radial-gradient(800px 520px at 90% 8%, rgba(201,119,43,0.10), transparent 64%),
     radial-gradient(900px 700px at 20% 100%, rgba(111,183,214,0.10), transparent 62%),
@@ -777,7 +777,7 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.056"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.057"),
     radial-gradient(900px 650px at 12% 8%, rgba(43,124,180,0.18), transparent 62%),
     radial-gradient(820px 560px at 92% 14%, rgba(201,119,43,0.16), transparent 62%),
     radial-gradient(900px 700px at 18% 96%, rgba(111,183,214,0.16), transparent 62%),
@@ -5663,120 +5663,150 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   background: rgba(255,255,255,0.24);
 }
 
-/* =====================
-   COLAZIONE
-===================== */
 
-#page-home #goColazione.colazione-alert .home-main-glyph{
-  position: relative;
-  overflow: hidden;
-}
-#page-home #goColazione.colazione-alert .home-main-glyph::after{
-  content: "";
-  position: absolute;
-  inset: 0;
-  border-radius: inherit;
-  background: rgba(220,38,38,0.30);
-  opacity: 0;
-  animation: colazioneBlink 1.2s infinite;
-}
-@keyframes colazioneBlink{
-  0%,45%{ opacity: 0; }
-  55%,100%{ opacity: 1; }
-}
+/* COLAZIONE */
 
-#page-colazione .colazione-tab{
+.colazione-page{
+  padding: 18px 16px 24px;
+}
+.colazione-title{
+  font-size: 22px;
+  font-weight: 800;
+  margin: 6px 0 14px;
+}
+.colazione-add{
+  margin-bottom: 14px;
+}
+.colazione-add-label{
+  font-size: 13px;
+  font-weight: 700;
+  opacity: .85;
+  margin: 0 0 8px;
+}
+.colazione-add-row{
   display: flex;
-  align-items: flex-end;
+  align-items: stretch;
+  gap: 10px;
 }
-
-#page-colazione .colazione-actions{
-  display: flex;
-  gap: 12px;
-}
-
-#page-colazione .col-btn{
+.colazione-add-row input{
   flex: 1;
-  border: 0;
+  min-width: 0;
+  padding: 0 14px;
   border-radius: 14px;
-  padding: 12px 14px;
-  font-weight: 950;
-  letter-spacing: .2px;
+  border: 1px solid rgba(255,255,255,.22);
+  background: rgba(0,0,0,.10);
   color: #fff;
-  opacity: 0.75;
-  cursor: pointer;
+  font-size: 15px;
+  font-weight: 700;
+}
+.colazione-add-row > *{
+  height: 48px;
+}
+.colazione-btn{
+  border: 1px solid rgba(255,255,255,.22);
+  border-radius: 14px;
+  background: rgba(0,0,0,.10);
+  color: #fff;
+  font-weight: 800;
+  padding: 0 14px;
+  opacity: .75;
   touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
+}
+.colazione-btn:active{
+  transform: translateY(1px);
+}
+.colazione-btn-plus{
+  width: 48px;
+  padding: 0;
+  font-size: 22px;
+  line-height: 1;
+}
+.colazione-btn-reset{
+  background: rgba(255,0,0,.35);
+}
+.colazione-btn-save{
+  background: rgba(0,255,0,.28);
 }
 
-#page-colazione .col-btn-reset{ background: rgba(220,38,38,1); }
-#page-colazione .col-btn-save{ background: rgba(22,163,74,1); }
-
-#page-colazione .colazione-list{
+.colazione-list{
   display: flex;
   flex-direction: column;
   gap: 10px;
 }
 
-#page-colazione .col-item{
+.colazione-item{
   display: flex;
   align-items: center;
-  gap: 10px;
-  padding: 12px 12px;
-  border-radius: 18px;
-  border: 1px solid rgba(15,23,42,0.10);
-  background:
-    radial-gradient(140% 120% at 30% 0%, rgba(255,255,255,0.88), rgba(255,255,255,0.60)),
-    linear-gradient(to bottom, rgba(255,255,255,0.90), rgba(255,255,255,0.72));
-  backdrop-filter: blur(16px);
-  -webkit-backdrop-filter: blur(16px);
+  gap: 12px;
+  padding: 8px 6px;
+  border-radius: 16px;
 }
 
-#page-colazione .col-qty{
-  width: 34px;
-  height: 34px;
-  border-radius: 999px;
-  border: 2px solid rgba(15,23,42,0.35);
-  background: transparent;
-  color: rgba(15,23,42,0.90);
-  font-weight: 950;
+.colazione-dot{
   display: inline-flex;
   align-items: center;
   justify-content: center;
-  padding: 0;
-  cursor: pointer;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-}
-#page-colazione .col-qty.saved{
-  border-color: rgba(220,38,38,0.92);
-  color: rgba(220,38,38,0.92);
-}
-
-#page-colazione .col-text{
-  flex: 1;
+  border-radius: 999px;
+  border: 2px solid rgba(255,255,255,.55);
+  background: rgba(255,255,255,.06);
+  color: #fff;
   font-weight: 900;
-  color: rgba(15,23,42,0.90);
+  user-select: none;
+  -webkit-user-select: none;
 }
 
-#page-colazione .col-check{
-  width: 30px;
-  height: 30px;
-  border-radius: 999px;
-  border: 2px solid rgba(15,23,42,0.35);
-  background: transparent;
-  color: rgba(15,23,42,0.90);
-  font-weight: 950;
-  display: inline-flex;
-  align-items: center;
-  justify-content: center;
-  padding: 0;
-  cursor: pointer;
-  touch-action: manipulation;
-  -webkit-tap-highlight-color: transparent;
-}
-#page-colazione .col-check.checked{
-  border-color: rgba(22,163,74,0.92);
-  color: rgba(22,163,74,0.92);
+/* Qty dot: doppio */
+.colazione-qtydot{
+  width: 44px;
+  height: 44px;
+  font-size: 18px;
+  flex: 0 0 44px;
 }
 
+.colazione-qtydot.is-saved{
+  border-color: rgba(255,0,0,.85);
+  background: rgba(255,0,0,.22);
+}
+
+.colazione-text{
+  flex: 1;
+  min-width: 0;
+  font-size: 16px;
+  font-weight: 800;
+  letter-spacing: .2px;
+  opacity: .95;
+  padding: 8px 6px;
+}
+
+.colazione-checkdot{
+  width: 28px;
+  height: 28px;
+  flex: 0 0 28px;
+}
+.colazione-checkdot svg{
+  width: 18px;
+  height: 18px;
+  fill: none;
+  stroke: rgba(255,255,255,.8);
+  stroke-width: 3;
+  stroke-linecap: round;
+  stroke-linejoin: round;
+  opacity: 0;
+}
+.colazione-checkdot.is-checked{
+  background: rgba(255,255,255,.14);
+  border-color: rgba(255,255,255,.75);
+}
+.colazione-checkdot.is-checked svg{
+  opacity: 1;
+}
+
+/* HOME: attenzione colazione se lista non vuota */
+@keyframes colazioneBlink{
+  0%{ box-shadow: 0 0 0 rgba(255,0,0,0); }
+  50%{ box-shadow: 0 0 0 6px rgba(255,0,0,.30); }
+  100%{ box-shadow: 0 0 0 rgba(255,0,0,0); }
+}
+.home-main.colazione-attn{
+  animation: colazioneBlink 1.15s infinite;
+}

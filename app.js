@@ -3,26 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.056";
-
-// Top "Home" button becomes "Impostazioni" when on HOME
-const HB_SVG_HOME = `<path d="M3 10.5L12 3l9 7.5"></path><path d="M5 10v11h14V10"></path><path d="M9 21v-6h6v6"></path>`;
-const HB_SVG_GEAR = `<path d="M12 14.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"></path><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="M4.93 4.93l1.41 1.41"></path><path d="M17.66 17.66l1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="M4.93 19.07l1.41-1.41"></path><path d="M17.66 6.34l1.41-1.41"></path>`;
-
-function updateHamburgerMode(){
-  try{
-    const hb = document.getElementById("hamburgerBtn");
-    if (!hb) return;
-    const isHome = (state.page === "home");
-    hb.setAttribute("aria-label", isHome ? "Impostazioni" : "Home");
-    hb.classList.toggle("hb-settings", isHome);
-    const svg = hb.querySelector("svg");
-    if (svg){
-      svg.innerHTML = isHome ? HB_SVG_GEAR : HB_SVG_HOME;
-    }
-  }catch(_){ }
-}
-
+const BUILD_VERSION = "dDAE_2.057";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -41,7 +22,7 @@ function applyRoleMode(){
       "openLauncher",
       "goTassaSoggiorno",
       "goStatistiche",
-      "goImpostazioni",
+      "homeSettingsTop",
       // icone/shortcuts ospiti duplicati (se presenti)
       "goOspiti",
     ];
@@ -554,6 +535,9 @@ guestMarriage: false,
   laundry: { list: [], current: null },
   // Impostazioni (foglio "impostazioni")
   settings: { loaded: false, byKey: {}, rows: [], loadedAt: 0 },
+
+  // Colazione (lista spesa permanente)
+  colazione: { loaded: false, loadedAt: 0, items: [] },
 
   // Auth/session + anno esercizio
   session: null,
@@ -1909,8 +1893,8 @@ function bindHomeDelegation(){
 const lav = e.target.closest && e.target.closest("#goLavanderia") || e.target.closest("#goLavanderiaTop");
     if (lav){ hideLauncher(); showPage("lavanderia"); return; }
 
-    const col = e.target.closest && e.target.closest("#goColazione");
-    if (col){ hideLauncher(); showPage("colazione"); return; }
+    const imp = e.target.closest && e.target.closest("#goImpostazioni");
+    if (imp){ hideLauncher(); showPage("impostazioni"); return; }
 
     const g = e.target.closest && e.target.closest("#goStatistiche");
     if (g){ hideLauncher(); showPage("statistiche"); return; }
@@ -2003,7 +1987,7 @@ function showPage(page){
   // Gate ruolo: operatore vede solo Pulizie / Lavanderia / Calendario
   try{
     if (state.session && isOperatoreSession(state.session)){
-      const allowed = new Set(["home","pulizie","lavanderia","calendario","orepulizia","colazione","impostazioni","auth"]);
+      const allowed = new Set(["home","pulizie","lavanderia","calendario","orepulizia","auth","colazione"]);
       if (!allowed.has(page)) page = "pulizie";
     }
   }catch(_){ }
@@ -2021,7 +2005,6 @@ state.page = page;
   document.body.dataset.page = page;
 
   try { __rememberPage(page); } catch (_) {}
-  try{ updateHamburgerMode(); }catch(_){ }
   document.querySelectorAll(".page").forEach(s => s.hidden = true);
   const el = $(`#page-${page}`);
   if (el) el.hidden = false;
@@ -2029,12 +2012,6 @@ state.page = page;
   // Impostazioni: aggiorna tabs (account + anno)
   if (page === "impostazioni"){
     try{ updateSettingsTabs(); }catch(_){ }
-  }
-
-  // Colazione
-  if (page === "colazione"){
-    try{ renderColazione(); }catch(_){ }
-    try{ refreshFloatingLabels(); }catch(_){ }
   }
 
   // Sotto-viste della pagina Spese (lista ↔ grafico+riepilogo)
@@ -2053,6 +2030,18 @@ state.page = page;
     }
   }
 
+
+
+
+  // Topbar: in HOME il tasto "Home" non serve → mostra Impostazioni
+  try{
+    const hb2 = document.getElementById("hamburgerBtn");
+    const hs2 = document.getElementById("homeSettingsTop");
+    const isHome = (page === "home");
+    const isOp = !!(state.session && isOperatoreSession(state.session));
+    if (hb2) hb2.hidden = isHome;
+    if (hs2) hs2.hidden = (!isHome) || isOp;
+  }catch(_){ }
 
   // Top back button (Ore pulizia + Calendario)
   const backBtnTop = $("#backBtnTop");
@@ -2114,6 +2103,13 @@ state.page = page;
   }
 
 // render on demand
+  if (page === "colazione") {
+    const _nav = navId;
+    loadColazione({ force:false, showLoader:true })
+      .then(()=>{ if (state.navId !== _nav || state.page !== "colazione") return; renderColazione(); })
+      .catch(e=>toast(e.message));
+  }
+
   if (page === "spese") {
     const _nav = navId;
     ensurePeriodData({ showLoader:true })
@@ -2208,11 +2204,7 @@ state.page = page;
 
 function setupHeader(){
   const hb = $("#hamburgerBtn");
-  if (hb) bindFastTap(hb, () => {
-    try{ hideLauncher(); }catch(_){ }
-    if (state.page === "home") { showPage("impostazioni"); }
-    else { showPage("home"); }
-  });
+  if (hb) hb.addEventListener("click", () => { hideLauncher(); showPage("home"); });
 
   const opLogout = document.getElementById("opLogoutTop");
   if (opLogout) bindFastTap(opLogout, () => {
@@ -2303,8 +2295,9 @@ if (goCalendarioTopOspiti){
   // HOME: icona Colazione
   const goCol = $("#goColazione");
   if (goCol){
-    bindFastTap(goCol, () => showPage("colazione"));
+    bindFastTap(goCol, () => { hideLauncher(); showPage("colazione"); });
   }
+
 
   // HOME: icona Calendario (tap-safe su iOS PWA)
   const goCal = $("#goCalendario");
@@ -5281,206 +5274,296 @@ function renderGuestCards(){
 
 
 
-// ===== Colazione (lista spesa) =====
-const COLAZIONE_KEY = "ddae_colazione_items";
-let colazioneState = { items: [] };
+// =========================
+// COLAZIONE (lista spesa)
+// =========================
 
-function loadColazioneItems(){
-  try{
-    const raw = localStorage.getItem(COLAZIONE_KEY);
-    const arr = raw ? JSON.parse(raw) : [];
-    if (Array.isArray(arr)) return arr.map(x => ({
-      text: String(x?.text ?? "").trim(),
-      qty: Math.max(0, parseInt(x?.qty ?? 0, 10) || 0),
-      checked: !!x?.checked,
-      saved: !!x?.saved
-    })).filter(x => x.text);
-  }catch(_){ }
-  return [];
+function __normBool01(v){
+  const s = String(v ?? "").trim().toLowerCase();
+  if (s === "1" || s === "true" || s === "yes" || s === "y") return 1;
+  return 0;
 }
 
-function saveColazioneItems(items){
-  try{ localStorage.setItem(COLAZIONE_KEY, JSON.stringify(items)); }catch(_){ }
+function __colazioneAny(){
+  try{ return Array.isArray(state.colazione.items) && state.colazione.items.filter(i=>!__normBool01(i.isDeleted)).length > 0; }catch(_){ return false; }
 }
 
-function updateColazioneHomeIndicator(){
-  try{
-    const btn = document.getElementById("goColazione");
-    if (!btn) return;
-    const items = loadColazioneItems();
-    btn.classList.toggle("colazione-alert", items.length > 0);
-  }catch(_){ }
+function updateColazioneHomeBlink(){
+  const btn = document.getElementById("goColazione");
+  if (!btn) return;
+  const on = __colazioneAny();
+  btn.classList.toggle("colazione-attn", !!on);
+}
+
+async function loadColazione({ force=false, showLoader=true } = {}){
+  const s = state.colazione;
+  const now = Date.now();
+  const ttl = 20000;
+  if (!force && s.loaded && (now - (s.loadedAt||0) < ttl)) {
+    updateColazioneHomeBlink();
+    return s.items || [];
+  }
+  const res = await api("colazione", { method:"GET", params:{}, showLoader });
+  const rows = Array.isArray(res) ? res : (res && Array.isArray(res.rows) ? res.rows : (res && Array.isArray(res.data) ? res.data : []));
+  s.items = (rows || []).filter(r => !__normBool01(r.isDeleted));
+  s.loaded = true;
+  s.loadedAt = now;
+  updateColazioneHomeBlink();
+  return s.items;
 }
 
 function renderColazione(){
-  const list = document.getElementById("colList");
-  if (!list) return;
-  const items = loadColazioneItems();
-  colazioneState.items = items;
+  const wrap = document.getElementById("colazioneList");
+  if (!wrap) return;
+  const items = (state.colazione.items || []).filter(r => !__normBool01(r.isDeleted));
 
-  list.innerHTML = "";
-  if (!items.length){
-    const empty = document.createElement("div");
-    empty.className = "col-empty";
-    empty.textContent = "";
-    list.appendChild(empty);
-    updateColazioneHomeIndicator();
-    return;
-  }
+  wrap.innerHTML = "";
+  const frag = document.createDocumentFragment();
 
-  for (let i=0;i<items.length;i++){
-    const it = items[i];
+  items.forEach((it) => {
     const row = document.createElement("div");
-    row.className = "col-item";
-    row.dataset.idx = String(i);
+    row.className = "colazione-item";
+    row.dataset.id = String(it.id || "");
 
     const qtyBtn = document.createElement("button");
     qtyBtn.type = "button";
-    qtyBtn.className = "col-qty" + ((it.saved && it.qty>0) ? " saved" : "");
-    qtyBtn.textContent = it.qty>0 ? String(it.qty) : "•";
-    qtyBtn.setAttribute("aria-label", "Quantità");
+    qtyBtn.className = "colazione-dot colazione-qtydot";
+    const qty = parseInt(String(it.qty ?? 0), 10);
+    const q = (isNaN(qty) ? 0 : Math.max(0, qty));
+    qtyBtn.textContent = q > 0 ? String(q) : "";
+
+    const saved = __normBool01(it.saved);
+    qtyBtn.classList.toggle("is-saved", saved && q > 0);
 
     const text = document.createElement("div");
-    text.className = "col-text";
-    text.textContent = it.text;
+    text.className = "colazione-text";
+    text.textContent = String(it.prodotto || "").trim();
 
     const checkBtn = document.createElement("button");
     checkBtn.type = "button";
-    checkBtn.className = "col-check" + (it.checked ? " checked" : "");
-    checkBtn.textContent = it.checked ? "✓" : "";
-    checkBtn.setAttribute("aria-label", "Nel carrello");
+    checkBtn.className = "colazione-dot colazione-checkdot";
+    checkBtn.innerHTML = '<svg aria-hidden="true" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"></path></svg>';
+    checkBtn.classList.toggle("is-checked", __normBool01(it.checked) === 1);
 
     row.appendChild(qtyBtn);
     row.appendChild(text);
     row.appendChild(checkBtn);
-    list.appendChild(row);
-  }
 
-  updateColazioneHomeIndicator();
+    frag.appendChild(row);
+  });
+
+  wrap.appendChild(frag);
 }
 
 function setupColazione(){
-  try{ updateColazioneHomeIndicator(); }catch(_){ }
+  const input = document.getElementById("colazioneInput");
+  const btnAdd = document.getElementById("colazioneAddBtn");
+  const btnReset = document.getElementById("colazioneResetBtn");
+  const btnSave = document.getElementById("colazioneSaveBtn");
+  const list = document.getElementById("colazioneList");
 
-  const addBtn = document.getElementById("colAddBtn");
-  const input = document.getElementById("colNewItem");
-  const resetBtn = document.getElementById("colResetBtn");
-  const saveBtn = document.getElementById("colSaveBtn");
-  const list = document.getElementById("colList");
+  if (!input || !btnAdd || !btnReset || !btnSave || !list) return;
 
-  function addItem(){
-    if (!input) return;
-    const v = String(input.value ?? "").trim();
+  const findItem = (id) => {
+    const sid = String(id || "");
+    return (state.colazione.items || []).find(x => String(x.id||"") === sid);
+  };
+
+  const patchItem = async (id, patch, {showLoader=false} = {}) => {
+    const it = findItem(id);
+    if (it) Object.assign(it, patch, { updatedAt: new Date().toISOString() });
+    renderColazione();
+    updateColazioneHomeBlink();
+    await api("colazione", { method:"PUT", body: Object.assign({ id: String(id) }, patch), showLoader });
+    try{ await loadColazione({ force:true, showLoader:false }); }catch(_){ }
+    renderColazione();
+    updateColazioneHomeBlink();
+  };
+
+  const addItem = async () => {
+    const raw = String(input.value || "");
+    const v = raw.trim();
     if (!v) return;
-    const items = loadColazioneItems();
-    items.push({ text: v, qty: 0, checked: false, saved: false });
-    saveColazioneItems(items);
+    const prodotto = v.toUpperCase();
     input.value = "";
-    try{ refreshFloatingLabels(); }catch(_){ }
-    renderColazione();
-  }
-
-  if (addBtn) bindFastTap(addBtn, addItem);
-  if (input){
-    input.addEventListener("keydown", (e)=>{
-      if (e.key === "Enter"){
-        try{ e.preventDefault(); }catch(_){ }
-        addItem();
-      }
-    });
-  }
-
-  if (resetBtn) bindFastTap(resetBtn, ()=>{
-    const items = loadColazioneItems();
-    for (const it of items){
-      it.qty = 0;
-      it.saved = false;
+    try{
+      await api("colazione", { method:"POST", body:{ op:"create", prodotto }, showLoader:true });
+      await loadColazione({ force:true, showLoader:false });
+      renderColazione();
+      updateColazioneHomeBlink();
+      input.focus();
+    }catch(e){
+      toast(e.message);
     }
-    saveColazioneItems(items);
-    renderColazione();
+  };
+
+  bindFastTap(btnAdd, addItem);
+  input.addEventListener("keydown", (e) => {
+    if (e.key === "Enter") {
+      e.preventDefault();
+      addItem();
+    }
   });
 
-  if (saveBtn) bindFastTap(saveBtn, ()=>{
-    const items = loadColazioneItems();
-    for (const it of items){
-      it.saved = (it.qty > 0);
-    }
-    saveColazioneItems(items);
-    renderColazione();
+  bindFastTap(btnReset, async () => {
+    try{
+      await api("colazione", { method:"POST", body:{ op:"resetQty" }, showLoader:true });
+      await loadColazione({ force:true, showLoader:false });
+      // reset locale qty/saved
+      (state.colazione.items || []).forEach(it => { it.qty = 0; it.saved = 0; });
+      renderColazione();
+      updateColazioneHomeBlink();
+    }catch(e){ toast(e.message); }
   });
 
-  // Delegation: qty click, check click, long-press delete on qty
-  if (list){
-    let lpTimer = null;
-    let lpFired = false;
-    let lpIdx = null;
+  bindFastTap(btnSave, async () => {
+    try{
+      await api("colazione", { method:"POST", body:{ op:"save" }, showLoader:true });
+      await loadColazione({ force:true, showLoader:false });
+      renderColazione();
+      updateColazioneHomeBlink();
+    }catch(e){ toast(e.message); }
+  });
 
-    function clearLP(){
-      if (lpTimer){ clearTimeout(lpTimer); lpTimer = null; }
-      lpIdx = null;
+  // Qty dot: tap increment, long-press (0.5s) reset qty only
+  let qtyTimer = null;
+  let qtyTargetId = null;
+  let qtyLongFired = false;
+  let lastQtyTouch = 0;
+
+  const clearQtyPress = () => {
+    if (qtyTimer){ clearTimeout(qtyTimer); qtyTimer = null; }
+    qtyTargetId = null;
+    qtyLongFired = false;
+  };
+
+  const startQtyPress = (id) => {
+    clearQtyPress();
+    qtyTargetId = id;
+    qtyTimer = setTimeout(() => {
+      qtyLongFired = true;
+      patchItem(id, { qty: 0, saved: 0 }, { showLoader:false }).catch(()=>{});
+    }, 500);
+  };
+
+  const tapQty = (id) => {
+    const it = findItem(id);
+    const cur = parseInt(String(it?.qty ?? 0), 10);
+    const next = (isNaN(cur) ? 0 : cur) + 1;
+    patchItem(id, { qty: next, saved: 0 }, { showLoader:false }).catch(()=>{});
+  };
+
+  // Delete: long press 2s on text
+  let delTimer = null;
+  let delTargetId = null;
+  let delFired = false;
+  let lastDelTouch = 0;
+
+  const clearDelPress = () => {
+    if (delTimer){ clearTimeout(delTimer); delTimer = null; }
+    delTargetId = null;
+    delFired = false;
+  };
+
+  const startDelPress = (id) => {
+    clearDelPress();
+    delTargetId = id;
+    delTimer = setTimeout(() => {
+      delFired = true;
+      patchItem(id, { isDeleted: 1, qty: 0, checked: 0, saved: 0 }, { showLoader:true }).catch(()=>{});
+    }, 2000);
+  };
+
+  const toggleCheck = (id) => {
+    const it = findItem(id);
+    const cur = __normBool01(it?.checked);
+    patchItem(id, { checked: cur ? 0 : 1 }, { showLoader:false }).catch(()=>{});
+  };
+
+  // Delegation (touch)
+  list.addEventListener("touchstart", (e) => {
+    const row = e.target.closest && e.target.closest(".colazione-item");
+    if (!row) return;
+    const id = row.dataset.id;
+
+    if (e.target.closest && e.target.closest(".colazione-qtydot")) {
+      lastQtyTouch = Date.now();
+      startQtyPress(id);
+      e.preventDefault();
+      e.stopPropagation();
+      return;
     }
 
-    function startLP(idx){
-      clearLP();
-      lpFired = false;
-      lpIdx = idx;
-      lpTimer = setTimeout(()=>{
-        lpFired = true;
-        const items = loadColazioneItems();
-        if (idx >= 0 && idx < items.length){
-          items.splice(idx, 1);
-          saveColazioneItems(items);
-          renderColazione();
-        }
-        clearLP();
-      }, 500);
+    if (e.target.closest && e.target.closest(".colazione-text")) {
+      lastDelTouch = Date.now();
+      startDelPress(id);
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+  }, { passive:false, capture:true });
+
+  list.addEventListener("touchend", (e) => {
+    const row = e.target.closest && e.target.closest(".colazione-item");
+    if (!row) return;
+    const id = row.dataset.id;
+
+    if (e.target.closest && e.target.closest(".colazione-qtydot")) {
+      if (qtyTimer){ clearTimeout(qtyTimer); qtyTimer = null; }
+      if (!qtyLongFired) tapQty(id);
+      clearQtyPress();
+      e.preventDefault();
+      e.stopPropagation();
+      return;
     }
 
-    list.addEventListener("pointerdown", (e)=>{
-      const q = e.target && e.target.closest && e.target.closest(".col-qty");
-      if (!q) return;
-      const row = q.closest(".col-item");
-      const idx = row ? parseInt(row.dataset.idx || "-1", 10) : -1;
-      if (idx >= 0) startLP(idx);
-    });
-    list.addEventListener("pointerup", ()=>{ clearLP(); });
-    list.addEventListener("pointercancel", ()=>{ clearLP(); });
-    list.addEventListener("pointerleave", ()=>{ clearLP(); });
-
-    list.addEventListener("click", (e)=>{
-      const q = e.target && e.target.closest && e.target.closest(".col-qty");
-      if (q){
-        if (lpFired) { lpFired = false; return; }
-        const row = q.closest(".col-item");
-        const idx = row ? parseInt(row.dataset.idx || "-1", 10) : -1;
-        if (idx < 0) return;
-        const items = loadColazioneItems();
-        const it = items[idx];
-        if (!it) return;
-        it.qty = (parseInt(it.qty || 0, 10) || 0) + 1;
-        saveColazioneItems(items);
-        renderColazione();
-        return;
+    if (e.target.closest && e.target.closest(".colazione-text")) {
+      if (delTimer){ clearTimeout(delTimer); delTimer = null; }
+      if (!delFired) {
+        // niente tap sul testo
       }
+      clearDelPress();
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
 
-      const c = e.target && e.target.closest && e.target.closest(".col-check");
-      if (c){
-        const row = c.closest(".col-item");
-        const idx = row ? parseInt(row.dataset.idx || "-1", 10) : -1;
-        if (idx < 0) return;
-        const items = loadColazioneItems();
-        const it = items[idx];
-        if (!it) return;
-        it.checked = !it.checked;
-        saveColazioneItems(items);
-        renderColazione();
-        return;
-      }
-    });
-  }
+    if (e.target.closest && e.target.closest(".colazione-checkdot")) {
+      toggleCheck(id);
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+  }, { passive:false, capture:true });
 
-  // initial render
-  try{ renderColazione(); }catch(_){ }
+  list.addEventListener("touchcancel", (e) => {
+    clearQtyPress();
+    clearDelPress();
+    try{ e.preventDefault(); e.stopPropagation(); }catch(_){ }
+  }, { passive:false, capture:true });
+
+  // Click (desktop) + anti ghost-click after touch
+  list.addEventListener("click", (e) => {
+    const row = e.target.closest && e.target.closest(".colazione-item");
+    if (!row) return;
+    const id = row.dataset.id;
+
+    if (e.target.closest && e.target.closest(".colazione-qtydot")) {
+      if (Date.now() - lastQtyTouch < 450) { e.preventDefault(); e.stopPropagation(); return; }
+      tapQty(id);
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+
+    if (e.target.closest && e.target.closest(".colazione-checkdot")) {
+      if (Date.now() - lastDelTouch < 450) { e.preventDefault(); e.stopPropagation(); return; }
+      toggleCheck(id);
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+  }, true);
 }
 
 function initFloatingLabels(){
@@ -5587,6 +5670,11 @@ async function init(){
 
 
   // prefetch leggero (no await): evita blocchi e “clessidra” ripetute all'avvio
+  // Colazione: prefetch per segnale in HOME
+  if (state.session && state.session.user_id){
+    try { loadColazione({ force:false, showLoader:false }).catch(() => {}); } catch(_){ }
+  }
+
   if (state.session && state.session.user_id){
     try { loadMotivazioni().catch(() => {}); } catch(_){ }
     try { ensureSettingsLoaded({ force:false, showLoader:false }).catch(() => {}); } catch(_){ }
