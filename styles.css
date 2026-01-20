@@ -41,7 +41,7 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.066"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.069"),
     radial-gradient(900px 600px at 10% 0%, rgba(43,124,180,0.10), transparent 62%),
     radial-gradient(800px 520px at 90% 8%, rgba(201,119,43,0.10), transparent 64%),
     radial-gradient(900px 700px at 20% 100%, rgba(111,183,214,0.10), transparent 62%),
@@ -81,16 +81,21 @@ body{
   display:flex;
   align-items:center;
   gap: 6px;
+  flex-wrap: nowrap;
 }
 
 /* Topbar: LED indicatori prodotti */
 .top-leds{
   display: inline-flex;
+  flex-direction: row;
   align-items: center;
   gap: 6px;
+  white-space: nowrap;
+  line-height: 0;
   margin-right: 2px;
 }
 .top-led{
+  display: block;
   width: 10px;
   height: 10px;
   border-radius: 999px;
@@ -313,10 +318,7 @@ body{
 .card{
   border: 1px solid var(--border);
   border-radius: var(--radius);
-  background:
-    radial-gradient(120% 120% at 12% 0%, rgba(43,124,180,0.12), transparent 58%),
-    radial-gradient(120% 120% at 92% 0%, rgba(201,119,43,0.12), transparent 58%),
-    linear-gradient(to bottom, var(--glass), var(--glass2));
+  background: rgba(0,0,0,0.15);
   backdrop-filter: blur(16px);
   box-shadow: var(--shadow);
   overflow:hidden;
@@ -850,7 +852,7 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.066"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.069"),
     radial-gradient(900px 650px at 12% 8%, rgba(43,124,180,0.18), transparent 62%),
     radial-gradient(820px 560px at 92% 14%, rgba(201,119,43,0.16), transparent 62%),
     radial-gradient(900px 700px at 18% 96%, rgba(111,183,214,0.16), transparent 62%),
@@ -5840,22 +5842,18 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 .prod-item-block{
   display: flex;
   flex-direction: column;
-  gap: 6px;
-}
-.prod-item-subbtn{
-  width: 100%;
-  border: 0;
-  border-radius: 16px;
+  gap: 0;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: rgba(0,0,0,0.15);
+  backdrop-filter: blur(16px);
+  -webkit-backdrop-filter: blur(16px);
+  box-shadow: 0 16px 52px rgba(15,23,42,0.10);
   padding: 10px 12px;
-  background: rgba(0,0,0,0.20);
-  color: rgba(255,255,255,0.86);
-  font-weight: 900;
-  letter-spacing: 0.2px;
-  text-align: center;
-  -webkit-tap-highlight-color: transparent;
+  overflow: hidden;
 }
-.prod-item-subbtn:active{
-  background: rgba(0,0,0,0.26);
+.prod-item-block .colazione-item{
+  padding: 6px 2px;
 }
 
 .colazione-dot{

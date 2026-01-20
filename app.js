@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.066";
+const BUILD_VERSION = "dDAE_2.069";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -2052,7 +2052,7 @@ state.page = page;
     const isOp = !!(state.session && isOperatoreSession(state.session));
     if (hb2) hb2.hidden = isHome;
     if (hs2) hs2.hidden = (!isHome) || isOp;
-    if (leds2) leds2.hidden = (!isHome) || isOp;
+    if (leds2) leds2.hidden = (page !== "home") || isOp;
   }catch(_){ }
 
   // Top back button (Ore pulizia + Calendario)
@@ -5552,14 +5552,7 @@ function renderProdotti(){
     row.appendChild(text);
     row.appendChild(checkBtn);
 
-    const subBtn = document.createElement("button");
-    subBtn.type = "button";
-    subBtn.className = "prod-item-subbtn";
-    subBtn.textContent = "⋯";
-    try{ subBtn.setAttribute("aria-label", "Azioni prodotto"); }catch(_){ }
-
     block.appendChild(row);
-    block.appendChild(subBtn);
     frag.appendChild(block);
   });
 
