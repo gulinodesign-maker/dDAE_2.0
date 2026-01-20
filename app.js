@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.059";
+const BUILD_VERSION = "dDAE_2.062";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -2088,7 +2088,15 @@ state.page = page;
     speseTopTools.hidden = (page !== "spese");
   }
 
-  // Top tools (Statistiche → Conteggio generale)
+  
+
+  // Top tools (Prodotti) — inserisci/azzera/salva accanto al tasto Home
+  const prodottiTopTools = $("#prodottiTopTools");
+  if (prodottiTopTools){
+    prodottiTopTools.hidden = (page !== "prodotti");
+  }
+
+// Top tools (Statistiche → Conteggio generale)
   const statGenTopTools = $("#statGenTopTools");
   if (statGenTopTools){
     statGenTopTools.hidden = (page !== "statgen");
@@ -5419,6 +5427,10 @@ function __prodStateBucket_(){
   return __prodListKey_() === "pulizia" ? state.prodotti_pulizia : state.colazione;
 }
 
+function __prodNameKey_(it){
+  return String(it?.prodotto ?? "").trim().toUpperCase();
+}
+
 async function loadProdotti({ force=false, showLoader=true } = {}){
   const key = __prodListKey_();
   if (key === "pulizia") return loadProdottiList_("prodotti_pulizia", state.prodotti_pulizia, { force, showLoader });
@@ -5467,13 +5479,13 @@ function renderProdotti(){
   let arr = items.slice();
   const sort = (state.prodottiUI && state.prodottiUI.sort) ? state.prodottiUI.sort : "frequent";
   if (sort === "alpha") {
-    arr.sort((a,b)=> String(a.prodotto||"").localeCompare(String(b.prodotto||""), "it", { sensitivity:"base" }));
+    arr.sort((a,b)=> __prodNameKey_(a).localeCompare(__prodNameKey_(b), "it", { sensitivity:"base" }));
   } else {
     arr.sort((a,b)=>{
       const fa = getFreq_(action, String(a.id||""));
       const fb = getFreq_(action, String(b.id||""));
       if (fb !== fa) return fb - fa;
-      return String(a.prodotto||"").localeCompare(String(b.prodotto||""), "it", { sensitivity:"base" });
+      return __prodNameKey_(a).localeCompare(__prodNameKey_(b), "it", { sensitivity:"base" });
     });
   }
 
@@ -5589,8 +5601,9 @@ function setupProdotti(){
     await loadProdottiList_("prodotti_pulizia", state.prodotti_pulizia, { force:false, showLoader:true });
     renderProdotti();
   });
-  if (sF) bindFastTap(sF, () => { state.prodottiUI = state.prodottiUI || {}; state.prodottiUI.sort = "frequent"; renderProdotti(); });
-  if (sA) bindFastTap(sA, () => { state.prodottiUI = state.prodottiUI || {}; state.prodottiUI.sort = "alpha"; renderProdotti(); });
+  const scrollTopList = () => { try{ const w = document.getElementById("prodottiList"); if (w) w.scrollTop = 0; }catch(_){ } };
+  if (sF) bindFastTap(sF, () => { state.prodottiUI = state.prodottiUI || {}; state.prodottiUI.sort = "frequent"; scrollTopList(); renderProdotti(); });
+  if (sA) bindFastTap(sA, () => { state.prodottiUI = state.prodottiUI || {}; state.prodottiUI.sort = "alpha"; scrollTopList(); renderProdotti(); });
 
   if (btnReset) bindFastTap(btnReset, async () => {
     const action = __prodAction_();

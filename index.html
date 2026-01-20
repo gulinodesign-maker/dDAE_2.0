@@ -8,12 +8,12 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="Cache-Control"/>
 <meta content="no-cache" http-equiv="Pragma"/>
 <meta content="0" http-equiv="Expires"/>
-<link href="./styles.css?v=dDAE_2.059" rel="stylesheet"/>
-<link href="./manifest.json?v=dDAE_2.059" rel="manifest"/>
-<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.059" rel="apple-touch-icon" sizes="180x180"/>
-<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.059" rel="apple-touch-icon-precomposed" sizes="180x180"/>
-<link href="./assets/icons/favicon-32.png?v=dDAE_2.059" rel="icon" sizes="32x32" type="image/png"/>
-<link href="./assets/icons/favicon-16.png?v=dDAE_2.059" rel="icon" sizes="16x16" type="image/png"/>
+<link href="./styles.css?v=dDAE_2.062" rel="stylesheet"/>
+<link href="./manifest.json?v=dDAE_2.062" rel="manifest"/>
+<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.062" rel="apple-touch-icon" sizes="180x180"/>
+<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.062" rel="apple-touch-icon-precomposed" sizes="180x180"/>
+<link href="./assets/icons/favicon-32.png?v=dDAE_2.062" rel="icon" sizes="32x32" type="image/png"/>
+<link href="./assets/icons/favicon-16.png?v=dDAE_2.062" rel="icon" sizes="16x16" type="image/png"/>
 <meta content="#ffffff" name="theme-color"/>
 <meta content="yes" name="apple-mobile-web-app-capable"/>
 <meta content="Daedalium PMS" name="apple-mobile-web-app-title"/>
@@ -23,7 +23,7 @@
 <header class="topbar">
 <div class="brand">
 <div class="brand-left">
-<img alt="Daedalium logo" class="logo" src="./assets/logo.jpg?v=dDAE_2.059"/>
+<img alt="Daedalium logo" class="logo" src="./assets/logo.jpg?v=dDAE_2.062"/>
 <h1>Daedalium PMS</h1>
 </div>
 <div class="brand-right">
@@ -63,6 +63,18 @@
 </button>
 </div>
 <div hidden="" id="speseTopTools"><button aria-label="Aggiungi spesa" class="icon-btn icon-btn-whiteorange" id="btnAddSpesa" type="button"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg></button><button aria-label="Grafico e riepilogo" class="icon-btn icon-btn-whiteblue" id="btnSpeseInsights" type="button"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24"><path d="M4 19V5"></path><path d="M4 19h16"></path><path d="M8 17v-6"></path><path d="M12 17V7"></path><path d="M16 17v-3"></path></svg></button></div>
+
+<div hidden="" id="prodottiTopTools">
+  <button aria-label="Inserisci prodotto" class="icon-btn icon-btn-whiteorange" id="prodAddBtn" type="button">
+    <svg aria-hidden="true" class="ui-ico" viewBox="0 0 24 24"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
+  </button>
+  <button aria-label="Azzera quantita prodotti" class="icon-btn icon-btn-whitered" id="prodResetBtn" type="button">
+    <svg aria-hidden="true" class="ui-ico" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v6h6"></path></svg>
+  </button>
+  <button aria-label="Salva lista prodotti" class="icon-btn icon-btn-whitegreen" id="prodSaveBtn" type="button">
+    <svg aria-hidden="true" class="ui-ico" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"></path></svg>
+  </button>
+</div>
 <div hidden="" id="statGenTopTools">
 <button aria-label="Torna a Statistiche" class="icon-btn icon-btn-whiteorange" id="btnBackStatistiche" type="button">
 <svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24">
@@ -118,7 +130,7 @@
 </div>
 <!-- HOME: Impostazioni (solo in HOME) -->
 <button aria-label="Impostazioni" class="icon-btn icon-btn-whiteorange" hidden="" id="homeSettingsTop" type="button"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24"><path d="M12 14.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"></path><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="M4.93 4.93l1.41 1.41"></path><path d="M17.66 17.66l1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="M4.93 19.07l1.41-1.41"></path><path d="M17.66 6.34l1.41-1.41"></path></svg></button>
-<button aria-label="Home" class="icon-btn-whiteblack icon-btn" id="hamburgerBtn"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5"></path><path d="M5 10v11h14V10"></path><path d="M9 21v-6h6v6"></path></svg></button>
+<button aria-label="Home" class="icon-btn icon-btn-whiteorange" id="hamburgerBtn"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24"><path d="M3 10.5L12 3l9 7.5"></path><path d="M5 10v11h14V10"></path><path d="M9 21v-6h6v6"></path></svg></button>
 <button aria-label="Logout" class="icon-btn icon-btn-whiteorange" hidden="" id="opLogoutTop" type="button"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24"><path d="M10 17l1 1a2 2 0 0 0 2 0l1-1"></path><path d="M12 3v10"></path><path d="M7 8a6 6 0 1 0 10 0"></path></svg></button>
 </div>
 </div>
@@ -129,7 +141,7 @@
 <div class="auth-page">
 <div class="auth-card">
 <div class="auth-logo-wrap">
-<img alt="Daedalium" class="auth-logo" src="./assets/logo.jpg?v=dDAE_2.059"/>
+<img alt="Daedalium" class="auth-logo" src="./assets/logo.jpg?v=dDAE_2.062"/>
 </div>
 <div class="field float">
 <input autocomplete="username" id="authUsername" placeholder=" "/>
@@ -260,31 +272,13 @@
 
 
 
-</div><div class="build" id="buildText">dDAE_2.059</div></div></section>
+</div><div class="build" id="buildText">dDAE_2.062</div></div></section>
 
 
 
 <!-- PRODOTTI -->
 <section class="page" hidden id="page-prodotti">
   <div class="prodotti-page">
-
-    <div class="prodotti-topbar" role="toolbar" aria-label="Azioni prodotti">
-      <button id="prodAddBtn" class="icon-btn icon-btn-whiteorange" type="button" aria-label="Aggiungi prodotto">
-        <svg aria-hidden="true" class="ui-ico" viewBox="0 0 24 24"><path d="M12 5v14"></path><path d="M5 12h14"></path></svg>
-      </button>
-
-      <button id="prodResetBtn" class="icon-btn icon-btn-red" type="button" aria-label="Azzera quantità prodotti">
-        <svg aria-hidden="true" class="ui-ico" viewBox="0 0 24 24"><path d="M3 12a9 9 0 1 0 3-6.7"></path><path d="M3 4v6h6"></path></svg>
-      </button>
-
-      <button id="prodSaveBtn" class="icon-btn icon-btn-green" type="button" aria-label="Salva lista prodotti">
-        <svg aria-hidden="true" class="ui-ico" viewBox="0 0 24 24"><path d="M20 6 9 17l-5-5"></path></svg>
-      </button>
-
-      <button id="prodHomeBtn" class="icon-btn icon-btn-orange" type="button" aria-label="Home">
-        <svg aria-hidden="true" class="ui-ico" viewBox="0 0 24 24"><path d="M3 11 12 3l9 8"></path><path d="M5 10v10h14V10"></path></svg>
-      </button>
-    </div>
 
     <div class="prodotti-grid" aria-label="Filtri prodotti">
       <button id="prodTabColazione" class="prod-rectbtn" type="button">Colazione</button>
@@ -1118,8 +1112,8 @@
 </div>
 </div>
 </div>
-<script defer="" src="./config.js?v=dDAE_2.059"></script>
-<script defer="" src="./app.js?v=dDAE_2.059"></script>
+<script defer="" src="./config.js?v=dDAE_2.062"></script>
+<script defer="" src="./app.js?v=dDAE_2.062"></script>
 <!-- TAX REPORT MODAL -->
 <div aria-hidden="true" class="modal" hidden="" id="taxReportModal">
 <div aria-labelledby="taxReportTitle" aria-modal="true" class="modal-card tax-report-card" role="dialog">
