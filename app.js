@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.074";
+const BUILD_VERSION = "dDAE_2.075";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -61,7 +61,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.019)
+// AUTH + SESSION (dDAE_2.075)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -487,7 +487,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.019 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.075 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -1087,7 +1087,7 @@ function __apiProfile(action, method, body){
   return { timeoutMs, retries };
 }
 
-async function api(action, { method="GET", params={}, body=null, showLoader=true } = {}){
+async function api(action, { method="GET", params={}, body=null, showLoader=true, keepalive=false } = {}){
   if (showLoader) beginRequest();
   try {
   if (!API_BASE_URL || API_BASE_URL.includes("INCOLLA_QUI")) {
@@ -1127,6 +1127,7 @@ async function api(action, { method="GET", params={}, body=null, showLoader=true
   const baseFetchOpts = {
     method: realMethod,
     cache: "no-store",
+    keepalive: !!keepalive,
   };
 
   // Headers/body solo quando serve (riduce rischi di preflight su Safari iOS)
@@ -2250,7 +2251,7 @@ state.page = page;
   if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.019: fallback visualizzazione Pulizie
+  // dDAE_2.075: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3144,7 +3145,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.019)
+// STATISTICHE (dDAE_2.075)
 // =========================
 
 function computeStatGen(){
@@ -4236,7 +4237,7 @@ function renderRoomsReadOnly(ospite){
   `;
 }
 
-// ===== dDAE_2.035 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.075 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -6789,23 +6790,38 @@ const buildPuliziePayload = () => {
 
   // Salva biancheria (foglio "pulizie")
 if (cleanSaveLaundry){
-  cleanSaveLaundry.addEventListener("click", async (e) => {
+  let __cleanLaundrySaving = false;
+  cleanSaveLaundry.addEventListener("click", (e) => {
     e.preventDefault();
     e.stopPropagation();
-    try{
-      const payload = buildPuliziePayload();
-      await api("pulizie", { method:"POST", body: payload });
+    if (__cleanLaundrySaving) return;
+    __cleanLaundrySaving = true;
 
-      // ricarica dal DB senza svuotare (così resta visibile subito)
-      try{ await loadPulizieForDay({ clearFirst:false }); }catch(_){ }
+    try{ cleanSaveLaundry.disabled = true; }catch(_){}
+    try{ cleanSaveLaundry.classList.add("is-busy"); }catch(_){}
 
-      toast("Biancheria salvata", "blue");
-    }catch(err){
-      toast(String(err && err.message || "Errore salvataggio biancheria"));
-    }
+    let payload = null;
+    try{ payload = buildPuliziePayload(); }catch(_){ payload = null; }
+
+    const done = () => {
+      __cleanLaundrySaving = false;
+      try{ cleanSaveLaundry.disabled = false; }catch(_){}
+      try{ cleanSaveLaundry.classList.remove("is-busy"); }catch(_){}
+    };
+
+    Promise.resolve()
+      .then(() => api("pulizie", { method:"POST", body: payload, showLoader:false, keepalive:true }))
+      .then(() => {
+        toast("Biancheria salvata", "blue");
+        // ricarica dal DB in background (non blocca UI)
+        setTimeout(() => { try{ loadPulizieForDay({ clearFirst:false }); }catch(_){ } }, 0);
+      })
+      .catch((err) => {
+        toast(String(err && err.message || "Errore salvataggio biancheria"));
+      })
+      .finally(done);
   }, true);
 }
-
 // Salva ore lavoro (foglio "operatori") — REPLACE per data (sovrascrive report del giorno)
 // Nota: in sessione OPERATORE preserviamo le ore degli altri operatori con merge-safe.
 if (cleanSaveHours){
@@ -6977,7 +6993,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.019) =====
+// ===== CALENDARIO (dDAE_2.075) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -7402,7 +7418,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.019)
+   Lavanderia (dDAE_2.075)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -7798,7 +7814,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.019: renderSpese allineato al backend ---
+// --- FIX dDAE_2.075: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -7894,7 +7910,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.019: delete reale ospiti ---
+// --- FIX dDAE_2.075: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -7929,7 +7945,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.019: mostra nome ospite ---
+// --- FIX dDAE_2.075: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -8183,7 +8199,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.019
+   Build: dDAE_2.075
 ========================= */
 
 state.orepulizia = state.orepulizia || {
