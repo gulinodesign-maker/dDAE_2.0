@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.070";
+const BUILD_VERSION = "dDAE_2.071";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -5410,11 +5410,13 @@ function renderColazione(){
     const qtyBtn = document.createElement("button");
     qtyBtn.type = "button";
     qtyBtn.className = "colazione-dot colazione-qtydot";
-    const qty = parseInt(String(it.qty ?? 0), 10);
+    const draftQty = __prodDraftGetQty_(it.id);
+    const hasDraft = (draftQty !== null && draftQty !== undefined);
+    const qty = hasDraft ? parseInt(String(draftQty ?? 0), 10) : parseInt(String(it.qty ?? 0), 10);
     const q = (isNaN(qty) ? 0 : Math.max(0, qty));
     qtyBtn.textContent = q > 0 ? String(q) : "";
 
-    const saved = __normBool01(it.saved);
+    const saved = hasDraft ? 0 : __normBool01(it.saved);
     qtyBtn.classList.toggle("is-saved", saved && q > 0);
 
     const text = document.createElement("div");
@@ -5452,6 +5454,59 @@ function __prodAction_(){
 
 function __prodStateBucket_(){
   return __prodListKey_() === "pulizia" ? state.prodotti_pulizia : state.colazione;
+}
+
+// Draft qty (non persistito finche' non premi Salva)
+function __prodDraftEnsure_(){
+  state._prodDraft = state._prodDraft || { colazione:{}, pulizia:{} };
+  state._prodDraftDirty = state._prodDraftDirty || { colazione:{}, pulizia:{} };
+  const key = __prodListKey_();
+  state._prodDraft[key] = state._prodDraft[key] || {};
+  state._prodDraftDirty[key] = state._prodDraftDirty[key] || {};
+  return key;
+}
+
+function __prodDraftBucket_(){
+  const key = __prodDraftEnsure_();
+  return state._prodDraft[key];
+}
+
+function __prodDraftDirtyBucket_(){
+  const key = __prodDraftEnsure_();
+  return state._prodDraftDirty[key];
+}
+
+function __prodDraftGetQty_(id){
+  try{
+    const sid = String(id||"");
+    const b = __prodDraftBucket_();
+    if (b && Object.prototype.hasOwnProperty.call(b, sid)) return b[sid];
+  }catch(_){ }
+  return null;
+}
+
+function __prodDraftSetQty_(id, qty){
+  try{
+    const sid = String(id||"");
+    const n = parseInt(String(qty ?? 0), 10);
+    const q = isNaN(n) ? 0 : Math.max(0, n);
+    const b = __prodDraftBucket_();
+    const d = __prodDraftDirtyBucket_();
+    if (b) b[sid] = q;
+    if (d) d[sid] = 1;
+    return q;
+  }catch(_){ }
+  return 0;
+}
+
+function __prodDraftClear_(){
+  try{
+    const key = __prodListKey_();
+    state._prodDraft = state._prodDraft || { colazione:{}, pulizia:{} };
+    state._prodDraftDirty = state._prodDraftDirty || { colazione:{}, pulizia:{} };
+    state._prodDraft[key] = {};
+    state._prodDraftDirty[key] = {};
+  }catch(_){ }
 }
 
 function __prodNameKey_(it){
@@ -5531,11 +5586,13 @@ function renderProdotti(){
     const qtyBtn = document.createElement("button");
     qtyBtn.type = "button";
     qtyBtn.className = "colazione-dot colazione-qtydot";
-    const qty = parseInt(String(it.qty ?? 0), 10);
+    const draftQty = __prodDraftGetQty_(it.id);
+    const hasDraft = (draftQty !== null);
+    const qty = hasDraft ? parseInt(String(draftQty ?? 0), 10) : parseInt(String(it.qty ?? 0), 10);
     const q = (isNaN(qty) ? 0 : Math.max(0, qty));
     qtyBtn.textContent = q > 0 ? String(q) : "";
 
-    const saved = __normBool01(it.saved);
+    const saved = hasDraft ? 0 : __normBool01(it.saved);
     qtyBtn.classList.toggle("is-saved", saved && q > 0);
 
     const text = document.createElement("div");
@@ -5643,6 +5700,7 @@ function setupProdotti(){
     try{
       await api(action, { method:"POST", body:{ op:"resetQty" }, showLoader:true });
       await loadProdotti({ force:true, showLoader:false });
+      __prodDraftClear_();
       ( __prodStateBucket_().items || []).forEach(it => { it.qty = 0; it.saved = 0; });
       renderProdotti();
       updateProdottiHomeBlink();
@@ -5652,8 +5710,31 @@ function setupProdotti(){
   if (btnSave) bindFastTap(btnSave, async () => {
     const action = __prodAction_();
     try{
+      const draft = __prodDraftBucket_();
+      const dirty = __prodDraftDirtyBucket_();
+      const ids = Object.keys(dirty || {});
+
+      // 1) Applica le qty in bozza SOLO ora (niente refresh/PUT ad ogni tap)
+      for (const id of ids){
+        const qn = parseInt(String(draft[id] ?? 0), 10);
+        const qty = isNaN(qn) ? 0 : Math.max(0, qn);
+        const it = findItem(id);
+        if (it){ it.qty = qty; it.saved = 0; it.updatedAt = new Date().toISOString(); }
+        await api(action, { method:"PUT", body:{ id: String(id), qty: qty, saved: 0 }, showLoader:false });
+      }
+
+      // 2) Salva (rende rossi i pallini con qty>0)
       await api(action, { method:"POST", body:{ op:"save" }, showLoader:true });
-      await loadProdotti({ force:true, showLoader:false });
+
+      // 3) Aggiorna localmente lo stato 'saved' (senza ricaricare tutta la lista)
+      (__prodStateBucket_().items || []).forEach((it)=>{
+        if (__normBool01(it?.isDeleted)) return;
+        const n = parseInt(String(it?.qty ?? 0), 10);
+        const q = isNaN(n) ? 0 : Math.max(0, n);
+        it.saved = q > 0 ? 1 : 0;
+      });
+
+      __prodDraftClear_();
       renderProdotti();
       updateProdottiHomeBlink();
     }catch(e){ toast(e.message); }
@@ -5666,16 +5747,17 @@ function setupProdotti(){
     return (__prodStateBucket_().items || []).find(x => String(x.id||"") === sid);
   };
 
-  const patchItem = async (id, patch, {showLoader=false} = {}) => {
+  const persistPatch = async (id, patch, {showLoader=false} = {}) => {
     const action = __prodAction_();
     const it = findItem(id);
     if (it) Object.assign(it, patch, { updatedAt: new Date().toISOString() });
     renderProdotti();
     updateProdottiHomeBlink();
-    await api(action, { method:"PUT", body: Object.assign({ id: String(id) }, patch), showLoader });
-    try{ await loadProdotti({ force:true, showLoader:false }); }catch(_){ }
-    renderProdotti();
-    updateProdottiHomeBlink();
+    try{
+      await api(action, { method:"PUT", body: Object.assign({ id: String(id) }, patch), showLoader });
+    }catch(e){
+      toast(e.message);
+    }
   };
 
   // Qty dot: tap increment, long-press (0.5s) reset qty only
@@ -5695,16 +5777,22 @@ function setupProdotti(){
     qtyTargetId = id;
     qtyTimer = setTimeout(() => {
       qtyLongFired = true;
-      patchItem(id, { qty: 0, saved: 0 }, { showLoader:false }).catch(()=>{});
+      __prodDraftSetQty_(id, 0);
+      renderProdotti();
+      updateProdottiHomeBlink();
     }, 500);
   };
 
   const tapQty = (id) => {
     const it = findItem(id);
-    const cur = parseInt(String(it?.qty ?? 0), 10);
-    const next = (isNaN(cur) ? 0 : cur) + 1;
+    const base = __prodDraftGetQty_(id);
+    const cur = (base !== null && base !== undefined) ? parseInt(String(base ?? 0), 10) : parseInt(String(it?.qty ?? 0), 10);
+    const c = isNaN(cur) ? 0 : Math.max(0, cur);
+    const next = c + 1;
     incFreq_(__prodAction_(), String(id));
-    patchItem(id, { qty: next, saved: 0 }, { showLoader:false }).catch(()=>{});
+    __prodDraftSetQty_(id, next);
+    renderProdotti();
+    updateProdottiHomeBlink();
   };
 
   // Delete: long press 2s on text
@@ -5724,7 +5812,7 @@ function setupProdotti(){
     delTargetId = id;
     delTimer = setTimeout(() => {
       delFired = true;
-      patchItem(id, { isDeleted: 1, qty: 0, checked: 0, saved: 0 }, { showLoader:true }).catch(()=>{});
+      persistPatch(id, { isDeleted: 1, qty: 0, checked: 0, saved: 0 }, { showLoader:true }).catch(()=>{});
     }, 2000);
   };
 
@@ -5733,7 +5821,7 @@ function setupProdotti(){
     const cur = __normBool01(it?.checked);
     const next = cur ? 0 : 1;
     if (next === 1) incFreq_(__prodAction_(), String(id));
-    patchItem(id, { checked: next }, { showLoader:false }).catch(()=>{});
+    persistPatch(id, { checked: next }, { showLoader:false }).catch(()=>{});
   };
 
   // Delegation (touch)
