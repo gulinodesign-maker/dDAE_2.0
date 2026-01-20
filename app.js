@@ -3,12 +3,24 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.054";
+const BUILD_VERSION = "dDAE_2.055";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
   try{ return String(sess?.ruolo || "").trim().toLowerCase() === "operatore"; }
   catch(_){ return false; }
+}
+
+// Associa username operatore a uno dei nomi impostati (operatore_1/2/3)
+function __normOpName_(s){ return String(s||"").trim().toLowerCase(); }
+function __matchOperatorNameForUser_(username, names){
+  try{
+    const u = __normOpName_(username);
+    if (!u) return "";
+    const list = (names||[]).map(x=>String(x||"").trim()).filter(Boolean);
+    const found = list.find(n => __normOpName_(n) === u);
+    return found ? String(found).trim() : "";
+  }catch(_){ return ""; }
 }
 
 function applyRoleMode(){
@@ -5485,10 +5497,22 @@ async function init(){
 
   const syncCleanOperators = () => {
   const names = getOperatorNamesFromSettings(); // [op1, op2, op3]
+  const __isOpSess = !!(state && state.session && isOperatoreSession(state.session));
+  const __opUser = __isOpSess ? String(state.session.username || state.session.user || "").trim() : "";
+  const __opOnlyName = __isOpSess ? (__matchOperatorNameForUser_(__opUser, names) || __opUser) : "";
 
   opEls.forEach((r, idx) => {
     const n = String(names[idx] || "").trim();
     const rowEl = (r.hours && r.hours.closest) ? r.hours.closest(".clean-op-row") : null;
+
+    // Account operatore: mostra SOLO la propria riga
+    if (__isOpSess && __opOnlyName){
+      const keep = (__normOpName_(n) === __normOpName_(__opOnlyName));
+      if (!keep){
+        if (rowEl) rowEl.style.display = "none";
+        return;
+      }
+    }
 
     // Se non è impostato: NON mostrare né scritta né pallino
     if (!n) {
@@ -5786,7 +5810,61 @@ if (cleanSaveHours){
     e.preventDefault();
     e.stopPropagation();
     try{
-      const { touched, payload: opPayload } = buildOperatoriPayload();
+      let touched = true;
+      let opPayload = null;
+
+      const __isOpSess = !!(state && state.session && isOperatoreSession(state.session));
+      if (__isOpSess){
+        // Operatore: salva SOLO le proprie ore senza sovrascrivere gli altri
+        const date = getCleanDate();
+        const names = getOperatorNamesFromSettings();
+        const __opUser = String(state.session.username || state.session.user || "").trim();
+        const __opName = __matchOperatorNameForUser_(__opUser, names) || __opUser;
+        if (!__opName){
+          toast("Operatore non riconosciuto");
+          return;
+        }
+
+        // Carica ore esistenti del giorno per preservare gli altri operatori
+        let existing = [];
+        try{
+          const resGet = await api("operatori", { method:"GET", params:{ data: date }, showLoader:false });
+          existing = Array.isArray(resGet) ? resGet
+            : (resGet && Array.isArray(resGet.rows) ? resGet.rows
+            : (resGet && Array.isArray(resGet.data) ? resGet.data
+            : []));
+        }catch(_){ existing = []; }
+
+        const exMap = new Map();
+        existing.forEach(r=>{
+          const op = __normOpName_(r?.operatore || r?.nome || "");
+          const ore = parseInt(String(r?.ore ?? 0), 10);
+          if (op) exMap.set(op, (isNaN(ore) ? 0 : Math.max(0, ore)));
+        });
+
+        const rows = [];
+        const hasAnyName = names.some(n => String(n || "").trim());
+        if (!hasAnyName){
+          toast("Imposta i nomi operatori in Impostazioni");
+          return;
+        }
+
+        opEls.forEach((r, idx)=>{
+          const name = String(names[idx] || "").trim();
+          if (!name) return;
+          const key = __normOpName_(name);
+          const isMine = (__normOpName_(name) === __normOpName_(__opName));
+          const hours = isMine ? readHourDot(r.hours) : (exMap.get(key) || 0);
+          rows.push({ data: date, operatore: name, ore: hours, benzina_euro: OP_BENZINA_EUR });
+        });
+
+        opPayload = { data: date, operatori: rows, replaceDay: true };
+      } else {
+        const built = buildOperatoriPayload();
+        touched = built.touched;
+        opPayload = built.payload;
+      }
+
 
       if (!touched){
         toast("Nessun operatore configurato");
@@ -7353,12 +7431,27 @@ async function initOrePuliziaPage(){
     .filter(Boolean)
     .sort();
 
-  // opzioni: TUTTI + operatori
-  const opItems = [{ value:"__ALL__", label:"TUTTI" }, ...ops.map(x=>({ value:x, label:x }))];
+  const __isOpSess = !!(state && state.session && isOperatoreSession(state.session));
+
+  // opzioni: TUTTI + operatori (utente) / solo operatore (account operatore)
+  let opItems = [{ value:"__ALL__", label:"TUTTI" }, ...ops.map(x=>({ value:x, label:x }))];
+
+  if (__isOpSess){
+    const __opUser = String(state.session.username || state.session.user || "").trim();
+    const __opName = __matchOperatorNameForUser_(__opUser, ops) || __opUser || (ops[0] || "");
+    if (__opName){
+      s.operatore = __opName;
+      opItems = [{ value: __opName, label: __opName }];
+      try{ const wrap = selOp && selOp.closest ? selOp.closest('label') : null; if (wrap) wrap.style.display = 'none'; }catch(_){ }
+    }
+  }
+  if (!__isOpSess){
+    try{ const wrap = selOp && selOp.closest ? selOp.closest('label') : null; if (wrap) wrap.style.display = ''; }catch(_){ }
+  }
 
   // default operatore
-  if (!s.operatore) s.operatore = ops.length ? ops[0] : "__ALL__";
-  if (!opItems.some(o=>o.value === s.operatore)) s.operatore = ops.length ? ops[0] : "__ALL__";
+  if (!s.operatore) s.operatore = ops.length ? ops[0] : (opItems[0] ? opItems[0].value : "__ALL__");
+  if (!opItems.some(o=>o.value === s.operatore)) s.operatore = ops.length ? ops[0] : (opItems[0] ? opItems[0].value : "__ALL__");
 
   __fillSelect_(selOp, opItems, s.operatore);
 
