@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.071";
+const BUILD_VERSION = "dDAE_2.072";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -5695,17 +5695,51 @@ function setupProdotti(){
   if (sF) bindFastTap(sF, () => { state.prodottiUI = state.prodottiUI || {}; state.prodottiUI.sort = "frequent"; scrollTopList(); renderProdotti(); });
   if (sA) bindFastTap(sA, () => { state.prodottiUI = state.prodottiUI || {}; state.prodottiUI.sort = "alpha"; scrollTopList(); renderProdotti(); });
 
+
+
+
+
   if (btnReset) bindFastTap(btnReset, async () => {
     const action = __prodAction_();
     try{
-      await api(action, { method:"POST", body:{ op:"resetQty" }, showLoader:true });
-      await loadProdotti({ force:true, showLoader:false });
+      // UI immediata: azzera anche le spunte verdi
       __prodDraftClear_();
-      ( __prodStateBucket_().items || []).forEach(it => { it.qty = 0; it.saved = 0; });
+
+      const bucket = __prodStateBucket_();
+      const items = (bucket.items || []);
+      const checkedIds = [];
+
+      items.forEach((it) => {
+        if (__normBool01(it?.isDeleted)) return;
+        const id = String(it?.id || "").trim();
+        if (id && __normBool01(it?.checked) === 1) checkedIds.push(id);
+        it.qty = 0;
+        it.saved = 0;
+        it.checked = 0;
+        it.updatedAt = new Date().toISOString();
+      });
+
       renderProdotti();
       updateProdottiHomeBlink();
+
+      // Backend sync (non bloccare UI)
+      api(action, { method:"POST", body:{ op:"resetQty" }, showLoader:false })
+        .catch((e)=>{ try{ toast(e.message || "Errore"); }catch(_){ } });
+
+      if (checkedIds.length){
+        Promise.all(checkedIds.map((id) => (
+          api(action, { method:"PUT", body:{ id:String(id), checked:0 }, showLoader:false })
+        )))
+          .catch((e)=>{ try{ toast(e.message || "Errore"); }catch(_){ } });
+      }
     }catch(e){ toast(e.message); }
   });
+
+
+
+
+
+
 
   if (btnSave) bindFastTap(btnSave, async () => {
     const action = __prodAction_();
@@ -5714,31 +5748,48 @@ function setupProdotti(){
       const dirty = __prodDraftDirtyBucket_();
       const ids = Object.keys(dirty || {});
 
-      // 1) Applica le qty in bozza SOLO ora (niente refresh/PUT ad ogni tap)
+      const qtyById = {};
       for (const id of ids){
         const qn = parseInt(String(draft[id] ?? 0), 10);
         const qty = isNaN(qn) ? 0 : Math.max(0, qn);
+        qtyById[id] = qty;
+
         const it = findItem(id);
-        if (it){ it.qty = qty; it.saved = 0; it.updatedAt = new Date().toISOString(); }
-        await api(action, { method:"PUT", body:{ id: String(id), qty: qty, saved: 0 }, showLoader:false });
+        if (it){
+          it.qty = qty;
+          it.saved = 0;
+          it.updatedAt = new Date().toISOString();
+        }
       }
 
-      // 2) Salva (rende rossi i pallini con qty>0)
-      await api(action, { method:"POST", body:{ op:"save" }, showLoader:true });
-
-      // 3) Aggiorna localmente lo stato 'saved' (senza ricaricare tutta la lista)
+      // UI immediata: alla pressione di SALVA, i pallini rossi e i LED in Home devono aggiornarsi subito
       (__prodStateBucket_().items || []).forEach((it)=>{
         if (__normBool01(it?.isDeleted)) return;
         const n = parseInt(String(it?.qty ?? 0), 10);
         const q = isNaN(n) ? 0 : Math.max(0, n);
         it.saved = q > 0 ? 1 : 0;
+        it.updatedAt = new Date().toISOString();
       });
 
       __prodDraftClear_();
       renderProdotti();
       updateProdottiHomeBlink();
+
+      // Backend sync in background (non blocca UI)
+      const sync = async () => {
+        if (ids.length){
+          await Promise.all(ids.map((id) => (
+            api(action, { method:"PUT", body:{ id:String(id), qty: qtyById[id], saved: 0 }, showLoader:false })
+          )));
+        }
+        await api(action, { method:"POST", body:{ op:"save" }, showLoader:false });
+      };
+
+      sync().catch((e)=>{ try{ toast(e.message || "Errore"); }catch(_){ } });
     }catch(e){ toast(e.message); }
   });
+
+
 
   if (!list) return;
 
