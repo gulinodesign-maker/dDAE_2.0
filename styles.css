@@ -41,7 +41,7 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.078"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.075"),
     radial-gradient(900px 600px at 10% 0%, rgba(43,124,180,0.10), transparent 62%),
     radial-gradient(800px 520px at 90% 8%, rgba(201,119,43,0.10), transparent 64%),
     radial-gradient(900px 700px at 20% 100%, rgba(111,183,214,0.10), transparent 62%),
@@ -127,10 +127,7 @@ body{
 #prodottiTopTools,
 #statGenTopTools,
 #statMensiliTopTools,
-#statSpeseTopTools,
-#statPrenTopTools,
-#statAdminTopTools,
-#statSrlTopTools{
+#statSpeseTopTools{
   display: flex;
   align-items: center;
   gap: 6px;
@@ -141,10 +138,7 @@ body{
 #prodottiTopTools[hidden],
 #statGenTopTools[hidden],
 #statMensiliTopTools[hidden],
-#statSpeseTopTools[hidden],
-#statPrenTopTools[hidden],
-#statAdminTopTools[hidden],
-#statSrlTopTools[hidden]{ display:none !important; }
+#statSpeseTopTools[hidden]{ display:none !important; }
 .logo{
   width: 36px; height: 36px;
   border-radius: 12px;
@@ -859,7 +853,7 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.078"),
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.075"),
     radial-gradient(900px 650px at 12% 8%, rgba(43,124,180,0.18), transparent 62%),
     radial-gradient(820px 560px at 92% 14%, rgba(201,119,43,0.16), transparent 62%),
     radial-gradient(900px 700px at 18% 96%, rgba(111,183,214,0.16), transparent 62%),
@@ -6083,23 +6077,4 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 }
 .home-main.colazione-attn{
   animation: colazioneBlink 1.15s infinite;
-}
-
-
-/* STATISTICHE: dettagli a cascata (accordion) */
-.stat-row.stat-acc{
-  cursor: pointer;
-}
-.stat-detail{
-  margin: -4px 0 10px 0;
-  padding: 10px 12px;
-  border-radius: 14px;
-  background: rgba(255,255,255,0.78);
-  border: 1px solid rgba(15,23,42,0.10);
-  box-shadow: 0 10px 26px rgba(15,23,42,0.06);
-  font-size: 14px;
-  line-height: 1.35;
-}
-.stat-detail .muted{
-  opacity: 0.75;
 }

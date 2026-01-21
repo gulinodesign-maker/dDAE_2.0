@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.078";
+const BUILD_VERSION = "dDAE_2.075";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -1815,7 +1815,7 @@ function invalidateApiCache(prefix){
 }
 
 // ===== LocalStorage cache (perceived speed on iOS) =====
-const __lsPrefix = "ddae_cache_v2:";
+const __lsPrefix = "ddae_cache_v1:";
 function __lsClearAll(){
   try{
     const keys = [];
@@ -1954,12 +1954,7 @@ const lav = e.target.closest && e.target.closest("#goLavanderia") || e.target.cl
     const s4 = e.target.closest && e.target.closest("#goStatPrenotazioni");
     if (s4){ hideLauncher(); showPage("statprenotazioni"); return; }
 
-  
-    const s5 = e.target.closest && e.target.closest("#goStatAdmin");
-    if (s5){ hideLauncher(); showPage("statadmin"); return; }
-    const s6 = e.target.closest && e.target.closest("#goStatSrl");
-    if (s6){ hideLauncher(); showPage("statsrl"); return; }
-});
+  });
 }
 
 function bindLauncherDelegation(){
@@ -2165,17 +2160,6 @@ state.page = page;
     statPrenTopTools.hidden = (page !== "statprenotazioni");
   }
 
-
-  const statAdminTopTools = $("#statAdminTopTools");
-  if (statAdminTopTools){
-    statAdminTopTools.hidden = (page !== "statadmin");
-  }
-
-  const statSrlTopTools = $("#statSrlTopTools");
-  if (statSrlTopTools){
-    statSrlTopTools.hidden = (page !== "statsrl");
-  }
-
 // render on demand
   if (page === "prodotti") {
     const _nav = navId;
@@ -2260,25 +2244,6 @@ state.page = page;
       loadOspiti({ ...(state.period || {}), force:false }),
     ])
       .then(()=>{ if (state.navId !== _nav || state.page !== "statprenotazioni") return; renderStatPrenotazioni(); })
-      .catch(e=>toast(e.message));
-  }
-
-
-  if (page === "statadmin") {
-    const _nav = navId;
-    // usa solo dati locali (popup)
-    Promise.resolve()
-      .then(()=>{ if (state.navId !== _nav || state.page !== "statadmin") return; renderStatAdmin(); })
-      .catch(e=>toast(e.message));
-  }
-
-  if (page === "statsrl") {
-    const _nav = navId;
-    Promise.all([
-      ensurePeriodData({ showLoader:true }),
-      loadOspiti({ ...(state.period || {}), force:false }),
-    ])
-      .then(()=>{ if (state.navId !== _nav || state.page !== "statsrl") return; renderStatSrl(); })
       .catch(e=>toast(e.message));
   }
 
@@ -2459,12 +2424,7 @@ if (goCalendarioTopOspiti){
   const s4 = $("#goStatPrenotazioni");
   if (s4){ bindFastTap(s4, () => { hideLauncher(); showPage("statprenotazioni"); }); }
 
-  
-  const s5 = $("#goStatAdmin");
-  if (s5){ bindFastTap(s5, () => { hideLauncher(); showPage("statadmin"); }); }
-  const s6 = $("#goStatSrl");
-  if (s6){ bindFastTap(s6, () => { hideLauncher(); showPage("statsrl"); }); }
-// STATGEN: topbar tools
+  // STATGEN: topbar tools
   const btnBackStats = $("#btnBackStatistiche");
   if (btnBackStats){ bindFastTap(btnBackStats, () => { closeStatPieModal(); showPage("statistiche"); }); }
   // STATMENSILI: topbar tools
@@ -2501,27 +2461,6 @@ if (goCalendarioTopOspiti){
   if (btnBackStatsSpese){ bindFastTap(btnBackStatsSpese, () => { closeStatSpesePieModal(); showPage("statistiche"); }); }
   const btnBackStatsPren = $("#btnBackStatistichePrenotazioni");
   if (btnBackStatsPren){ bindFastTap(btnBackStatsPren, () => { showPage("statistiche"); }); }
-
-  // STATISTICHE: Amministratore / SRL topbar tools
-  const btnBackStatsAdmin = $("#btnBackStatisticheAdmin");
-  if (btnBackStatsAdmin){ bindFastTap(btnBackStatsAdmin, () => { showPage("statistiche"); }); }
-  const btnBackStatsSrl = $("#btnBackStatisticheSrl");
-  if (btnBackStatsSrl){ bindFastTap(btnBackStatsSrl, () => { showPage("statistiche"); }); }
-
-  const btnDataAdmin = $("#btnStatAdminData");
-  if (btnDataAdmin){ bindFastTap(btnDataAdmin, () => { openStatDataModal(); }); }
-  const btnDataSrl = $("#btnStatSrlData");
-  if (btnDataSrl){ bindFastTap(btnDataSrl, () => { openStatDataModal(); }); }
-
-  const statDataClose = $("#statDataClose");
-  if (statDataClose){ bindFastTap(statDataClose, () => closeStatDataModal()); }
-  const statDataModal = $("#statDataModal");
-  if (statDataModal){
-    statDataModal.addEventListener("click", (e)=>{ if (e.target === statDataModal) closeStatDataModal(); });
-  }
-  const statDataSave = $("#statDataSave");
-  if (statDataSave){ bindFastTap(statDataSave, () => saveStatDataFromModal()); }
-
   const btnPieSpese = $("#btnStatSpesePie");
   if (btnPieSpese){ bindFastTap(btnPieSpese, () => { openStatSpesePieModal(); }); }
 
@@ -2835,15 +2774,17 @@ async function loadOspiti({ from="", to="", force=false } = {}){
 
 async function ensurePeriodData({ showLoader=true, force=false } = {}){
   const { from, to } = state.period;
-  const key = `${from}|${to}`;
+  const uid = state?.session?.user_id ?? "anon";
+  const yr = state?.exerciseYear ?? "";
+  const key = `${uid}|${yr}|${from}|${to}`;
 
   if (!force && state._dataKey === key && state.report && Array.isArray(state.spese)) {
     return;
   }
 
   // Prefill immediato da cache locale (perceived speed) — poi refresh SWR
-  const lsSpeseKey = `spese|${ctxKey}|${from}|${to}`;
-  const lsReportKey = `report|${ctxKey}|${from}|${to}`;
+  const lsSpeseKey = `spese|${uid}|${yr}|${from}|${to}`;
+  const lsReportKey = `report|${uid}|${yr}|${from}|${to}`;
   const hitS = !force ? __lsGet(lsSpeseKey) : null;
   const hitR = !force ? __lsGet(lsReportKey) : null;
   const hasLocal = !!((hitS && hitS.data) || (hitR && hitR.data));
@@ -2863,7 +2804,7 @@ async function ensurePeriodData({ showLoader=true, force=false } = {}){
   if (hasLocal && !force) {
     fetchAll()
       .then(([report, spese]) => {
-        const kNow = `${state.period.from}|${state.period.to}`;
+    const kNow = `${(state?.session?.user_id ?? "anon")}|${(state?.exerciseYear ?? "")}|${state.period.from}|${state.period.to}`;
         if (kNow !== key) return;
         state.report = report;
         state.spese = Array.isArray(spese) ? spese : [];
@@ -3654,61 +3595,64 @@ function closeStatMensiliPieModal(){
 }
 
 function computeStatSpese(){
-  const r = state.report || null;
-  const by = (r && r.byCategoria) ? r.byCategoria : null;
+  // IMPORTANT: le spese devono essere per-account.
+  // Usiamo come fonte primaria le righe "spese" (che sono già scoperte per user_id lato API),
+  // e usiamo il report aggregato SOLO come fallback se non abbiamo righe.
+  const items = Array.isArray(state.spese) ? state.spese : [];
+  const acc = { CONTANTI:0, TASSA_SOGGIORNO:0, IVA_22:0, IVA_10:0, IVA_4:0 };
 
-  const get = (k) => {
-    try{ return Number(by?.[k]?.importoLordo || 0) || 0; }catch(_){ return 0; }
-  };
+  const uid = state?.session?.user_id ?? null;
 
-  let contanti = get("CONTANTI");
-  let tassa = get("TASSA_SOGGIORNO");
-  let iva22 = get("IVA_22");
-  let iva10 = get("IVA_10");
-  let iva4 = get("IVA_4");
+  for (const s of items){
+    // Safety: se per qualsiasi motivo arrivano righe di altri account, filtrale.
+    if (uid && s?.user_id && String(s.user_id) !== String(uid)) continue;
 
-  // Fallback: se il report non ha la breakdown, aggrega dalle spese
-  if (!by){
-    const items = Array.isArray(state.spese) ? state.spese : [];
-    const acc = { CONTANTI:0, TASSA_SOGGIORNO:0, IVA_22:0, IVA_10:0, IVA_4:0 };
+    const lordo = Number(s?.importoLordo || 0) || 0;
+    if (!isFinite(lordo) || lordo === 0) continue;
 
-    for (const s of items){
-      const lordo = Number(s?.importoLordo || 0) || 0;
-      if (!isFinite(lordo) || lordo === 0) continue;
+    const catRaw = (s?.categoria ?? s?.cat ?? "").toString().trim().toLowerCase();
 
-      const catRaw = (s?.categoria ?? s?.cat ?? "").toString().trim().toLowerCase();
+    if (catRaw.includes("contant")) { acc.CONTANTI += lordo; continue; }
+    if (catRaw.includes("tassa") && catRaw.includes("sogg")) { acc.TASSA_SOGGIORNO += lordo; continue; }
 
-      if (catRaw.includes("contant")) { acc.CONTANTI += lordo; continue; }
-      if (catRaw.includes("tassa") && catRaw.includes("sogg")) { acc.TASSA_SOGGIORNO += lordo; continue; }
-
-      if (catRaw.includes("iva")){
-        if (catRaw.includes("22")) { acc.IVA_22 += lordo; continue; }
-        if (catRaw.includes("10")) { acc.IVA_10 += lordo; continue; }
-        if (catRaw.includes("4")) { acc.IVA_4 += lordo; continue; }
-      }
-
-      // fallback su aliquota numerica
-      const n = parseFloat(String(s?.aliquotaIva ?? s?.aliquota_iva ?? "").replace(",","."));
-      if (!isNaN(n)){
-        if (n >= 21.5) acc.IVA_22 += lordo;
-        else if (n >= 9.5 && n < 11.5) acc.IVA_10 += lordo;
-        else if (n >= 3.5 && n < 5.5) acc.IVA_4 += lordo;
-      }
+    if (catRaw.includes("iva")){
+      if (catRaw.includes("22")) { acc.IVA_22 += lordo; continue; }
+      if (catRaw.includes("10")) { acc.IVA_10 += lordo; continue; }
+      if (catRaw.includes("4")) { acc.IVA_4 += lordo; continue; }
     }
 
-    contanti = acc.CONTANTI;
-    tassa = acc.TASSA_SOGGIORNO;
-    iva22 = acc.IVA_22;
-    iva10 = acc.IVA_10;
-    iva4 = acc.IVA_4;
+    // fallback su aliquota numerica
+    const n = parseFloat(String(s?.aliquotaIva ?? s?.aliquota_iva ?? "").replace(",","."));
+    if (!isNaN(n)){
+      if (n >= 21.5) acc.IVA_22 += lordo;
+      else if (n >= 9.5 && n < 11.5) acc.IVA_10 += lordo;
+      else if (n >= 3.5 && n < 5.5) acc.IVA_4 += lordo;
+    }
+  }
+
+  // Fallback: se non abbiamo righe, prova ad usare il report (può essere utile offline/legacy),
+  // ma NON deve mai mescolare account se il backend non filtra correttamente.
+  if (items.length === 0){
+    const r = state.report || null;
+    const by = (r && r.byCategoria) ? r.byCategoria : null;
+
+    const get = (k) => {
+      try{ return Number(by?.[k]?.importoLordo || 0) || 0; }catch(_){ return 0; }
+    };
+
+    acc.CONTANTI = get("CONTANTI");
+    acc.TASSA_SOGGIORNO = get("TASSA_SOGGIORNO");
+    acc.IVA_22 = get("IVA_22");
+    acc.IVA_10 = get("IVA_10");
+    acc.IVA_4 = get("IVA_4");
   }
 
   return {
-    contanti,
-    tassaSoggiorno: tassa,
-    iva22,
-    iva10,
-    iva4,
+    contanti: acc.CONTANTI,
+    tassa: acc.TASSA_SOGGIORNO,
+    iva22: acc.IVA_22,
+    iva10: acc.IVA_10,
+    iva4: acc.IVA_4,
   };
 }
 
