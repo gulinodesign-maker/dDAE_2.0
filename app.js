@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.078";
+const BUILD_VERSION = "dDAE_2.079";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -5681,22 +5681,12 @@ function renderProdotti(){
   if (!wrap) return;
 
   const key = __prodListKey_();
-  const action = __prodAction_();
   const bucket = __prodStateBucket_();
   const items = (bucket.items || []).filter(r => !__normBool01(r.isDeleted));
 
   let arr = items.slice();
-  const sort = (state.prodottiUI && state.prodottiUI.sort) ? state.prodottiUI.sort : "frequent";
-  if (sort === "alpha") {
-    arr.sort((a,b)=> __prodNameKey_(a).localeCompare(__prodNameKey_(b), "it", { sensitivity:"base" }));
-  } else {
-    arr.sort((a,b)=>{
-      const fa = getFreq_(action, String(a.id||""));
-      const fb = getFreq_(action, String(b.id||""));
-      if (fb !== fa) return fb - fa;
-      return __prodNameKey_(a).localeCompare(__prodNameKey_(b), "it", { sensitivity:"base" });
-    });
-  }
+  // sempre ordine alfabetico
+  arr.sort((a,b)=> __prodNameKey_(a).localeCompare(__prodNameKey_(b), "it", { sensitivity:"base" }));
 
   wrap.innerHTML = "";
   const frag = document.createDocumentFragment();
@@ -5807,13 +5797,13 @@ function setupProdotti(){
   if (btnHome) bindFastTap(btnHome, () => { closeModal(); showPage("home"); });
 
   if (tabC) bindFastTap(tabC, async () => {
-    state.prodottiUI = state.prodottiUI || { list:"colazione", sort:"frequent" };
+    state.prodottiUI = state.prodottiUI || { list:"colazione", sort:"alpha" };
     state.prodottiUI.list = "colazione";
     await loadProdottiList_("colazione", state.colazione, { force:false, showLoader:true });
     renderProdotti();
   });
   if (tabP) bindFastTap(tabP, async () => {
-    state.prodottiUI = state.prodottiUI || { list:"colazione", sort:"frequent" };
+    state.prodottiUI = state.prodottiUI || { list:"colazione", sort:"alpha" };
     state.prodottiUI.list = "pulizia";
     await loadProdottiList_("prodotti_pulizia", state.prodotti_pulizia, { force:false, showLoader:true });
     renderProdotti();
