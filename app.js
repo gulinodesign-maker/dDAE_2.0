@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.079";
+const BUILD_VERSION = "dDAE_2.074";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -1087,206 +1087,7 @@ function __apiProfile(action, method, body){
   return { timeoutMs, retries };
 }
 
-
-// =========================
-// Offline-first (IndexedDB + Outbox) - Build dDAE_2.079
-// =========================
-const __OFFLINE__ = {
-  enabled: true,
-  dbName: "dDAE_offline",
-  dbVersion: 1,
-  dbp: null,
-  syncing: false,
-  outboxCount: 0,
-};
-
-function __offlineCtxKey_(){
-  try{
-    const uid = String(state?.session?.user_id || "").trim() || "anon";
-    const yr = String(state?.exerciseYear || "").trim() || "";
-    return `${uid}:${yr}`;
-  }catch(_){ return "anon:"; }
-}
-
-function __stableJson_(obj){
-  try{
-    if (obj === null || obj === undefined) return "null";
-    if (typeof obj !== "object") return JSON.stringify(obj);
-    if (Array.isArray(obj)) return JSON.stringify(obj.map((x)=>JSON.parse(__stableJson_(x))));
-    const keys = Object.keys(obj).sort();
-    const o = {};
-    for (const k of keys) o[k] = obj[k];
-    return JSON.stringify(o);
-  }catch(_){
-    try{ return JSON.stringify(obj); }catch(__){ return "null"; }
-  }
-}
-
-function __cacheKey_(action, params){
-  const ctx = __offlineCtxKey_();
-  return `cache:${ctx}:${String(action||"")}:${__stableJson_(params||{})}`;
-}
-
-function __idbOpen_(){
-  if (__OFFLINE__.dbp) return __OFFLINE__.dbp;
-  __OFFLINE__.dbp = new Promise((resolve, reject) => {
-    try{
-      const req = indexedDB.open(__OFFLINE__.dbName, __OFFLINE__.dbVersion);
-      req.onupgradeneeded = () => {
-        const db = req.result;
-        if (!db.objectStoreNames.contains("cache")) db.createObjectStore("cache", { keyPath:"key" });
-        if (!db.objectStoreNames.contains("outbox")) db.createObjectStore("outbox", { keyPath:"id", autoIncrement:true });
-        if (!db.objectStoreNames.contains("meta")) db.createObjectStore("meta", { keyPath:"key" });
-      };
-      req.onsuccess = () => resolve(req.result);
-      req.onerror = () => reject(req.error || new Error("IndexedDB error"));
-    }catch(e){ reject(e); }
-  });
-  return __OFFLINE__.dbp;
-}
-
-async function __idbPut_(storeName, value){
-  const db = await __idbOpen_();
-  return await new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, "readwrite");
-    const st = tx.objectStore(storeName);
-    const req = st.put(value);
-    req.onsuccess = () => resolve(req.result);
-    req.onerror = () => reject(req.error || new Error("IDB put error"));
-  });
-}
-
-async function __idbGet_(storeName, key){
-  const db = await __idbOpen_();
-  return await new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, "readonly");
-    const st = tx.objectStore(storeName);
-    const req = st.get(key);
-    req.onsuccess = () => resolve(req.result || null);
-    req.onerror = () => reject(req.error || new Error("IDB get error"));
-  });
-}
-
-async function __idbDel_(storeName, key){
-  const db = await __idbOpen_();
-  return await new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, "readwrite");
-    const st = tx.objectStore(storeName);
-    const req = st.delete(key);
-    req.onsuccess = () => resolve(true);
-    req.onerror = () => reject(req.error || new Error("IDB del error"));
-  });
-}
-
-async function __idbGetAll_(storeName){
-  const db = await __idbOpen_();
-  return await new Promise((resolve, reject) => {
-    const tx = db.transaction(storeName, "readonly");
-    const st = tx.objectStore(storeName);
-    const req = st.getAll();
-    req.onsuccess = () => resolve(req.result || []);
-    req.onerror = () => reject(req.error || new Error("IDB getAll error"));
-  });
-}
-
-async function __offlineRefreshOutboxCount_(){
-  try{
-    const ops = await __idbGetAll_("outbox");
-    const ctx = __offlineCtxKey_();
-    __OFFLINE__.outboxCount = ops.filter(o => String(o?.ctx||"") === String(ctx)).length;
-  }catch(_){
-    __OFFLINE__.outboxCount = 0;
-  }
-  try{ updateSyncLed(); }catch(_){ }
-}
-
-function updateSyncLed(){
-  const led = document.getElementById("syncLed");
-  if (!led) return;
-  const hasPending = (__OFFLINE__.outboxCount || 0) > 0;
-  led.classList.toggle("is-red", !!hasPending);
-  led.classList.toggle("is-green", !hasPending);
-  try{ led.setAttribute("aria-label", hasPending ? "Dati non sincronizzati" : "Sincronizzato"); }catch(_){ }
-}
-
-async function __outboxEnqueue_(action, method, params, body){
-  try{
-    const op = {
-      action: String(action||""),
-      method: String(method||"GET"),
-      params: params || {},
-      body: (body === undefined ? null : body),
-      ctx: __offlineCtxKey_(),
-      createdAt: new Date().toISOString(),
-    };
-    try{
-      if (op.body && typeof op.body === "object" && op.body.id && (op.method === "PUT" || op.method === "POST" || op.method === "DELETE")){
-        op.dedupeKey = `${op.ctx}:${op.action}:${op.method}:${String(op.body.id)}`;
-      }
-    }catch(_){ }
-    await __idbPut_("outbox", op);
-    await __offlineRefreshOutboxCount_();
-  }catch(_){ }
-}
-
-async function __outboxFlush_({ showLoader=false } = {}){
-  if (!__OFFLINE__.enabled) return;
-  if (__OFFLINE__.syncing) return;
-  if (!navigator.onLine) { await __offlineRefreshOutboxCount_(); return; }
-
-  __OFFLINE__.syncing = true;
-  try{
-    const ctx = __offlineCtxKey_();
-    const opsAll = await __idbGetAll_("outbox");
-    const opsCtx = opsAll.filter(o => String(o?.ctx||"") === String(ctx));
-
-    // dedupe: keep last op per dedupeKey
-    const lastByKey = new Map();
-    const ordered = [];
-    for (const op of opsCtx){
-      if (op && op.dedupeKey){
-        lastByKey.set(op.dedupeKey, op);
-      } else {
-        ordered.push(op);
-      }
-    }
-    const deduped = ordered.concat(Array.from(lastByKey.values()).sort((a,b)=>(a.id||0)-(b.id||0)));
-
-    for (const op of deduped){
-      if (!op) continue;
-      try{
-        await api(op.action, { method: op.method, params: op.params||{}, body: op.body||null, showLoader: showLoader, allowCache:false, allowQueue:false, preferCache:false, _raw:true });
-        // remove op(s)
-        if (op.dedupeKey){
-          for (const o2 of opsCtx){
-            if (o2 && o2.dedupeKey === op.dedupeKey){
-              try{ await __idbDel_("outbox", o2.id); }catch(_){ }
-            }
-          }
-        } else {
-          try{ await __idbDel_("outbox", op.id); }catch(_){ }
-        }
-      }catch(e){
-        break; // stop on first failure
-      }
-    }
-  }catch(_){
-  }finally{
-    __OFFLINE__.syncing = false;
-    await __offlineRefreshOutboxCount_();
-  }
-}
-
-function __offlineStartSyncLoop_(){
-  try{ __offlineRefreshOutboxCount_().catch(()=>{}); }catch(_){ }
-  try{
-    window.addEventListener("online", () => { __outboxFlush_({ showLoader:false }).catch(()=>{}); });
-    document.addEventListener("visibilitychange", () => { if (!document.hidden) __outboxFlush_({ showLoader:false }).catch(()=>{}); });
-    setInterval(() => { __outboxFlush_({ showLoader:false }).catch(()=>{}); }, 30000);
-  }catch(_){ }
-}
-
-async function api(action, { method="GET", params={}, body=null, showLoader=true, allowCache=true, allowQueue=true, preferCache=false, _raw=false } = {}){
+async function api(action, { method="GET", params={}, body=null, showLoader=true } = {}){
   if (showLoader) beginRequest();
   try {
   if (!API_BASE_URL || API_BASE_URL.includes("INCOLLA_QUI")) {
@@ -1298,18 +1099,6 @@ async function api(action, { method="GET", params={}, body=null, showLoader=true
   url.searchParams.set("apiKey", API_KEY);
   // Cache-busting for iOS/Safari aggressive caching
   url.searchParams.set("_ts", String(Date.now()));
-
-  // Offline-first: cache GET per (user_id, anno, action, params)
-  const __isGet = (String(method||"GET").toUpperCase() === "GET");
-  const __cacheKey = (__OFFLINE__ && __OFFLINE__.enabled && __isGet && allowCache) ? __cacheKey_(action, params) : null;
-  if (!_raw && __cacheKey && (preferCache || !navigator.onLine)){
-    try{
-      const cached = await __idbGet_("cache", __cacheKey);
-      if (cached && cached.value){
-        try{ return JSON.parse(cached.value); }catch(_){ }
-      }
-    }catch(_){ }
-  }
 
   // Context multi-account (user + anno)
   try{
@@ -1410,14 +1199,6 @@ async function api(action, { method="GET", params={}, body=null, showLoader=true
         throw new Error("Connessione assente o instabile. Verifica la rete e riprova. Se il problema persiste: 1) Web App Apps Script distribuita come 'Chiunque', 2) URL /exec corretto, 3) hai ridistribuito una nuova versione dello script dopo modifiche.");
       }
 
-      // Offline-first: se fallisce una WRITE, metti in coda (outbox) per evitare perdita dati
-      const isWrite = (String(method||"GET").toUpperCase() !== "GET");
-      const canQueue = (__OFFLINE__ && __OFFLINE__.enabled && allowQueue && !_raw && isWrite && action !== "utenti" && action !== "ping");
-      if (canQueue){
-        try{ await __outboxEnqueue_(action, method, params, body); }catch(_){ }
-        try{ __outboxFlush_({ showLoader:false }).catch(()=>{}); }catch(_){ }
-        return { ok:true, queued:true };
-      }
       throw err;
     }finally{
       clearTimeout(t);
@@ -1430,12 +1211,6 @@ try {
 } catch (_) {
   throw new Error("Risposta non valida dal server");
 }
-
-  // Cache write on success (GET)
-  if (__OFFLINE__ && __OFFLINE__.enabled && __isGet && allowCache && __cacheKey){
-    try{ await __idbPut_("cache", { key: __cacheKey, value: JSON.stringify(json), ts: Date.now() }); }catch(_){ }
-  }
-
 
 if (!json.ok) throw new Error(json.error || "API error");
 return json.data;
@@ -2999,47 +2774,40 @@ async function loadOspiti({ from="", to="", force=false } = {}){
 
 async function ensurePeriodData({ showLoader=true, force=false } = {}){
   const { from, to } = state.period;
-  const uid = (state && state.session && state.session.user_id) ? String(state.session.user_id) : "";
-  const anno = (state && state.exerciseYear) ? String(state.exerciseYear) : "";
-  const key = `${uid}|${anno}|${from}|${to}`;
+  const key = `${from}|${to}`;
 
   if (!force && state._dataKey === key && state.report && Array.isArray(state.spese)) {
     return;
   }
 
   // Prefill immediato da cache locale (perceived speed) — poi refresh SWR
-  const lsSpeseKey = `spese|${uid}|${anno}|${from}|${to}`;
-  const lsReportKey = `report|${uid}|${anno}|${from}|${to}`;
+  const lsSpeseKey = `spese|${from}|${to}`;
+  const lsReportKey = `report|${from}|${to}`;
   const hitS = !force ? __lsGet(lsSpeseKey) : null;
   const hitR = !force ? __lsGet(lsReportKey) : null;
   const hasLocal = !!((hitS && hitS.data) || (hitR && hitR.data));
 
   if (!force) {
-    if (hitS && Array.isArray(hitS.data)) {
-      state.spese = hitS.data;
-      state.report = buildReportFromSpese(state.spese);
-    } else if (hitR && hitR.data) {
-      state.report = hitR.data;
-    }
+    if (hitS && Array.isArray(hitS.data)) state.spese = hitS.data;
+    if (hitR && hitR.data) state.report = hitR.data;
     if (hasLocal) state._dataKey = key;
   }
 
   const fetchAll = () => Promise.all([
+    cachedGet("report", { from, to }, { showLoader: showLoader && !hasLocal, ttlMs: 2*60*1000, swrMs: 10*60*1000, force }),
     cachedGet("spese", { from, to }, { showLoader: showLoader && !hasLocal, ttlMs: 2*60*1000, swrMs: 10*60*1000, force }),
   ]);
 
   // Se ho cache locale e non forzo, non bloccare la navigazione: aggiorna in background
   if (hasLocal && !force) {
     fetchAll()
-      .then(([spese]) => {
-                const uidNow = (state && state.session && state.session.user_id) ? String(state.session.user_id) : "";
-        const annoNow = (state && state.exerciseYear) ? String(state.exerciseYear) : "";
-        const kNow = `${uidNow}|${annoNow}|${state.period.from}|${state.period.to}`;
+      .then(([report, spese]) => {
+        const kNow = `${state.period.from}|${state.period.to}`;
         if (kNow !== key) return;
+        state.report = report;
         state.spese = Array.isArray(spese) ? spese : [];
-        state.report = buildReportFromSpese(state.spese);
         state._dataKey = key;
-        __lsSet(lsReportKey, state.report);
+        __lsSet(lsReportKey, report);
         __lsSet(lsSpeseKey, state.spese);
 
         // refresh UI se siamo su pagine che dipendono da questi dati
@@ -3057,11 +2825,11 @@ async function ensurePeriodData({ showLoader=true, force=false } = {}){
     return;
   }
 
-  const [spese] = await fetchAll();
+  const [report, spese] = await fetchAll();
+  state.report = report;
   state.spese = Array.isArray(spese) ? spese : [];
-  state.report = buildReportFromSpese(state.spese);
   state._dataKey = key;
-  __lsSet(lsReportKey, state.report);
+  __lsSet(lsReportKey, report);
   __lsSet(lsSpeseKey, state.spese);
 }
 
@@ -3213,8 +2981,8 @@ function renderSpese(){
 
 /* 3) RIEPILOGO */
 function renderRiepilogo(){
-  const r = buildReportFromSpese(state.spese);
-  state.report = r;
+  const r = state.report;
+  if (!r) return;
 
   $("#kpiTotSpese").textContent = euro(r.totals.importoLordo);
   $("#kpiIvaDetraibile").textContent = euro(r.totals.ivaDetraibile);
@@ -3245,9 +3013,8 @@ function renderRiepilogo(){
 
 /* 4) GRAFICO */
 function renderGrafico(){
-  // Usa report locale calcolato dalle spese correnti (evita mix multi-account)
-  const r = buildReportFromSpese(state.spese);
-  state.report = r;
+  const r = state.report;
+  if (!r) return;
 
   const by = r.byCategoria || {};
   const order = ["CONTANTI","TASSA_SOGGIORNO","IVA_22","IVA_10","IVA_4"];
@@ -3432,20 +3199,10 @@ function computeStatGen(){
     }
   }
 
-  let speseTot = 0;
+  const speseTot = money(report?.totals?.importoLordo ?? 0);
 
-  try{
-    const items = Array.isArray(state.spese) ? state.spese : [];
-    let sum = 0;
-    for (const it of items){
-      sum += money(it?.importoLordo ?? it?.lordo ?? 0);
-    }
-    speseTot = sum;
-  }catch(_){
-    speseTot = 0;
-  }
-
-  let ivaSpese = 0;
+  // IVA da versare = (10% del fatturato alloggi) - (somma IVA di tutte le spese al 4/10/22)
+  let ivaSpese = money(report?.totals?.iva ?? 0);
   if (!isFinite(ivaSpese) || ivaSpese === 0){
     ivaSpese = money(report?.totals?.ivaDetraibile ?? 0);
   }
@@ -3836,134 +3593,63 @@ function closeStatMensiliPieModal(){
 }
 
 function computeStatSpese(){
-  const items = Array.isArray(state.spese) ? state.spese : [];
-  const acc = { CONTANTI:0, TASSA_SOGGIORNO:0, IVA_22:0, IVA_10:0, IVA_4:0 };
+  const r = state.report || null;
+  const by = (r && r.byCategoria) ? r.byCategoria : null;
 
-  const money = (v) => {
-    if (v === null || v === undefined) return 0;
-    if (typeof v === "number") return isFinite(v) ? v : 0;
-    let s = String(v).trim();
-    if (!s) return 0;
-    if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
-    else if (s.includes(",")) s = s.replace(",", ".");
-    const n = Number(s);
-    return isFinite(n) ? n : 0;
+  const get = (k) => {
+    try{ return Number(by?.[k]?.importoLordo || 0) || 0; }catch(_){ return 0; }
   };
 
-  for (const s of items){
-    const lordo = money(s?.importoLordo ?? s?.lordo ?? 0);
-    if (!isFinite(lordo) || lordo === 0) continue;
+  let contanti = get("CONTANTI");
+  let tassa = get("TASSA_SOGGIORNO");
+  let iva22 = get("IVA_22");
+  let iva10 = get("IVA_10");
+  let iva4 = get("IVA_4");
 
-    const catRaw = (s?.categoria ?? s?.cat ?? "").toString().trim().toLowerCase();
+  // Fallback: se il report non ha la breakdown, aggrega dalle spese
+  if (!by){
+    const items = Array.isArray(state.spese) ? state.spese : [];
+    const acc = { CONTANTI:0, TASSA_SOGGIORNO:0, IVA_22:0, IVA_10:0, IVA_4:0 };
 
-    if (catRaw.includes("contant")) { acc.CONTANTI += lordo; continue; }
-    if (catRaw.includes("tassa") && catRaw.includes("sogg")) { acc.TASSA_SOGGIORNO += lordo; continue; }
+    for (const s of items){
+      const lordo = Number(s?.importoLordo || 0) || 0;
+      if (!isFinite(lordo) || lordo === 0) continue;
 
-    if (catRaw.includes("iva")){
-      if (catRaw.includes("22")) { acc.IVA_22 += lordo; continue; }
-      if (catRaw.includes("10")) { acc.IVA_10 += lordo; continue; }
-      if (catRaw.includes("4")) { acc.IVA_4 += lordo; continue; }
-    }
+      const catRaw = (s?.categoria ?? s?.cat ?? "").toString().trim().toLowerCase();
 
-    // fallback su aliquota numerica
-    const n = parseFloat(String(s?.aliquotaIva ?? s?.aliquota_iva ?? "").replace(",","."));
-    if (!isNaN(n)){
-      if (n >= 21.5) acc.IVA_22 += lordo;
-      else if (n >= 9.5 && n < 11.5) acc.IVA_10 += lordo;
-      else if (n >= 3.5 && n < 5.5) acc.IVA_4 += lordo;
-    }
-  }
+      if (catRaw.includes("contant")) { acc.CONTANTI += lordo; continue; }
+      if (catRaw.includes("tassa") && catRaw.includes("sogg")) { acc.TASSA_SOGGIORNO += lordo; continue; }
 
-  return {
-    contanti: acc.CONTANTI,
-    tassaSoggiorno: acc.TASSA_SOGGIORNO,
-    iva22: acc.IVA_22,
-    iva10: acc.IVA_10,
-    iva4: acc.IVA_4,
-  };
-}// ===== Report locale (per-account): calcolato dalla lista spese corrente =====
-function buildReportFromSpese(items){
-  const list = Array.isArray(items) ? items : [];
-  const money = (v) => {
-    if (v === null || v === undefined) return 0;
-    if (typeof v === "number") return isFinite(v) ? v : 0;
-    let s = String(v).trim();
-    if (!s) return 0;
-    if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
-    else if (s.includes(",")) s = s.replace(",", ".");
-    const n = Number(s);
-    return isFinite(n) ? n : 0;
-  };
+      if (catRaw.includes("iva")){
+        if (catRaw.includes("22")) { acc.IVA_22 += lordo; continue; }
+        if (catRaw.includes("10")) { acc.IVA_10 += lordo; continue; }
+        if (catRaw.includes("4")) { acc.IVA_4 += lordo; continue; }
+      }
 
-  const normCat = (row) => {
-    const catRaw = (row?.categoria ?? row?.cat ?? "").toString().trim().toLowerCase();
-    const aliqRaw = (row?.aliquotaIva ?? row?.aliquota_iva ?? "").toString().trim();
-
-    if (catRaw.includes("contant")) return "CONTANTI";
-    if (catRaw.includes("tassa") && catRaw.includes("sogg")) return "TASSA_SOGGIORNO";
-
-    if (catRaw.includes("iva")){
-      if (catRaw.includes("22")) return "IVA_22";
-      if (catRaw.includes("10")) return "IVA_10";
-      if (catRaw.includes("4")) return "IVA_4";
-    }
-
-    const n = parseFloat(aliqRaw.replace(",", "."));
-    if (!isNaN(n)){
-      if (n >= 21.5) return "IVA_22";
-      if (n >= 9.5 && n < 11.5) return "IVA_10";
-      if (n >= 3.5 && n < 5.5) return "IVA_4";
-    }
-    return null;
-  };
-
-  const totals = { importoLordo:0, imponibile:0, iva:0, ivaDetraibile:0 };
-  const byCategoria = {
-    CONTANTI:{ importoLordo:0, imponibile:0, iva:0, ivaDetraibile:0 },
-    TASSA_SOGGIORNO:{ importoLordo:0, imponibile:0, iva:0, ivaDetraibile:0 },
-    IVA_22:{ importoLordo:0, imponibile:0, iva:0, ivaDetraibile:0 },
-    IVA_10:{ importoLordo:0, imponibile:0, iva:0, ivaDetraibile:0 },
-    IVA_4:{ importoLordo:0, imponibile:0, iva:0, ivaDetraibile:0 },
-  };
-
-  for (const row of list){
-    const lordo = money(row?.importoLordo ?? row?.lordo ?? row?.importo ?? 0);
-    let imponibile = money(row?.imponibile ?? 0);
-    let iva = money(row?.iva ?? 0);
-    let ivaDet = money(row?.ivaDetraibile ?? row?.iva_detraibile ?? 0);
-
-    // Se mancano imponibile/iva ma ho aliquota e lordo, ricava
-    if ((imponibile === 0 && iva === 0) && lordo > 0){
-      const aliqRaw = (row?.aliquotaIva ?? row?.aliquota_iva ?? "").toString().trim();
-      const rate = parseFloat(aliqRaw.replace(",", "."));
-      if (!isNaN(rate) && rate > 0){
-        const imp = lordo / (1 + rate/100);
-        const iv = lordo - imp;
-        if (isFinite(imp)) imponibile = imp;
-        if (isFinite(iv)) iva = iv;
+      // fallback su aliquota numerica
+      const n = parseFloat(String(s?.aliquotaIva ?? s?.aliquota_iva ?? "").replace(",","."));
+      if (!isNaN(n)){
+        if (n >= 21.5) acc.IVA_22 += lordo;
+        else if (n >= 9.5 && n < 11.5) acc.IVA_10 += lordo;
+        else if (n >= 3.5 && n < 5.5) acc.IVA_4 += lordo;
       }
     }
 
-    // Se non c'e' ivaDetraibile, usa iva come fallback (mantiene KPI coerenti)
-    if (!ivaDet && iva) ivaDet = iva;
-
-    totals.importoLordo += lordo;
-    totals.imponibile += imponibile;
-    totals.iva += iva;
-    totals.ivaDetraibile += ivaDet;
-
-    const k = normCat(row);
-    if (k && byCategoria[k]){
-      byCategoria[k].importoLordo += lordo;
-      byCategoria[k].imponibile += imponibile;
-      byCategoria[k].iva += iva;
-      byCategoria[k].ivaDetraibile += ivaDet;
-    }
+    contanti = acc.CONTANTI;
+    tassa = acc.TASSA_SOGGIORNO;
+    iva22 = acc.IVA_22;
+    iva10 = acc.IVA_10;
+    iva4 = acc.IVA_4;
   }
 
-  return { totals, byCategoria, source: "local_spese" };
+  return {
+    contanti,
+    tassaSoggiorno: tassa,
+    iva22,
+    iva10,
+    iva4,
+  };
 }
-
 
 function renderStatSpese(){
   const s = computeStatSpese();
@@ -6127,23 +5813,17 @@ function setupProdotti(){
       renderProdotti();
       updateProdottiHomeBlink();
 
-      // Backend sync: prima in coda (persistente), poi tentativo di flush
-      try{
+      // Backend sync in background (non blocca UI)
+      const sync = async () => {
         if (ids.length){
-          for (const id of ids){
-            try{ await __outboxEnqueue_(action, "PUT", {}, { id:String(id), qty: qtyById[id], saved: 0 }); }catch(_){ }
-          }
+          await Promise.all(ids.map((id) => (
+            api(action, { method:"PUT", body:{ id:String(id), qty: qtyById[id], saved: 0 }, showLoader:false })
+          )));
         }
-        try{ await __outboxEnqueue_(action, "POST", {}, { op:"save" }); }catch(_){ }
+        await api(action, { method:"POST", body:{ op:"save" }, showLoader:false });
+      };
 
-        // Tentativo immediato (con clessidra)
-        try{ beginRequest(); }catch(_){ }
-        try{ await __outboxFlush_({ showLoader:false }); }catch(_){ }
-        try{ endRequest(); }catch(_){ }
-        try{ toast((__OFFLINE__.outboxCount||0) > 0 ? "In coda" : "Salvato"); }catch(_){ }
-      }catch(e){
-        try{ toast(e.message || "Errore"); }catch(_){ }
-      }
+      sync().catch((e)=>{ try{ toast(e.message || "Errore"); }catch(_){ } });
     }catch(e){ toast(e.message); }
   });
 
@@ -6575,7 +6255,6 @@ async function init(){
   const __restore = __readRestoreState();
   // Session + anno
   state.session = loadSession();
-  try{ __offlineRefreshOutboxCount_().catch(()=>{}); }catch(_){ }
   state.exerciseYear = loadExerciseYear();
   updateYearPill();
 
