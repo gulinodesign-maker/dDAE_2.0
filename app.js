@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.074";
+const BUILD_VERSION = "dDAE_2.078";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -2774,40 +2774,47 @@ async function loadOspiti({ from="", to="", force=false } = {}){
 
 async function ensurePeriodData({ showLoader=true, force=false } = {}){
   const { from, to } = state.period;
-  const key = `${from}|${to}`;
+  const uid = (state && state.session && state.session.user_id) ? String(state.session.user_id) : "";
+  const anno = (state && state.exerciseYear) ? String(state.exerciseYear) : "";
+  const key = `${uid}|${anno}|${from}|${to}`;
 
   if (!force && state._dataKey === key && state.report && Array.isArray(state.spese)) {
     return;
   }
 
   // Prefill immediato da cache locale (perceived speed) — poi refresh SWR
-  const lsSpeseKey = `spese|${from}|${to}`;
-  const lsReportKey = `report|${from}|${to}`;
+  const lsSpeseKey = `spese|${uid}|${anno}|${from}|${to}`;
+  const lsReportKey = `report|${uid}|${anno}|${from}|${to}`;
   const hitS = !force ? __lsGet(lsSpeseKey) : null;
   const hitR = !force ? __lsGet(lsReportKey) : null;
   const hasLocal = !!((hitS && hitS.data) || (hitR && hitR.data));
 
   if (!force) {
-    if (hitS && Array.isArray(hitS.data)) state.spese = hitS.data;
-    if (hitR && hitR.data) state.report = hitR.data;
+    if (hitS && Array.isArray(hitS.data)) {
+      state.spese = hitS.data;
+      state.report = buildReportFromSpese(state.spese);
+    } else if (hitR && hitR.data) {
+      state.report = hitR.data;
+    }
     if (hasLocal) state._dataKey = key;
   }
 
   const fetchAll = () => Promise.all([
-    cachedGet("report", { from, to }, { showLoader: showLoader && !hasLocal, ttlMs: 2*60*1000, swrMs: 10*60*1000, force }),
     cachedGet("spese", { from, to }, { showLoader: showLoader && !hasLocal, ttlMs: 2*60*1000, swrMs: 10*60*1000, force }),
   ]);
 
   // Se ho cache locale e non forzo, non bloccare la navigazione: aggiorna in background
   if (hasLocal && !force) {
     fetchAll()
-      .then(([report, spese]) => {
-        const kNow = `${state.period.from}|${state.period.to}`;
+      .then(([spese]) => {
+                const uidNow = (state && state.session && state.session.user_id) ? String(state.session.user_id) : "";
+        const annoNow = (state && state.exerciseYear) ? String(state.exerciseYear) : "";
+        const kNow = `${uidNow}|${annoNow}|${state.period.from}|${state.period.to}`;
         if (kNow !== key) return;
-        state.report = report;
         state.spese = Array.isArray(spese) ? spese : [];
+        state.report = buildReportFromSpese(state.spese);
         state._dataKey = key;
-        __lsSet(lsReportKey, report);
+        __lsSet(lsReportKey, state.report);
         __lsSet(lsSpeseKey, state.spese);
 
         // refresh UI se siamo su pagine che dipendono da questi dati
@@ -2825,11 +2832,11 @@ async function ensurePeriodData({ showLoader=true, force=false } = {}){
     return;
   }
 
-  const [report, spese] = await fetchAll();
-  state.report = report;
+  const [spese] = await fetchAll();
   state.spese = Array.isArray(spese) ? spese : [];
+  state.report = buildReportFromSpese(state.spese);
   state._dataKey = key;
-  __lsSet(lsReportKey, report);
+  __lsSet(lsReportKey, state.report);
   __lsSet(lsSpeseKey, state.spese);
 }
 
@@ -2981,8 +2988,8 @@ function renderSpese(){
 
 /* 3) RIEPILOGO */
 function renderRiepilogo(){
-  const r = state.report;
-  if (!r) return;
+  const r = buildReportFromSpese(state.spese);
+  state.report = r;
 
   $("#kpiTotSpese").textContent = euro(r.totals.importoLordo);
   $("#kpiIvaDetraibile").textContent = euro(r.totals.ivaDetraibile);
@@ -3013,8 +3020,9 @@ function renderRiepilogo(){
 
 /* 4) GRAFICO */
 function renderGrafico(){
-  const r = state.report;
-  if (!r) return;
+  // Usa report locale calcolato dalle spese correnti (evita mix multi-account)
+  const r = buildReportFromSpese(state.spese);
+  state.report = r;
 
   const by = r.byCategoria || {};
   const order = ["CONTANTI","TASSA_SOGGIORNO","IVA_22","IVA_10","IVA_4"];
@@ -3199,10 +3207,20 @@ function computeStatGen(){
     }
   }
 
-  const speseTot = money(report?.totals?.importoLordo ?? 0);
+  let speseTot = 0;
 
-  // IVA da versare = (10% del fatturato alloggi) - (somma IVA di tutte le spese al 4/10/22)
-  let ivaSpese = money(report?.totals?.iva ?? 0);
+  try{
+    const items = Array.isArray(state.spese) ? state.spese : [];
+    let sum = 0;
+    for (const it of items){
+      sum += money(it?.importoLordo ?? it?.lordo ?? 0);
+    }
+    speseTot = sum;
+  }catch(_){
+    speseTot = 0;
+  }
+
+  let ivaSpese = 0;
   if (!isFinite(ivaSpese) || ivaSpese === 0){
     ivaSpese = money(report?.totals?.ivaDetraibile ?? 0);
   }
@@ -3593,63 +3611,134 @@ function closeStatMensiliPieModal(){
 }
 
 function computeStatSpese(){
-  const r = state.report || null;
-  const by = (r && r.byCategoria) ? r.byCategoria : null;
+  const items = Array.isArray(state.spese) ? state.spese : [];
+  const acc = { CONTANTI:0, TASSA_SOGGIORNO:0, IVA_22:0, IVA_10:0, IVA_4:0 };
 
-  const get = (k) => {
-    try{ return Number(by?.[k]?.importoLordo || 0) || 0; }catch(_){ return 0; }
+  const money = (v) => {
+    if (v === null || v === undefined) return 0;
+    if (typeof v === "number") return isFinite(v) ? v : 0;
+    let s = String(v).trim();
+    if (!s) return 0;
+    if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
+    else if (s.includes(",")) s = s.replace(",", ".");
+    const n = Number(s);
+    return isFinite(n) ? n : 0;
   };
 
-  let contanti = get("CONTANTI");
-  let tassa = get("TASSA_SOGGIORNO");
-  let iva22 = get("IVA_22");
-  let iva10 = get("IVA_10");
-  let iva4 = get("IVA_4");
+  for (const s of items){
+    const lordo = money(s?.importoLordo ?? s?.lordo ?? 0);
+    if (!isFinite(lordo) || lordo === 0) continue;
 
-  // Fallback: se il report non ha la breakdown, aggrega dalle spese
-  if (!by){
-    const items = Array.isArray(state.spese) ? state.spese : [];
-    const acc = { CONTANTI:0, TASSA_SOGGIORNO:0, IVA_22:0, IVA_10:0, IVA_4:0 };
+    const catRaw = (s?.categoria ?? s?.cat ?? "").toString().trim().toLowerCase();
 
-    for (const s of items){
-      const lordo = Number(s?.importoLordo || 0) || 0;
-      if (!isFinite(lordo) || lordo === 0) continue;
+    if (catRaw.includes("contant")) { acc.CONTANTI += lordo; continue; }
+    if (catRaw.includes("tassa") && catRaw.includes("sogg")) { acc.TASSA_SOGGIORNO += lordo; continue; }
 
-      const catRaw = (s?.categoria ?? s?.cat ?? "").toString().trim().toLowerCase();
-
-      if (catRaw.includes("contant")) { acc.CONTANTI += lordo; continue; }
-      if (catRaw.includes("tassa") && catRaw.includes("sogg")) { acc.TASSA_SOGGIORNO += lordo; continue; }
-
-      if (catRaw.includes("iva")){
-        if (catRaw.includes("22")) { acc.IVA_22 += lordo; continue; }
-        if (catRaw.includes("10")) { acc.IVA_10 += lordo; continue; }
-        if (catRaw.includes("4")) { acc.IVA_4 += lordo; continue; }
-      }
-
-      // fallback su aliquota numerica
-      const n = parseFloat(String(s?.aliquotaIva ?? s?.aliquota_iva ?? "").replace(",","."));
-      if (!isNaN(n)){
-        if (n >= 21.5) acc.IVA_22 += lordo;
-        else if (n >= 9.5 && n < 11.5) acc.IVA_10 += lordo;
-        else if (n >= 3.5 && n < 5.5) acc.IVA_4 += lordo;
-      }
+    if (catRaw.includes("iva")){
+      if (catRaw.includes("22")) { acc.IVA_22 += lordo; continue; }
+      if (catRaw.includes("10")) { acc.IVA_10 += lordo; continue; }
+      if (catRaw.includes("4")) { acc.IVA_4 += lordo; continue; }
     }
 
-    contanti = acc.CONTANTI;
-    tassa = acc.TASSA_SOGGIORNO;
-    iva22 = acc.IVA_22;
-    iva10 = acc.IVA_10;
-    iva4 = acc.IVA_4;
+    // fallback su aliquota numerica
+    const n = parseFloat(String(s?.aliquotaIva ?? s?.aliquota_iva ?? "").replace(",","."));
+    if (!isNaN(n)){
+      if (n >= 21.5) acc.IVA_22 += lordo;
+      else if (n >= 9.5 && n < 11.5) acc.IVA_10 += lordo;
+      else if (n >= 3.5 && n < 5.5) acc.IVA_4 += lordo;
+    }
   }
 
   return {
-    contanti,
-    tassaSoggiorno: tassa,
-    iva22,
-    iva10,
-    iva4,
+    contanti: acc.CONTANTI,
+    tassaSoggiorno: acc.TASSA_SOGGIORNO,
+    iva22: acc.IVA_22,
+    iva10: acc.IVA_10,
+    iva4: acc.IVA_4,
   };
+}// ===== Report locale (per-account): calcolato dalla lista spese corrente =====
+function buildReportFromSpese(items){
+  const list = Array.isArray(items) ? items : [];
+  const money = (v) => {
+    if (v === null || v === undefined) return 0;
+    if (typeof v === "number") return isFinite(v) ? v : 0;
+    let s = String(v).trim();
+    if (!s) return 0;
+    if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
+    else if (s.includes(",")) s = s.replace(",", ".");
+    const n = Number(s);
+    return isFinite(n) ? n : 0;
+  };
+
+  const normCat = (row) => {
+    const catRaw = (row?.categoria ?? row?.cat ?? "").toString().trim().toLowerCase();
+    const aliqRaw = (row?.aliquotaIva ?? row?.aliquota_iva ?? "").toString().trim();
+
+    if (catRaw.includes("contant")) return "CONTANTI";
+    if (catRaw.includes("tassa") && catRaw.includes("sogg")) return "TASSA_SOGGIORNO";
+
+    if (catRaw.includes("iva")){
+      if (catRaw.includes("22")) return "IVA_22";
+      if (catRaw.includes("10")) return "IVA_10";
+      if (catRaw.includes("4")) return "IVA_4";
+    }
+
+    const n = parseFloat(aliqRaw.replace(",", "."));
+    if (!isNaN(n)){
+      if (n >= 21.5) return "IVA_22";
+      if (n >= 9.5 && n < 11.5) return "IVA_10";
+      if (n >= 3.5 && n < 5.5) return "IVA_4";
+    }
+    return null;
+  };
+
+  const totals = { importoLordo:0, imponibile:0, iva:0, ivaDetraibile:0 };
+  const byCategoria = {
+    CONTANTI:{ importoLordo:0, imponibile:0, iva:0, ivaDetraibile:0 },
+    TASSA_SOGGIORNO:{ importoLordo:0, imponibile:0, iva:0, ivaDetraibile:0 },
+    IVA_22:{ importoLordo:0, imponibile:0, iva:0, ivaDetraibile:0 },
+    IVA_10:{ importoLordo:0, imponibile:0, iva:0, ivaDetraibile:0 },
+    IVA_4:{ importoLordo:0, imponibile:0, iva:0, ivaDetraibile:0 },
+  };
+
+  for (const row of list){
+    const lordo = money(row?.importoLordo ?? row?.lordo ?? row?.importo ?? 0);
+    let imponibile = money(row?.imponibile ?? 0);
+    let iva = money(row?.iva ?? 0);
+    let ivaDet = money(row?.ivaDetraibile ?? row?.iva_detraibile ?? 0);
+
+    // Se mancano imponibile/iva ma ho aliquota e lordo, ricava
+    if ((imponibile === 0 && iva === 0) && lordo > 0){
+      const aliqRaw = (row?.aliquotaIva ?? row?.aliquota_iva ?? "").toString().trim();
+      const rate = parseFloat(aliqRaw.replace(",", "."));
+      if (!isNaN(rate) && rate > 0){
+        const imp = lordo / (1 + rate/100);
+        const iv = lordo - imp;
+        if (isFinite(imp)) imponibile = imp;
+        if (isFinite(iv)) iva = iv;
+      }
+    }
+
+    // Se non c'e' ivaDetraibile, usa iva come fallback (mantiene KPI coerenti)
+    if (!ivaDet && iva) ivaDet = iva;
+
+    totals.importoLordo += lordo;
+    totals.imponibile += imponibile;
+    totals.iva += iva;
+    totals.ivaDetraibile += ivaDet;
+
+    const k = normCat(row);
+    if (k && byCategoria[k]){
+      byCategoria[k].importoLordo += lordo;
+      byCategoria[k].imponibile += imponibile;
+      byCategoria[k].iva += iva;
+      byCategoria[k].ivaDetraibile += ivaDet;
+    }
+  }
+
+  return { totals, byCategoria, source: "local_spese" };
 }
+
 
 function renderStatSpese(){
   const s = computeStatSpese();
