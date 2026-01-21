@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.075";
+const BUILD_VERSION = "dDAE_2.076";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -2774,17 +2774,17 @@ async function loadOspiti({ from="", to="", force=false } = {}){
 
 async function ensurePeriodData({ showLoader=true, force=false } = {}){
   const { from, to } = state.period;
-  const uid = state?.session?.user_id ?? "anon";
-  const yr = state?.exerciseYear ?? "";
-  const key = `${uid}|${yr}|${from}|${to}`;
+  const uid = (state && state.session && state.session.user_id) ? String(state.session.user_id) : "";
+  const anno = (state && state.exerciseYear) ? String(state.exerciseYear) : "";
+  const key = `${uid}|${anno}|${from}|${to}`;
 
   if (!force && state._dataKey === key && state.report && Array.isArray(state.spese)) {
     return;
   }
 
   // Prefill immediato da cache locale (perceived speed) — poi refresh SWR
-  const lsSpeseKey = `spese|${uid}|${yr}|${from}|${to}`;
-  const lsReportKey = `report|${uid}|${yr}|${from}|${to}`;
+  const lsSpeseKey = `spese|${uid}|${anno}|${from}|${to}`;
+  const lsReportKey = `report|${uid}|${anno}|${from}|${to}`;
   const hitS = !force ? __lsGet(lsSpeseKey) : null;
   const hitR = !force ? __lsGet(lsReportKey) : null;
   const hasLocal = !!((hitS && hitS.data) || (hitR && hitR.data));
@@ -2804,7 +2804,9 @@ async function ensurePeriodData({ showLoader=true, force=false } = {}){
   if (hasLocal && !force) {
     fetchAll()
       .then(([report, spese]) => {
-    const kNow = `${(state?.session?.user_id ?? "anon")}|${(state?.exerciseYear ?? "")}|${state.period.from}|${state.period.to}`;
+                const uidNow = (state && state.session && state.session.user_id) ? String(state.session.user_id) : "";
+        const annoNow = (state && state.exerciseYear) ? String(state.exerciseYear) : "";
+        const kNow = `${uidNow}|${annoNow}|${state.period.from}|${state.period.to}`;
         if (kNow !== key) return;
         state.report = report;
         state.spese = Array.isArray(spese) ? spese : [];
@@ -3201,9 +3203,24 @@ function computeStatGen(){
     }
   }
 
-  const speseTot = money(report?.totals?.importoLordo ?? 0);
+  let speseTot = 0;
 
-  // IVA da versare = (10% del fatturato alloggi) - (somma IVA di tutte le spese al 4/10/22)
+  try{
+    const items = Array.isArray(state.spese) ? state.spese : [];
+    if (items.length){
+      let sum = 0;
+      for (const it of items){
+        sum += money(it?.importoLordo ?? it?.lordo ?? 0);
+      }
+      speseTot = sum;
+    } else {
+      speseTot = money(report?.totals?.importoLordo ?? 0);
+    }
+  }catch(_){
+    speseTot = money(report?.totals?.importoLordo ?? 0);
+  }
+
+// IVA da versare = (10% del fatturato alloggi) - (somma IVA di tutte le spese al 4/10/22)
   let ivaSpese = money(report?.totals?.iva ?? 0);
   if (!isFinite(ivaSpese) || ivaSpese === 0){
     ivaSpese = money(report?.totals?.ivaDetraibile ?? 0);
@@ -3595,19 +3612,22 @@ function closeStatMensiliPieModal(){
 }
 
 function computeStatSpese(){
-  // IMPORTANT: le spese devono essere per-account.
-  // Usiamo come fonte primaria le righe "spese" (che sono già scoperte per user_id lato API),
-  // e usiamo il report aggregato SOLO come fallback se non abbiamo righe.
   const items = Array.isArray(state.spese) ? state.spese : [];
   const acc = { CONTANTI:0, TASSA_SOGGIORNO:0, IVA_22:0, IVA_10:0, IVA_4:0 };
 
-  const uid = state?.session?.user_id ?? null;
+  const money = (v) => {
+    if (v === null || v === undefined) return 0;
+    if (typeof v === "number") return isFinite(v) ? v : 0;
+    let s = String(v).trim();
+    if (!s) return 0;
+    if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
+    else if (s.includes(",")) s = s.replace(",", ".");
+    const n = Number(s);
+    return isFinite(n) ? n : 0;
+  };
 
   for (const s of items){
-    // Safety: se per qualsiasi motivo arrivano righe di altri account, filtrale.
-    if (uid && s?.user_id && String(s.user_id) !== String(uid)) continue;
-
-    const lordo = Number(s?.importoLordo || 0) || 0;
+    const lordo = money(s?.importoLordo ?? s?.lordo ?? 0);
     if (!isFinite(lordo) || lordo === 0) continue;
 
     const catRaw = (s?.categoria ?? s?.cat ?? "").toString().trim().toLowerCase();
@@ -3630,26 +3650,9 @@ function computeStatSpese(){
     }
   }
 
-  // Fallback: se non abbiamo righe, prova ad usare il report (può essere utile offline/legacy),
-  // ma NON deve mai mescolare account se il backend non filtra correttamente.
-  if (items.length === 0){
-    const r = state.report || null;
-    const by = (r && r.byCategoria) ? r.byCategoria : null;
-
-    const get = (k) => {
-      try{ return Number(by?.[k]?.importoLordo || 0) || 0; }catch(_){ return 0; }
-    };
-
-    acc.CONTANTI = get("CONTANTI");
-    acc.TASSA_SOGGIORNO = get("TASSA_SOGGIORNO");
-    acc.IVA_22 = get("IVA_22");
-    acc.IVA_10 = get("IVA_10");
-    acc.IVA_4 = get("IVA_4");
-  }
-
   return {
     contanti: acc.CONTANTI,
-    tassa: acc.TASSA_SOGGIORNO,
+    tassaSoggiorno: acc.TASSA_SOGGIORNO,
     iva22: acc.IVA_22,
     iva10: acc.IVA_10,
     iva4: acc.IVA_4,
