@@ -3,7 +3,58 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.086";
+const BUILD_VERSION = "dDAE_2.087";
+
+// =========================
+// SETTINGS (local) — Azienda/Amministratore/IRAP
+// =========================
+
+const __IRAP_PERC_KEY = "dDAE_irap_percent";
+const __AMM_COMP_KEY = "dDAE_admin_compenso";
+const __AMM_TFM_KEY = "dDAE_admin_tfm";
+
+function __lsNumberGet(key, fallback){
+  try{
+    const raw = localStorage.getItem(key);
+    if (raw === null || raw === undefined || raw === "") return fallback;
+    let s = String(raw).trim();
+    if (!s) return fallback;
+    if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
+    else if (s.includes(",")) s = s.replace(",", ".");
+    const n = Number(s);
+    return Number.isFinite(n) ? n : fallback;
+  }catch(_){ return fallback; }
+}
+function __lsNumberSet(key, n){
+  try{
+    const v = Number(n);
+    localStorage.setItem(key, String(Number.isFinite(v) ? v : 0));
+  }catch(_){ }
+}
+function __clamp(n, min, max){
+  const v = Number(n);
+  if (!Number.isFinite(v)) return min;
+  return Math.max(min, Math.min(max, v));
+}
+
+function getIrapPercent(){
+  return __clamp(__lsNumberGet(__IRAP_PERC_KEY, 0), 0, 100);
+}
+function setIrapPercent(p){
+  __lsNumberSet(__IRAP_PERC_KEY, __clamp(p, 0, 100));
+}
+function getAmmCompenso(){
+  return Math.max(0, __lsNumberGet(__AMM_COMP_KEY, 25000));
+}
+function setAmmCompenso(v){
+  __lsNumberSet(__AMM_COMP_KEY, Math.max(0, v));
+}
+function getAmmTfm(){
+  return Math.max(0, __lsNumberGet(__AMM_TFM_KEY, 15000));
+}
+function setAmmTfm(v){
+  __lsNumberSet(__AMM_TFM_KEY, Math.max(0, v));
+}
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -41,6 +92,8 @@ function applyRoleMode(){
     try{ const statMensiliTopTools = document.getElementById("statMensiliTopTools"); if (statMensiliTopTools) statMensiliTopTools.hidden = true; }catch(_){ }
     try{ const statSpeseTopTools = document.getElementById("statSpeseTopTools"); if (statSpeseTopTools) statSpeseTopTools.hidden = true; }catch(_){ }
     try{ const statPrenTopTools = document.getElementById("statPrenTopTools"); if (statPrenTopTools) statPrenTopTools.hidden = true; }catch(_){ }
+    try{ const statAziendaTopTools = document.getElementById("statAziendaTopTools"); if (statAziendaTopTools) statAziendaTopTools.hidden = true; }catch(_){ }
+    try{ const statAmmTopTools = document.getElementById("statAmmTopTools"); if (statAmmTopTools) statAmmTopTools.hidden = true; }catch(_){ }
   }
 }
 
@@ -61,7 +114,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.086)
+// AUTH + SESSION (dDAE_2.087)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -487,7 +540,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.086 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.087 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2254,11 +2307,13 @@ state.page = page;
   try{
     const hb2 = document.getElementById("hamburgerBtn");
     const hs2 = document.getElementById("homeSettingsTop");
+    const irapTop = document.getElementById("btnIrapTop");
     const leds2 = document.getElementById("prodTopLeds");
     const isHome = (page === "home");
     const isOp = !!(state.session && isOperatoreSession(state.session));
     if (hb2) hb2.hidden = isHome;
     if (hs2) hs2.hidden = (!isHome) || isOp;
+    if (irapTop) irapTop.hidden = isHome || isOp || !(state.session && state.session.user_id) || (page === "auth");
     if (leds2) leds2.hidden = (page !== "home") || isOp;
   }catch(_){ }
 
@@ -2427,10 +2482,24 @@ state.page = page;
       .catch(e=>toast(e.message));
   }
 
+  if (page === "statazienda") {
+    const _nav = navId;
+    Promise.all([
+      ensurePeriodData({ showLoader:true }),
+      loadOspiti({ ...(state.period || {}), force:false }),
+    ])
+      .then(()=>{ if (state.navId !== _nav || state.page !== "statazienda") return; renderStatAzienda(); })
+      .catch(e=>toast(e.message));
+  }
+
+  if (page === "statamministratore") {
+    try{ initStatAmministratore(); }catch(e){ toast(e.message || "Errore"); }
+  }
+
   if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.086: fallback visualizzazione Pulizie
+  // dDAE_2.087: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -2443,6 +2512,12 @@ state.page = page;
 function setupHeader(){
   const hb = $("#hamburgerBtn");
   if (hb) hb.addEventListener("click", () => { hideLauncher(); showPage("home"); });
+
+  // IRAP popup (top bar)
+  const irapTop = $("#btnIrapTop");
+  if (irapTop){
+    bindFastTap(irapTop, () => { try{ openIrapModal(); }catch(e){ toast(e.message || "Errore"); } });
+  }
 
   const opLogout = document.getElementById("opLogoutTop");
   if (opLogout) bindFastTap(opLogout, () => {
@@ -2662,10 +2737,25 @@ const btnPieSpese = $("#btnStatSpesePie");
     });
   }
 
+  // IRAP modal
+  const irapClose = $("#irapClose");
+  if (irapClose){ bindFastTap(irapClose, () => closeIrapModal()); }
+  const irapSave = $("#irapSave");
+  if (irapSave){ bindFastTap(irapSave, () => saveIrapFromModal()); }
+  const irapModal = $("#irapModal");
+  if (irapModal){
+    irapModal.addEventListener("click", (e)=>{
+      if (e.target === irapModal) closeIrapModal();
+    });
+  }
+
 
   // Escape chiude il launcher
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape") hideLauncher();
+    if (e.key === "Escape"){
+      try{ closeIrapModal(); }catch(_){ }
+      hideLauncher();
+    }
   });
 }
 
@@ -3341,7 +3431,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.086)
+// STATISTICHE (dDAE_2.087)
 // =========================
 
 function computeStatGen(){
@@ -3798,6 +3888,138 @@ function closeStatMensiliPieModal(){
   m.hidden = true;
   m.setAttribute("aria-hidden", "true");
 }
+
+
+// =========================
+// STATISTICHE → AZIENDA (stima tassazione)
+// =========================
+
+function computeStatAzienda(){
+  const sg = computeStatGen();
+  const conRicevutaGross = Number(sg?.conRicevuta || 0) || 0;
+  const fatturatoNettoIva = conRicevutaGross / 1.10; // IVA 10%
+
+  const isContanti = (r) => {
+    try{
+      const raw = (r?.categoria ?? r?.cat ?? "").toString().toLowerCase();
+      if (raw.includes("contant")) return true;
+      if (typeof normCat === "function"){
+        return (normCat(r) === "CONTANTI");
+      }
+    }catch(_){ }
+    return false;
+  };
+
+  const itemsAll = Array.isArray(state.spese) ? state.spese : [];
+  const items = itemsAll.filter((r)=>{
+    try{
+      if (truthy(r?.isDeleted)) return false;
+    }catch(_){ }
+    return !isContanti(r);
+  });
+
+  let speseOperativeNettoIva = 0;
+  try{
+    const rep = buildReportFromSpese(items);
+    speseOperativeNettoIva = Number(rep?.totals?.imponibile || 0) || 0;
+  }catch(_){ speseOperativeNettoIva = 0; }
+
+  const compenso = getAmmCompenso();
+  const tfm = getAmmTfm();
+  const inps = compenso * 0.16; // stima quota azienda 2/3 (gestione separata)
+
+  const ebt = fatturatoNettoIva - speseOperativeNettoIva - compenso - inps - tfm;
+  const base = Math.max(0, ebt);
+  const ires = base * 0.24;
+  const irap = base * (getIrapPercent() / 100);
+  const utileNetto = ebt - ires - irap;
+
+  return {
+    fatturatoNettoIva,
+    speseOperativeNettoIva,
+    compenso,
+    inps,
+    tfm,
+    ebt,
+    ires,
+    irap,
+    utileNetto,
+    irapPercent: getIrapPercent(),
+  };
+}
+
+function renderStatAzienda(){
+  const s = computeStatAzienda();
+  const set = (id, value) => {
+    const el = document.getElementById(id);
+    if (el) el.textContent = euro(value);
+  };
+  set("azFattNetto", s.fatturatoNettoIva);
+  set("azSpeseNetto", s.speseOperativeNettoIva);
+  set("azCompenso", s.compenso);
+  set("azInps", s.inps);
+  set("azTfm", s.tfm);
+  set("azEbt", s.ebt);
+  set("azIres", s.ires);
+  set("azIrap", s.irap);
+  set("azUtileNetto", s.utileNetto);
+}
+
+function initStatAmministratore(){
+  const comp = document.getElementById("ammCompenso");
+  const tfm = document.getElementById("ammTfm");
+  const btn = document.getElementById("ammSave");
+  const hint = document.getElementById("ammHint");
+  if (comp) comp.value = String(getAmmCompenso());
+  if (tfm) tfm.value = String(getAmmTfm());
+  if (btn && !btn.__bound){
+    btn.__bound = true;
+    bindFastTap(btn, () => {
+      const c = comp ? Number(String(comp.value||"0").replace(",",".")) : getAmmCompenso();
+      const t = tfm ? Number(String(tfm.value||"0").replace(",",".")) : getAmmTfm();
+      setAmmCompenso(Number.isFinite(c) ? c : 0);
+      setAmmTfm(Number.isFinite(t) ? t : 0);
+      if (hint) hint.textContent = "Salvato";
+      try{ if (state.page === "statazienda") renderStatAzienda(); }catch(_){ }
+    });
+  }
+}
+
+
+// =========================
+// IRAP popup (percentuale)
+// =========================
+
+function openIrapModal(){
+  const m = document.getElementById("irapModal");
+  if (!m) return;
+  const input = document.getElementById("irapPercentInput");
+  const hint = document.getElementById("irapHint");
+  if (hint) hint.textContent = "";
+  if (input) input.value = String(getIrapPercent());
+  m.hidden = false;
+  try{ m.setAttribute("aria-hidden", "false"); }catch(_){ }
+  if (input){
+    setTimeout(()=>{ try{ input.focus(); input.select(); }catch(_){ } }, 50);
+  }
+}
+
+function closeIrapModal(){
+  const m = document.getElementById("irapModal");
+  if (!m) return;
+  m.hidden = true;
+  try{ m.setAttribute("aria-hidden", "true"); }catch(_){ }
+}
+
+function saveIrapFromModal(){
+  const input = document.getElementById("irapPercentInput");
+  const hint = document.getElementById("irapHint");
+  const v = input ? Number(String(input.value||"0").replace(",",".")) : 0;
+  setIrapPercent(Number.isFinite(v) ? v : 0);
+  if (hint) hint.textContent = "Salvato";
+  try{ if (state.page === "statazienda") renderStatAzienda(); }catch(_){ }
+}
+
 
 function computeStatSpese(){
   const items = Array.isArray(state.spese) ? state.spese : [];
@@ -4514,7 +4736,7 @@ function renderRoomsReadOnly(ospite){
   `;
 }
 
-// ===== dDAE_2.086 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.087 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -7245,7 +7467,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.086) =====
+// ===== CALENDARIO (dDAE_2.087) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -7670,7 +7892,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.086)
+   Lavanderia (dDAE_2.087)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -8066,7 +8288,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.086: renderSpese allineato al backend ---
+// --- FIX dDAE_2.087: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -8162,7 +8384,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.086: delete reale ospiti ---
+// --- FIX dDAE_2.087: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -8197,7 +8419,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.086: mostra nome ospite ---
+// --- FIX dDAE_2.087: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -8451,7 +8673,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.086
+   Build: dDAE_2.087
 ========================= */
 
 state.orepulizia = state.orepulizia || {
