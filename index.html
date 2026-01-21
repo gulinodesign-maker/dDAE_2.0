@@ -8,12 +8,12 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="Cache-Control"/>
 <meta content="no-cache" http-equiv="Pragma"/>
 <meta content="0" http-equiv="Expires"/>
-<link href="./styles.css?v=dDAE_2.085" rel="stylesheet"/>
-<link href="./manifest.json?v=dDAE_2.085" rel="manifest"/>
-<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.085" rel="apple-touch-icon" sizes="180x180"/>
-<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.085" rel="apple-touch-icon-precomposed" sizes="180x180"/>
-<link href="./assets/icons/favicon-32.png?v=dDAE_2.085" rel="icon" sizes="32x32" type="image/png"/>
-<link href="./assets/icons/favicon-16.png?v=dDAE_2.085" rel="icon" sizes="16x16" type="image/png"/>
+<link href="./styles.css?v=dDAE_2.086" rel="stylesheet"/>
+<link href="./manifest.json?v=dDAE_2.086" rel="manifest"/>
+<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.086" rel="apple-touch-icon" sizes="180x180"/>
+<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.086" rel="apple-touch-icon-precomposed" sizes="180x180"/>
+<link href="./assets/icons/favicon-32.png?v=dDAE_2.086" rel="icon" sizes="32x32" type="image/png"/>
+<link href="./assets/icons/favicon-16.png?v=dDAE_2.086" rel="icon" sizes="16x16" type="image/png"/>
 <meta content="#ffffff" name="theme-color"/>
 <meta content="yes" name="apple-mobile-web-app-capable"/>
 <meta content="Daedalium PMS" name="apple-mobile-web-app-title"/>
@@ -23,7 +23,7 @@
 <header class="topbar">
 <div class="brand">
 <div class="brand-left">
-<img alt="Daedalium logo" class="logo" src="./assets/logo.jpg?v=dDAE_2.085"/>
+<img alt="Daedalium logo" class="logo" src="./assets/logo.jpg?v=dDAE_2.086"/>
 <h1>Daedalium PMS</h1>
 </div>
 <div class="brand-right">
@@ -128,6 +128,45 @@
 </svg>
 </button>
 </div>
+
+<div hidden="" id="statAziendaTopTools">
+<button aria-label="Torna a Statistiche" class="icon-btn icon-btn-whiteorange" id="btnBackStatisticheAzienda" type="button">
+<svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24">
+<path d="M15 18l-6-6 6-6"></path>
+<path d="M9 12h12"></path>
+</svg>
+</button>
+</div>
+
+<div hidden="" id="statAmmTopTools">
+<button aria-label="Torna a Statistiche" class="icon-btn icon-btn-whiteorange" id="btnBackStatisticheAmministratore" type="button">
+<svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24">
+<path d="M15 18l-6-6 6-6"></path>
+<path d="M9 12h12"></path>
+</svg>
+</button>
+</div>
+
+
+
+<div hidden="" id="statAziendaTopTools">
+<button aria-label="Torna a Statistiche" class="icon-btn icon-btn-whiteorange" id="btnBackStatisticheAzienda" type="button">
+<svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24">
+<path d="M15 18l-6-6 6-6"></path>
+<path d="M9 12h12"></path>
+</svg>
+</button>
+</div>
+
+<div hidden="" id="statAmmTopTools">
+<button aria-label="Torna a Statistiche" class="icon-btn icon-btn-whiteorange" id="btnBackStatisticheAmministratore" type="button">
+<svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24">
+<path d="M15 18l-6-6 6-6"></path>
+<path d="M9 12h12"></path>
+</svg>
+</button>
+</div>
+
 <!-- HOME: Impostazioni (solo in HOME) -->
 <div class="top-leds" hidden="" id="prodTopLeds" aria-label="Indicatori prodotti">
   <span class="top-led top-led-blue" id="prodLedColazione" aria-label="Colazione"></span>
@@ -145,7 +184,7 @@
 <div class="auth-page">
 <div class="auth-card">
 <div class="auth-logo-wrap">
-<img alt="Daedalium" class="auth-logo" src="./assets/logo.jpg?v=dDAE_2.085"/>
+<img alt="Daedalium" class="auth-logo" src="./assets/logo.jpg?v=dDAE_2.086"/>
 </div>
 
 <!-- MENU (4 pulsanti) -->
@@ -312,7 +351,7 @@
 
 
 
-</div><div class="build" id="buildText">dDAE_2.085</div></div></section>
+</div><div class="build" id="buildText">dDAE_2.086</div></div></section>
 
 
 
@@ -394,9 +433,48 @@
         </svg></div>
         <div class="home-main-label">Prenotazioni</div>
       </button>
+
+
+      <button aria-label="Azienda" class="home-main" id="goStatAzienda" type="button">
+        <div aria-hidden="true" class="home-main-glyph"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24">
+          <path d="M4 21V7a2 2 0 0 1 2-2h12a2 2 0 0 1 2 2v14"></path>
+          <path d="M9 21v-4a1 1 0 0 1 1-1h4a1 1 0 0 1 1 1v4"></path>
+          <path d="M8 9h.01"></path><path d="M12 9h.01"></path><path d="M16 9h.01"></path>
+          <path d="M8 12h.01"></path><path d="M12 12h.01"></path><path d="M16 12h.01"></path>
+        </svg></div>
+        <div class="home-main-label">Azienda</div>
+      </button>
+
+
+      <button aria-label="Amministratore" class="home-main" id="goStatAmministratore" type="button">
+        <div aria-hidden="true" class="home-main-glyph alt"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24">
+          <path d="M12 12a4 4 0 1 0-4-4 4 4 0 0 0 4 4Z"></path>
+          <path d="M4.5 21a7.5 7.5 0 0 1 15 0"></path>
+        </svg></div>
+        <div class="home-main-label">Amministratore</div>
+      </button>
+
     </div>
   </div>
 </section>
+
+<!-- STATISTICHE: AZIENDA -->
+<section class="page" hidden="" id="page-statazienda">
+  <div class="stats-page">
+    <div class="stats-title">Azienda</div>
+    <div class="stats-divider" aria-hidden="true"></div>
+  </div>
+</section>
+
+<!-- STATISTICHE: AMMINISTRATORE -->
+<section class="page" hidden="" id="page-statamministratore">
+  <div class="stats-page">
+    <div class="stats-title">Amministratore</div>
+    <div class="stats-divider" aria-hidden="true"></div>
+  </div>
+</section>
+
+
 
 <!-- STATISTICHE: CONTEGGIO GENERALE -->
 <section class="page" hidden="" id="page-statgen">
@@ -1150,8 +1228,8 @@
 </div>
 </div>
 </div>
-<script defer="" src="./config.js?v=dDAE_2.085"></script>
-<script defer="" src="./app.js?v=dDAE_2.085"></script>
+<script defer="" src="./config.js?v=dDAE_2.086"></script>
+<script defer="" src="./app.js?v=dDAE_2.086"></script>
 <!-- TAX REPORT MODAL -->
 <div aria-hidden="true" class="modal" hidden="" id="taxReportModal">
 <div aria-labelledby="taxReportTitle" aria-modal="true" class="modal-card tax-report-card" role="dialog">
