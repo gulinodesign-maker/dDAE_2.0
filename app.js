@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.078";
+const BUILD_VERSION = "dDAE_2.079";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -1087,7 +1087,206 @@ function __apiProfile(action, method, body){
   return { timeoutMs, retries };
 }
 
-async function api(action, { method="GET", params={}, body=null, showLoader=true } = {}){
+
+// =========================
+// Offline-first (IndexedDB + Outbox) - Build dDAE_2.079
+// =========================
+const __OFFLINE__ = {
+  enabled: true,
+  dbName: "dDAE_offline",
+  dbVersion: 1,
+  dbp: null,
+  syncing: false,
+  outboxCount: 0,
+};
+
+function __offlineCtxKey_(){
+  try{
+    const uid = String(state?.session?.user_id || "").trim() || "anon";
+    const yr = String(state?.exerciseYear || "").trim() || "";
+    return `${uid}:${yr}`;
+  }catch(_){ return "anon:"; }
+}
+
+function __stableJson_(obj){
+  try{
+    if (obj === null || obj === undefined) return "null";
+    if (typeof obj !== "object") return JSON.stringify(obj);
+    if (Array.isArray(obj)) return JSON.stringify(obj.map((x)=>JSON.parse(__stableJson_(x))));
+    const keys = Object.keys(obj).sort();
+    const o = {};
+    for (const k of keys) o[k] = obj[k];
+    return JSON.stringify(o);
+  }catch(_){
+    try{ return JSON.stringify(obj); }catch(__){ return "null"; }
+  }
+}
+
+function __cacheKey_(action, params){
+  const ctx = __offlineCtxKey_();
+  return `cache:${ctx}:${String(action||"")}:${__stableJson_(params||{})}`;
+}
+
+function __idbOpen_(){
+  if (__OFFLINE__.dbp) return __OFFLINE__.dbp;
+  __OFFLINE__.dbp = new Promise((resolve, reject) => {
+    try{
+      const req = indexedDB.open(__OFFLINE__.dbName, __OFFLINE__.dbVersion);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains("cache")) db.createObjectStore("cache", { keyPath:"key" });
+        if (!db.objectStoreNames.contains("outbox")) db.createObjectStore("outbox", { keyPath:"id", autoIncrement:true });
+        if (!db.objectStoreNames.contains("meta")) db.createObjectStore("meta", { keyPath:"key" });
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error || new Error("IndexedDB error"));
+    }catch(e){ reject(e); }
+  });
+  return __OFFLINE__.dbp;
+}
+
+async function __idbPut_(storeName, value){
+  const db = await __idbOpen_();
+  return await new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readwrite");
+    const st = tx.objectStore(storeName);
+    const req = st.put(value);
+    req.onsuccess = () => resolve(req.result);
+    req.onerror = () => reject(req.error || new Error("IDB put error"));
+  });
+}
+
+async function __idbGet_(storeName, key){
+  const db = await __idbOpen_();
+  return await new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readonly");
+    const st = tx.objectStore(storeName);
+    const req = st.get(key);
+    req.onsuccess = () => resolve(req.result || null);
+    req.onerror = () => reject(req.error || new Error("IDB get error"));
+  });
+}
+
+async function __idbDel_(storeName, key){
+  const db = await __idbOpen_();
+  return await new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readwrite");
+    const st = tx.objectStore(storeName);
+    const req = st.delete(key);
+    req.onsuccess = () => resolve(true);
+    req.onerror = () => reject(req.error || new Error("IDB del error"));
+  });
+}
+
+async function __idbGetAll_(storeName){
+  const db = await __idbOpen_();
+  return await new Promise((resolve, reject) => {
+    const tx = db.transaction(storeName, "readonly");
+    const st = tx.objectStore(storeName);
+    const req = st.getAll();
+    req.onsuccess = () => resolve(req.result || []);
+    req.onerror = () => reject(req.error || new Error("IDB getAll error"));
+  });
+}
+
+async function __offlineRefreshOutboxCount_(){
+  try{
+    const ops = await __idbGetAll_("outbox");
+    const ctx = __offlineCtxKey_();
+    __OFFLINE__.outboxCount = ops.filter(o => String(o?.ctx||"") === String(ctx)).length;
+  }catch(_){
+    __OFFLINE__.outboxCount = 0;
+  }
+  try{ updateSyncLed(); }catch(_){ }
+}
+
+function updateSyncLed(){
+  const led = document.getElementById("syncLed");
+  if (!led) return;
+  const hasPending = (__OFFLINE__.outboxCount || 0) > 0;
+  led.classList.toggle("is-red", !!hasPending);
+  led.classList.toggle("is-green", !hasPending);
+  try{ led.setAttribute("aria-label", hasPending ? "Dati non sincronizzati" : "Sincronizzato"); }catch(_){ }
+}
+
+async function __outboxEnqueue_(action, method, params, body){
+  try{
+    const op = {
+      action: String(action||""),
+      method: String(method||"GET"),
+      params: params || {},
+      body: (body === undefined ? null : body),
+      ctx: __offlineCtxKey_(),
+      createdAt: new Date().toISOString(),
+    };
+    try{
+      if (op.body && typeof op.body === "object" && op.body.id && (op.method === "PUT" || op.method === "POST" || op.method === "DELETE")){
+        op.dedupeKey = `${op.ctx}:${op.action}:${op.method}:${String(op.body.id)}`;
+      }
+    }catch(_){ }
+    await __idbPut_("outbox", op);
+    await __offlineRefreshOutboxCount_();
+  }catch(_){ }
+}
+
+async function __outboxFlush_({ showLoader=false } = {}){
+  if (!__OFFLINE__.enabled) return;
+  if (__OFFLINE__.syncing) return;
+  if (!navigator.onLine) { await __offlineRefreshOutboxCount_(); return; }
+
+  __OFFLINE__.syncing = true;
+  try{
+    const ctx = __offlineCtxKey_();
+    const opsAll = await __idbGetAll_("outbox");
+    const opsCtx = opsAll.filter(o => String(o?.ctx||"") === String(ctx));
+
+    // dedupe: keep last op per dedupeKey
+    const lastByKey = new Map();
+    const ordered = [];
+    for (const op of opsCtx){
+      if (op && op.dedupeKey){
+        lastByKey.set(op.dedupeKey, op);
+      } else {
+        ordered.push(op);
+      }
+    }
+    const deduped = ordered.concat(Array.from(lastByKey.values()).sort((a,b)=>(a.id||0)-(b.id||0)));
+
+    for (const op of deduped){
+      if (!op) continue;
+      try{
+        await api(op.action, { method: op.method, params: op.params||{}, body: op.body||null, showLoader: showLoader, allowCache:false, allowQueue:false, preferCache:false, _raw:true });
+        // remove op(s)
+        if (op.dedupeKey){
+          for (const o2 of opsCtx){
+            if (o2 && o2.dedupeKey === op.dedupeKey){
+              try{ await __idbDel_("outbox", o2.id); }catch(_){ }
+            }
+          }
+        } else {
+          try{ await __idbDel_("outbox", op.id); }catch(_){ }
+        }
+      }catch(e){
+        break; // stop on first failure
+      }
+    }
+  }catch(_){
+  }finally{
+    __OFFLINE__.syncing = false;
+    await __offlineRefreshOutboxCount_();
+  }
+}
+
+function __offlineStartSyncLoop_(){
+  try{ __offlineRefreshOutboxCount_().catch(()=>{}); }catch(_){ }
+  try{
+    window.addEventListener("online", () => { __outboxFlush_({ showLoader:false }).catch(()=>{}); });
+    document.addEventListener("visibilitychange", () => { if (!document.hidden) __outboxFlush_({ showLoader:false }).catch(()=>{}); });
+    setInterval(() => { __outboxFlush_({ showLoader:false }).catch(()=>{}); }, 30000);
+  }catch(_){ }
+}
+
+async function api(action, { method="GET", params={}, body=null, showLoader=true, allowCache=true, allowQueue=true, preferCache=false, _raw=false } = {}){
   if (showLoader) beginRequest();
   try {
   if (!API_BASE_URL || API_BASE_URL.includes("INCOLLA_QUI")) {
@@ -1099,6 +1298,18 @@ async function api(action, { method="GET", params={}, body=null, showLoader=true
   url.searchParams.set("apiKey", API_KEY);
   // Cache-busting for iOS/Safari aggressive caching
   url.searchParams.set("_ts", String(Date.now()));
+
+  // Offline-first: cache GET per (user_id, anno, action, params)
+  const __isGet = (String(method||"GET").toUpperCase() === "GET");
+  const __cacheKey = (__OFFLINE__ && __OFFLINE__.enabled && __isGet && allowCache) ? __cacheKey_(action, params) : null;
+  if (!_raw && __cacheKey && (preferCache || !navigator.onLine)){
+    try{
+      const cached = await __idbGet_("cache", __cacheKey);
+      if (cached && cached.value){
+        try{ return JSON.parse(cached.value); }catch(_){ }
+      }
+    }catch(_){ }
+  }
 
   // Context multi-account (user + anno)
   try{
@@ -1199,6 +1410,14 @@ async function api(action, { method="GET", params={}, body=null, showLoader=true
         throw new Error("Connessione assente o instabile. Verifica la rete e riprova. Se il problema persiste: 1) Web App Apps Script distribuita come 'Chiunque', 2) URL /exec corretto, 3) hai ridistribuito una nuova versione dello script dopo modifiche.");
       }
 
+      // Offline-first: se fallisce una WRITE, metti in coda (outbox) per evitare perdita dati
+      const isWrite = (String(method||"GET").toUpperCase() !== "GET");
+      const canQueue = (__OFFLINE__ && __OFFLINE__.enabled && allowQueue && !_raw && isWrite && action !== "utenti" && action !== "ping");
+      if (canQueue){
+        try{ await __outboxEnqueue_(action, method, params, body); }catch(_){ }
+        try{ __outboxFlush_({ showLoader:false }).catch(()=>{}); }catch(_){ }
+        return { ok:true, queued:true };
+      }
       throw err;
     }finally{
       clearTimeout(t);
@@ -1211,6 +1430,12 @@ try {
 } catch (_) {
   throw new Error("Risposta non valida dal server");
 }
+
+  // Cache write on success (GET)
+  if (__OFFLINE__ && __OFFLINE__.enabled && __isGet && allowCache && __cacheKey){
+    try{ await __idbPut_("cache", { key: __cacheKey, value: JSON.stringify(json), ts: Date.now() }); }catch(_){ }
+  }
+
 
 if (!json.ok) throw new Error(json.error || "API error");
 return json.data;
@@ -5902,17 +6127,23 @@ function setupProdotti(){
       renderProdotti();
       updateProdottiHomeBlink();
 
-      // Backend sync in background (non blocca UI)
-      const sync = async () => {
+      // Backend sync: prima in coda (persistente), poi tentativo di flush
+      try{
         if (ids.length){
-          await Promise.all(ids.map((id) => (
-            api(action, { method:"PUT", body:{ id:String(id), qty: qtyById[id], saved: 0 }, showLoader:false })
-          )));
+          for (const id of ids){
+            try{ await __outboxEnqueue_(action, "PUT", {}, { id:String(id), qty: qtyById[id], saved: 0 }); }catch(_){ }
+          }
         }
-        await api(action, { method:"POST", body:{ op:"save" }, showLoader:false });
-      };
+        try{ await __outboxEnqueue_(action, "POST", {}, { op:"save" }); }catch(_){ }
 
-      sync().catch((e)=>{ try{ toast(e.message || "Errore"); }catch(_){ } });
+        // Tentativo immediato (con clessidra)
+        try{ beginRequest(); }catch(_){ }
+        try{ await __outboxFlush_({ showLoader:false }); }catch(_){ }
+        try{ endRequest(); }catch(_){ }
+        try{ toast((__OFFLINE__.outboxCount||0) > 0 ? "In coda" : "Salvato"); }catch(_){ }
+      }catch(e){
+        try{ toast(e.message || "Errore"); }catch(_){ }
+      }
     }catch(e){ toast(e.message); }
   });
 
@@ -6344,6 +6575,7 @@ async function init(){
   const __restore = __readRestoreState();
   // Session + anno
   state.session = loadSession();
+  try{ __offlineRefreshOutboxCount_().catch(()=>{}); }catch(_){ }
   state.exerciseYear = loadExerciseYear();
   updateYearPill();
 
