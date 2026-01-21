@@ -41,15 +41,10 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.079"),
-    radial-gradient(900px 600px at 10% 0%, rgba(43,124,180,0.10), transparent 62%),
-    radial-gradient(800px 520px at 90% 8%, rgba(201,119,43,0.10), transparent 64%),
-    radial-gradient(900px 700px at 20% 100%, rgba(111,183,214,0.10), transparent 62%),
-    radial-gradient(900px 700px at 90% 100%, rgba(214,178,134,0.14), transparent 62%),
-    linear-gradient(to bottom, rgba(255,255,255,0.06), rgba(255,255,255,0.12));
-  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
-  background-position: center, 10% 0%, 90% 8%, 20% 100%, 90% 100%, center;
-  background-size: cover, auto, auto, auto, auto, cover;
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.081");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
   background-attachment: scroll;
 }
 
@@ -60,7 +55,7 @@ body{
   top: 0;
   z-index: 40;
   padding-top: var(--safe-top);
-  background: linear-gradient(to bottom, rgba(255,255,255,0.92), rgba(255,255,255,0.62));
+  background: var(--glass);
   backdrop-filter: blur(14px);
   border-bottom: 1px solid var(--border);
 }
@@ -120,7 +115,7 @@ body{
 }
 
 
-/* dDAE_2.079 — TOP TOOLS OSPITI: pulsanti affiancati (fix iPhone) */
+/* dDAE_2.081 — TOP TOOLS OSPITI: pulsanti affiancati (fix iPhone) */
 #ospitiTopTools,
 #pulizieTopTools,
 #speseTopTools,
@@ -213,7 +208,7 @@ body{
 .icon-btn.icon-btn-green .ui-ico{ stroke: #ffffff; }
 
 
-/* dDAE_2.079 — Ore pulizia: back button bianco piatto con icona arancione (fix iOS) */
+/* dDAE_2.081 — Ore pulizia: back button bianco piatto con icona arancione (fix iOS) */
 .icon-btn.icon-btn-whiteblue{
   background:#ffffff;
   border: 1px solid rgba(15,23,42,0.10);
@@ -417,11 +412,11 @@ body{
 }
 .btn.primary{
   border-color: rgba(43,124,180,0.40);
-  background: linear-gradient(to bottom, rgba(43,124,180,0.18), rgba(255,255,255,0.78));
+  background: var(--glass);
 }
 .btn.warn{
   border-color: rgba(201,119,43,0.40);
-  background: linear-gradient(to bottom, rgba(201,119,43,0.18), rgba(255,255,255,0.78));
+  background: var(--glass);
 }
 
 
@@ -553,7 +548,7 @@ input[type="date"]{
 }
 .kpi-card.accent{
   border-color: rgba(43,124,180,0.35);
-  background: linear-gradient(to bottom, rgba(43,124,180,0.12), rgba(255,255,255,0.62));
+  background: var(--glass);
 }
 .kpi-label{ font-size: 12px; opacity: 0.80; }
 .kpi-value{ font-size: 26px; font-weight: 950; letter-spacing: 0.2px; }
@@ -657,10 +652,7 @@ input[type="date"]{
   width: min(420px, 92vw);
   border: 1px solid var(--border);
   border-radius: 24px;
-  background:
-    radial-gradient(120% 120% at 12% 0%, rgba(43,124,180,0.14), transparent 58%),
-    radial-gradient(120% 120% at 92% 0%, rgba(201,119,43,0.14), transparent 58%),
-    linear-gradient(to bottom, var(--glass), var(--glass2));
+  background: var(--glass);
   backdrop-filter: blur(18px);
   box-shadow: 0 18px 60px rgba(15,23,42,0.14);
   padding: 16px;
@@ -687,7 +679,7 @@ input[type="date"]{
 }
 .home-icon.primary{
   border-color: rgba(43,124,180,0.35);
-  background: linear-gradient(to bottom, rgba(43,124,180,0.12), rgba(255,255,255,0.62));
+  background: var(--glass);
 }
 .home-icon .glyph{
   width: 62px;
@@ -814,10 +806,7 @@ input[type="date"]{
   width: min(360px, 86vw);
   border: 1px solid var(--border);
   border-radius: 24px;
-  background:
-    radial-gradient(120% 120% at 12% 0%, rgba(43,124,180,0.14), transparent 58%),
-    radial-gradient(120% 120% at 92% 0%, rgba(201,119,43,0.14), transparent 58%),
-    linear-gradient(to bottom, var(--glass), var(--glass2));
+  background: var(--glass);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   box-shadow: 0 18px 60px rgba(15,23,42,0.14);
@@ -853,15 +842,10 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.079"),
-    radial-gradient(900px 650px at 12% 8%, rgba(43,124,180,0.18), transparent 62%),
-    radial-gradient(820px 560px at 92% 14%, rgba(201,119,43,0.16), transparent 62%),
-    radial-gradient(900px 700px at 18% 96%, rgba(111,183,214,0.16), transparent 62%),
-    radial-gradient(900px 700px at 92% 92%, rgba(214,178,134,0.18), transparent 62%),
-    linear-gradient(to bottom, rgba(255,255,255,0.05), rgba(255,255,255,0.10));
-  background-repeat: no-repeat, no-repeat, no-repeat, no-repeat, no-repeat, no-repeat;
-  background-position: center, 12% 8%, 92% 14%, 18% 96%, 92% 92%, center;
-  background-size: cover, auto, auto, auto, auto, cover;
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.081");
+  background-repeat: no-repeat;
+  background-position: center;
+  background-size: cover;
   background-attachment: scroll;
 }
 
@@ -881,7 +865,7 @@ body[data-page="home"]{
   position:absolute;
   inset:-1px;
   border-radius: 24px;
-  background: radial-gradient(120% 90% at 20% 0%, rgba(255,255,255,0.75), transparent 55%);
+  background: var(--glass);
   pointer-events:none;
   opacity: 0.8;
 }
@@ -893,12 +877,7 @@ body[data-page="home"]{
   left:-60%;
   width: 140%;
   height: 140%;
-  background: linear-gradient(105deg,
-    transparent 0%,
-    rgba(255,255,255,0.0) 35%,
-    rgba(255,255,255,0.28) 48%,
-    rgba(255,255,255,0.0) 60%,
-    transparent 100%);
+  background: var(--glass);
   transform: rotate(8deg);
   animation: homeShimmer 6.5s ease-in-out infinite;
   pointer-events:none;
@@ -925,7 +904,7 @@ body[data-page="home"]{
   position:absolute;
   inset:-1px;
   border-radius: 22px;
-  background: radial-gradient(120% 90% at 20% 0%, rgba(255,255,255,0.70), transparent 58%);
+  background: var(--glass);
   pointer-events:none;
   opacity: 0.65;
 }
@@ -934,21 +913,19 @@ body[data-page="home"]{
 .home-icon .glyph{
   position: relative;
   overflow:hidden;
-  background:
-    radial-gradient(140% 120% at 30% 0%, rgba(255,255,255,0.85), rgba(255,255,255,0.60)),
-    linear-gradient(to bottom, rgba(255,255,255,0.90), rgba(255,255,255,0.72));
+  background: var(--glass);
 }
 .home-icon .glyph::before{
   content:"";
   position:absolute;
   inset:-1px;
   border-radius: 20px;
-  background: radial-gradient(120% 120% at 20% 10%, rgba(43,124,180,0.16), transparent 60%);
+  background: var(--glass);
   pointer-events:none;
   opacity: 1;
 }
 .home-icon.primary .glyph::before{
-  background: radial-gradient(120% 120% at 20% 10%, rgba(201,119,43,0.18), transparent 60%);
+  background: var(--glass);
 }
 .home-icon[data-go="spese"] .glyph{ color: var(--blue); }
 .home-icon[data-go="riepilogo"] .glyph{ color: var(--orange); }
@@ -1179,9 +1156,7 @@ body::before{
   font-weight: 950;
   color: var(--blue);
   border: 1px solid rgba(15,23,42,0.10);
-  background:
-    radial-gradient(140% 120% at 30% 0%, rgba(255,255,255,0.88), rgba(255,255,255,0.60)),
-    linear-gradient(to bottom, rgba(255,255,255,0.90), rgba(255,255,255,0.72));
+  background: var(--glass);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
 }
@@ -1241,10 +1216,7 @@ body::before{
   width: min(430px, 92vw);
   border: 1px solid var(--border);
   border-radius: 26px;
-  background:
-    radial-gradient(120% 120% at 12% 0%, rgba(43,124,180,0.14), transparent 58%),
-    radial-gradient(120% 120% at 92% 0%, rgba(201,119,43,0.14), transparent 58%),
-    linear-gradient(to bottom, var(--glass), var(--glass2));
+  background: var(--glass);
   backdrop-filter: blur(18px);
   -webkit-backdrop-filter: blur(18px);
   box-shadow: 0 18px 60px rgba(15,23,42,0.14);
@@ -1283,9 +1255,7 @@ body::before{
   font-size: 40px;
   font-weight: 950;
   border: 1px solid rgba(15,23,42,0.10);
-  background:
-    radial-gradient(140% 120% at 30% 0%, rgba(255,255,255,0.88), rgba(255,255,255,0.60)),
-    linear-gradient(to bottom, rgba(255,255,255,0.90), rgba(255,255,255,0.72));
+  background: var(--glass);
   color: var(--blue);
   box-shadow: none !important;
   filter: none !important;
@@ -1358,17 +1328,13 @@ body::before{
 }
 .room-dot.selected{
   border-color: rgba(43,124,180,0.35);
-  background:
-    radial-gradient(120% 120% at 20% 0%, rgba(43,124,180,0.22), transparent 60%),
-    rgba(255,255,255,0.78);
+  background: var(--glass);
   color: rgba(15,23,42,0.92);
 }
 
 .room-dot.occupied{
   border-color: rgba(220,38,38,0.55);
-  background:
-    radial-gradient(120% 120% at 20% 0%, rgba(220,38,38,0.22), transparent 60%),
-    rgba(255,255,255,0.80);
+  background: var(--glass);
   color: rgba(127,29,29,0.92);
 }
 
@@ -1408,19 +1374,14 @@ body::before{
 }
 .seg-btn.active{
   border-color: rgba(43,124,180,0.35);
-  background:
-    radial-gradient(120% 120% at 20% 0%, rgba(43,124,180,0.22), transparent 60%),
-    rgba(255,255,255,0.82);
+  background: var(--glass);
 }
 
 /* Scheda cliente */
 .guest-card{
   border: 1px solid var(--border);
   border-radius: 22px;
-  background:
-    radial-gradient(120% 120% at 12% 0%, rgba(43,124,180,0.12), transparent 58%),
-    radial-gradient(120% 120% at 92% 0%, rgba(201,119,43,0.12), transparent 58%),
-    linear-gradient(to bottom, var(--glass), var(--glass2));
+  background: var(--glass);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   box-shadow: 0 16px 52px rgba(15,23,42,0.10);
@@ -1527,10 +1488,7 @@ body::before{
 }
 #page-home .home-main-glyph.alt{
   color: var(--orange);
-  background:
-    radial-gradient(140% 120% at 30% 0%, rgba(255,255,255,0.88), rgba(255,255,255,0.60)),
-    radial-gradient(120% 120% at 20% 0%, rgba(201,119,43,0.18), transparent 60%),
-    linear-gradient(to bottom, rgba(255,255,255,0.90), rgba(255,255,255,0.72));
+  background: var(--glass);
 }
 
 
@@ -1886,7 +1844,7 @@ body::before{
   position:absolute;
   left:0; right:0; bottom:-1px;
   height: 3px;
-  background: linear-gradient(90deg, rgba(111,183,214,0.0), rgba(111,183,214,0.85), rgba(43,124,180,0.92), rgba(201,119,43,0.85), rgba(111,183,214,0.0));
+  background: var(--glass);
   opacity: 0.55;
   pointer-events:none;
 }
@@ -1918,13 +1876,13 @@ body::before{
 /* Primary buttons: stronger blue tint + blue text */
 .btn.primary{
   border-color: rgba(43,124,180,0.55) !important;
-  background: linear-gradient(to bottom, rgba(43,124,180,0.28), rgba(255,255,255,0.88)) !important;
+  background: var(--glass) !important;
   color: rgba(31,112,166,0.98) !important;
 }
 /* Secondary/warn: stronger orange */
 .btn.warn{
   border-color: rgba(201,119,43,0.62) !important;
-  background: linear-gradient(to bottom, rgba(201,119,43,0.24), rgba(255,255,255,0.88)) !important;
+  background: var(--glass) !important;
   color: rgba(176,92,18,0.98) !important;
 }
 .btn.danger{
@@ -1936,15 +1894,13 @@ body::before{
 /* Segmented active: more visible blue */
 .seg-btn.active{
   border-color: rgba(43,124,180,0.52) !important;
-  background:
-    radial-gradient(120% 120% at 20% 0%, rgba(43,124,180,0.30), transparent 62%),
-    rgba(255,255,255,0.86) !important;
+  background: var(--glass) !important;
 }
 
 /* KPI: make the important number pop */
 .kpi-card.accent{
   border-color: rgba(43,124,180,0.52) !important;
-  background: linear-gradient(to bottom, rgba(43,124,180,0.20), rgba(255,255,255,0.72)) !important;
+  background: var(--glass) !important;
 }
 .kpi-value{
   color: rgba(11,15,22,0.96);
@@ -2005,7 +1961,7 @@ body::before{
 #page-home #goTassaSoggiorno .home-main-glyph{ color: rgba(201,119,43,0.92); }
 #page-home #goPulizie .home-main-glyph{ color: rgba(15,23,42,0.92); }
 #page-home #goGuadagni .home-main-glyph{ color: rgba(176,92,18,0.92); }
-/* dDAE_2.079 - Ospiti: solo consultazione (azioni nascoste per ora) */
+/* dDAE_2.081 - Ospiti: solo consultazione (azioni nascoste per ora) */
 body[data-page="ospiti"] .guest-card .actions {
   display: flex !important;
 }
@@ -2025,10 +1981,7 @@ body[data-page="ospiti"] .guest-card .actions {
 .clean-info-card{
   position: relative;
   text-align: center;
-  background:
-    radial-gradient(120% 120% at 12% 0%, rgba(43,124,180,0.14), transparent 58%),
-    radial-gradient(120% 120% at 92% 0%, rgba(201,119,43,0.14), transparent 58%),
-    linear-gradient(to bottom, var(--glass), var(--glass2));
+  background: var(--glass);
   backdrop-filter: blur(16px);
   border: 1px solid var(--border);
   box-shadow: var(--shadow);
@@ -2159,10 +2112,10 @@ body[data-page="ospiti"] .guest-card .actions {
 }
 
 
-/* dDAE_2.079 — Ospiti: azioni stile Apple (pallini verde/giallo/rosso) */
+/* dDAE_2.081 — Ospiti: azioni stile Apple (pallini verde/giallo/rosso) */
 
 /* =========================
-   dDAE_2.079 — Auth + Anno pill
+   dDAE_2.081 — Auth + Anno pill
 ========================= */
 
 .year-pill{
@@ -2315,7 +2268,7 @@ body[data-page="ospiti"] .guest-card .actions {
 }
 
 
-/* dDAE_2.079 — Ospiti: stanze come pallini azzurri */
+/* dDAE_2.081 — Ospiti: stanze come pallini azzurri */
 
 .rooms-dots{
   display:flex;
@@ -2355,7 +2308,7 @@ body[data-page="ospiti"] .guest-card .actions {
 
 
 
-/* dDAE_2.079 — Ospiti: pallini letti accanto alla stanza (stack per stanza) */
+/* dDAE_2.081 — Ospiti: pallini letti accanto alla stanza (stack per stanza) */
 
 .rooms-stack{
   display:flex;
@@ -2468,7 +2421,7 @@ body[data-page="ospiti"] .guest-card .actions {
 
 
 
-/* dDAE_2.079 — Matrimonio: pallino verde 'M' nella riga stanze */
+/* dDAE_2.081 — Matrimonio: pallino verde 'M' nella riga stanze */
 
 #page-ospite .room-dot-marriage{
   margin-left: 6px; /* resta nella stessa riga (nowrap) */
@@ -2483,7 +2436,7 @@ body[data-page="ospiti"] .guest-card .actions {
 }
 
 
-/* dDAE_2.079 — Acconto: pallini C/E come stanze */
+/* dDAE_2.081 — Acconto: pallini C/E come stanze */
 
 #page-ospite .pay-dots{
   display:grid;
@@ -2511,7 +2464,7 @@ body[data-page="ospiti"] .guest-card .actions {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* dDAE_2.079 — allineamento "pallini" Contanti/Elettronico (iOS/Safari) */
+/* dDAE_2.081 — allineamento "pallini" Contanti/Elettronico (iOS/Safari) */
 #page-ospite .pay-dots{
   place-items: center;
 }
@@ -2521,9 +2474,9 @@ body[data-page="ospiti"] .guest-card .actions {
 
 
 
-/* dDAE_2.079 — Pay dots: bianchi quando non selezionati + più distanziati */
+/* dDAE_2.081 — Pay dots: bianchi quando non selezionati + più distanziati */
 
-/* dDAE_2.079 — Pay dots: niente riflesso/ombra e allineamento verticale */
+/* dDAE_2.081 — Pay dots: niente riflesso/ombra e allineamento verticale */
 
 #page-ospite .pay-dot,
 #page-ospite .pay-dot.selected{
@@ -2531,7 +2484,7 @@ body[data-page="ospiti"] .guest-card .actions {
 }
 
 
-/* dDAE_2.079 — Colori pallini pagamento (bianchi se off) + niente ombre */
+/* dDAE_2.081 — Colori pallini pagamento (bianchi se off) + niente ombre */
 
 #page-ospite .pay-dot,
 #page-ospite .pay-dot.selected{
@@ -2558,7 +2511,7 @@ body[data-page="ospiti"] .guest-card .actions {
 }
 
 
-/* dDAE_2.079 — iOS: evita accavallamento label/value su date/number */
+/* dDAE_2.081 — iOS: evita accavallamento label/value su date/number */
 
 .field.float input[type="date"],
 .field.float input[type="number"],
@@ -2576,7 +2529,7 @@ body[data-page="ospiti"] .guest-card .actions {
 
 
 
-/* dDAE_2.079 — Fix definitivo allineamento pallini pagamento */
+/* dDAE_2.081 — Fix definitivo allineamento pallini pagamento */
 
 #page-ospite .field.two-col.payment-row{
   display: grid;
@@ -2598,7 +2551,7 @@ body[data-page="ospiti"] .guest-card .actions {
 }
 
 
-/* dDAE_2.079 — Override anti-vincoli: nessun offset fisso su C/E */
+/* dDAE_2.081 — Override anti-vincoli: nessun offset fisso su C/E */
 
 #page-ospite #depositType,
 #page-ospite #saldoType{
@@ -2624,7 +2577,7 @@ body[data-page="ospiti"] .guest-card .actions {
 }
 
 
-/* dDAE_2.079 — Eliminazione totale label tipo saldo + paywrap pulito */
+/* dDAE_2.081 — Eliminazione totale label tipo saldo + paywrap pulito */
 
 #page-ospite .subfield.paywrap::before,
 #page-ospite .subfield.paywrap::after{
@@ -2633,7 +2586,7 @@ body[data-page="ospiti"] .guest-card .actions {
 }
 
 
-/* dDAE_2.079 — mini led accanto ai prezzi (Acconto/Saldo) */
+/* dDAE_2.081 — mini led accanto ai prezzi (Acconto/Saldo) */
 .guest-led.mini-led{
   width: 10px;
   height: 10px;
@@ -2648,14 +2601,14 @@ body[data-page="ospiti"] .guest-card .actions {
 
 
 /* ===== CALENDARIO ===== */
-/* dDAE_2.079 — Calendario: margini orizzontali 5px (compensa padding .wrap) */
+/* dDAE_2.081 — Calendario: margini orizzontali 5px (compensa padding .wrap) */
 #page-calendario .content.calendar-page{
   margin-left: -9px; /* 14px (wrap) - 9px = 5px */
   margin-right: -9px;
 }
 
 
-/* dDAE_2.079 — Calendario: grafica più simile a Pulizie (solo UI, nessuna logica) */
+/* dDAE_2.081 — Calendario: grafica più simile a Pulizie (solo UI, nessuna logica) */
 #page-calendario .cal-nav-btn{
   background: rgba(255,255,255,0.92);
   border: 1px solid rgba(15,23,42,0.14);
@@ -2831,7 +2784,7 @@ body[data-page="ospiti"] .guest-card .actions {
 .cal-nav-btn:active{ transform: scale(.98); }
 
 /* Pulsante sync (verde) all'estrema destra */
-/* dDAE_2.079: calendario leggibile + colori pastello */
+/* dDAE_2.081: calendario leggibile + colori pastello */
 .cal-nav-btn-sync{
   position:absolute;
   right:5px;
@@ -3061,10 +3014,10 @@ body[data-page="ospiti"] .guest-card .actions {
 */
 .cal-cell.has-booking{
   background-color: var(--room-bg, rgba(255,255,255,.08));
-  background-image: linear-gradient(rgba(255,255,255,.40), rgba(255,255,255,.40));
-  border-color: rgba(255,255,255,.16);
+  background-image: none;
+border-color: rgba(255,255,255,.16);
 }
-/* ===== dDAE_2.079 FIX: HOME grid clickable (no flex override) ===== */
+/* ===== dDAE_2.081 FIX: HOME grid clickable (no flex override) ===== */
 #page-home .home-grid{
   display: grid !important;
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -3074,7 +3027,7 @@ body[data-page="ospiti"] .guest-card .actions {
   width: min(460px, 94vw) !important;
   padding: 14px !important;
 }
-/* === dDAE_2.079 FIX: Home grid reale (icone non sovrapposte / tappabili) === */
+/* === dDAE_2.081 FIX: Home grid reale (icone non sovrapposte / tappabili) === */
 #page-home .home-grid{
   display: grid !important;
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -3092,7 +3045,7 @@ body[data-page="ospiti"] .guest-card .actions {
 }
 
 
-/* ===== OSPITI: filtri in griglia 2x2 (dDAE_2.079) ===== */
+/* ===== OSPITI: filtri in griglia 2x2 (dDAE_2.081) ===== */
 .guest-filter-grid{
   display:flex;
   flex-direction: column;
@@ -3202,7 +3155,7 @@ body[data-page="ospiti"] .guest-card .actions {
 }
 
 
-/* dDAE_2.079 — Ospiti: pulsante + in testata */
+/* dDAE_2.081 — Ospiti: pulsante + in testata */
 .btn-add-guest{
   width: 40px;
   height: 40px;
@@ -3226,7 +3179,7 @@ body[data-page="ospiti"] .guest-card .actions {
 }
 
 
-/* dDAE_2.079 — Pagamenti: pillola con 3 pallini (Contanti / Elettronico + Ricevuta) */
+/* dDAE_2.081 — Pagamenti: pillola con 3 pallini (Contanti / Elettronico + Ricevuta) */
 #page-ospite .field.two-col.payment-row{
   grid-template-columns: minmax(0,1fr) 170px !important;
 }
@@ -3245,9 +3198,7 @@ body[data-page="ospiti"] .guest-card .actions {
   gap: 12px;
 
   border: 1px solid rgba(15,23,42,0.14);
-  background:
-    radial-gradient(140% 120% at 30% 0%, rgba(255,255,255,0.92), rgba(255,255,255,0.70)),
-    linear-gradient(to bottom, rgba(255,255,255,0.86), rgba(255,255,255,0.72));
+  background: var(--glass);
   backdrop-filter: blur(14px);
 }
 
@@ -3286,7 +3237,7 @@ body[data-page="ospiti"] .guest-card .actions {
 }
 
 
-/* dDAE_2.079 — Pillola registrazioni PS/ISTAT (pallini sotto Contanti/Ricevuta) */
+/* dDAE_2.081 — Pillola registrazioni PS/ISTAT (pallini sotto Contanti/Ricevuta) */
 #page-ospite .pay-gap{
   opacity: 0;
   pointer-events: none;
@@ -3307,7 +3258,7 @@ body[data-page="ospiti"] .guest-card .actions {
 }
 
 
-/* dDAE_2.079 — Ospiti: riga cliccabile + LED a destra, arrivo a destra del nome */
+/* dDAE_2.081 — Ospiti: riga cliccabile + LED a destra, arrivo a destra del nome */
 #page-ospiti .guest-card{
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -3359,7 +3310,7 @@ body[data-page="ospiti"] .guest-card .actions {
   margin-top: 2px;
 }
 
-/* dDAE_2.079 — Multi prenotazioni per stesso nome (scheda unica con blocchi multipli) */
+/* dDAE_2.081 — Multi prenotazioni per stesso nome (scheda unica con blocchi multipli) */
 #page-ospiti .guest-bookings{
   margin-top: 10px;
   display: flex;
@@ -3440,7 +3391,7 @@ body.perf-lite .guest-booking-block{
   white-space: nowrap;
 }
 
-/* dDAE_2.079 — iPhone: evita taglio dei tab/pillole sulla destra */
+/* dDAE_2.081 — iPhone: evita taglio dei tab/pillole sulla destra */
 @media (max-width: 430px){
   #page-ospite .field.two-col.payment-row{
     grid-template-columns: minmax(0,1fr) !important;
@@ -3618,7 +3569,7 @@ body.perf-lite *::after{
 }
 
 
-/* ===== dDAE_2.079 FIX: bordi neri (last-day / empty-selected) sopra has-booking ===== */
+/* ===== dDAE_2.081 FIX: bordi neri (last-day / empty-selected) sopra has-booking ===== */
 .cal-cell.last-day,
 .cal-cell.has-booking.last-day{
   border-color: rgba(0,0,0,.95) !important;
@@ -3634,7 +3585,7 @@ body.perf-lite *::after{
 }
 
 
-/* dDAE_2.079: riga spesa compatta (importo · data · motivazione) */
+/* dDAE_2.081: riga spesa compatta (importo · data · motivazione) */
 .spesa-line{
   display:flex;
   align-items:baseline;
@@ -3672,7 +3623,7 @@ body.perf-lite *::after{
   position:absolute;
   inset:0;
   pointer-events:none;
-  background: linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,0));
+  background: var(--glass);
   opacity:.35;
   mix-blend-mode: soft-light;
 }
@@ -3739,7 +3690,7 @@ body.perf-lite *::after{
 }
 
 
-/* dDAE_2.079 — Pulizie: raggruppa contenuto sotto topbar e spostalo giù di 30px */
+/* dDAE_2.081 — Pulizie: raggruppa contenuto sotto topbar e spostalo giù di 30px */
 #page-pulizie .clean-mainGroup{
   margin-top: 30px;
 }
@@ -3849,7 +3800,7 @@ grid-template-rows: 34px repeat(7, 54px);
   position:absolute;
   inset:0;
   pointer-events:none;
-  background: linear-gradient(180deg, rgba(255,255,255,.55), rgba(255,255,255,0));
+  background: var(--glass);
   opacity:.28;
   mix-blend-mode: soft-light;
 }
@@ -4019,7 +3970,7 @@ grid-template-rows: 34px repeat(7, 54px);
 
 
 /* =========================
-   Lavanderia (dDAE_2.079)
+   Lavanderia (dDAE_2.081)
 ========================= */
 #page-lavanderia .bd{ padding-bottom: 18px; }
 .laundry-sub{ margin: 2px 0 14px 0; }
@@ -4225,7 +4176,7 @@ grid-template-rows: 34px repeat(7, 54px);
 .laundry-del .x{ font-weight: 950; font-size: 16px; line-height: 1; }
 
 
-/* dDAE_2.079 — delete: stato busy + spinner (evita doppi tap) */
+/* dDAE_2.081 — delete: stato busy + spinner (evita doppi tap) */
 .laundry-del.busy{
   opacity: .70;
 }
@@ -4259,7 +4210,7 @@ grid-template-rows: 34px repeat(7, 54px);
   border-radius: 14px;
   font-weight: 950;
   color: #fff;
-  background: linear-gradient(90deg, rgba(201,119,43,0.92), rgba(43,124,180,0.92));
+  background: var(--glass);
 }
 
 .laundry-print-range{
@@ -4310,7 +4261,7 @@ grid-template-rows: 34px repeat(7, 54px);
 }
 
 
-/* ===== Tassa di soggiorno (dDAE_2.079) ===== */
+/* ===== Tassa di soggiorno (dDAE_2.081) ===== */
 .home-main-label.small{ font-size: 14px; line-height: 1.05; text-align:center; }
 
 .tax-hd{ display:flex; align-items:center; justify-content:center; gap:12px; }
@@ -4337,10 +4288,7 @@ grid-template-rows: 34px repeat(7, 54px);
   margin-top: 10px;
   color: rgba(255,255,255,0.98);
   border-color: rgba(201,119,43,0.65);
-  background:
-    radial-gradient(120% 120% at 18% 0%, rgba(255,255,255,0.55), rgba(255,255,255,0) 58%),
-    radial-gradient(140% 120% at 90% 0%, rgba(255,216,168,0.55), rgba(255,255,255,0) 62%),
-    linear-gradient(180deg, rgba(201,119,43,0.92), rgba(201,119,43,0.72));
+  background: var(--glass);
   box-shadow: 0 12px 28px rgba(15,23,42,0.16);
   backdrop-filter: blur(16px);
 
@@ -4353,7 +4301,7 @@ grid-template-rows: 34px repeat(7, 54px);
 }
 
 
-/* dDAE_2.079 - iOS fix: su PWA Safari alcuni button perdono il colore testo */
+/* dDAE_2.081 - iOS fix: su PWA Safari alcuni button perdono il colore testo */
 .btn.tax-calc,
 .btn.tax-report,
 .btn.ghost.tax-back{
@@ -4483,10 +4431,10 @@ grid-template-rows: 34px repeat(7, 54px);
 
 /* =========================
    Ore pulizia (calendario ore operatori)
-   Build: dDAE_2.079
+   Build: dDAE_2.081
 ========================= */
  (calendario ore operatori)
-   Build: dDAE_2.079
+   Build: dDAE_2.081
 ========================= */
 
 .opcal-wrap{
@@ -4717,10 +4665,7 @@ grid-template-rows: 34px repeat(7, 54px);
 
 /* Modal report tassa */
 .tax-report-card{
-  background:
-    radial-gradient(120% 120% at 12% 0%, rgba(43,124,180,0.10), transparent 58%),
-    radial-gradient(120% 120% at 92% 0%, rgba(201,119,43,0.12), transparent 58%),
-    linear-gradient(to bottom, rgba(255,255,255,0.92), rgba(255,255,255,0.78));
+  background: var(--glass);
   border: 1px solid rgba(15,23,42,0.10);
   box-shadow: 0 14px 34px rgba(15,23,42,0.16);
 }
@@ -4736,7 +4681,7 @@ grid-template-rows: 34px repeat(7, 54px);
   max-height: 44vh;
   overflow: auto;
 }
-/* dDAE_2.079: icone calendario più leggibili (evita bianco su bianco) */
+/* dDAE_2.081: icone calendario più leggibili (evita bianco su bianco) */
 #page-calendario .cal-nav-btn .ui-ico{ stroke: rgba(15,23,42,0.72); }
 #page-calendario .cal-nav-btn-sync{ background: rgba(186, 255, 201, .70); border-color: rgba(15,23,42,0.10); }
 #page-calendario .cal-nav-btn-sync .ui-ico{ stroke: rgba(9, 83, 25, .92); }
@@ -4750,13 +4695,13 @@ grid-template-rows: 34px repeat(7, 54px);
 #page-calendario .calendar-page .cal-body{ margin-top: 28px; }
 
 
-/* dDAE_2.079: Ore Pulizia - shift up 30px */
+/* dDAE_2.081: Ore Pulizia - shift up 30px */
 #page-orepulizia .opcal-wrap{
   padding: calc(12px + var(--safe-top) - 30px) 19px 26px;
 }
 
 
-/* dDAE_2.079 — Stanze occupate: rosso pieno (tinta unita) */
+/* dDAE_2.081 — Stanze occupate: rosso pieno (tinta unita) */
 #page-ospite .room-dot.occupied{
   background: #ff0000 !important;
   background-image: none !important;
@@ -4771,7 +4716,7 @@ grid-template-rows: 34px repeat(7, 54px);
 }
 
 
-/* dDAE_2.079 — iOS: più spazio sotto alle date (testo non attaccato al bordo) */
+/* dDAE_2.081 — iOS: più spazio sotto alle date (testo non attaccato al bordo) */
 #page-ospite input[type="date"]{
   padding-bottom: 18px !important;
   line-height: 1.2;
@@ -4780,7 +4725,7 @@ grid-template-rows: 34px repeat(7, 54px);
 
 /* =========================
    Topbar tools (Pulizie) — white buttons with colored icons (iOS-safe)
-   Build: dDAE_2.079
+   Build: dDAE_2.081
 ========================= */
 #pulizieTopTools{
   display:flex;
@@ -4835,7 +4780,7 @@ grid-template-rows: 34px repeat(7, 54px);
 .btn.tax-calc-whiteorange:active{ transform: translateY(1px); }
 
 
-/* --- Lavanderia: layout griglia + card senza vetro (dDAE_2.079) --- */
+/* --- Lavanderia: layout griglia + card senza vetro (dDAE_2.081) --- */
 #page-lavanderia .card--plain{
   background: transparent !important;
   backdrop-filter: none !important;
@@ -4881,7 +4826,7 @@ grid-template-rows: 34px repeat(7, 54px);
 .laundry-tile[data-key="TPI"]{ --tile-bg: rgba(230,232,236,0.40); }
 
 
-/* --- Lavanderia: fix layout tasto report (dDAE_2.079) --- */
+/* --- Lavanderia: fix layout tasto report (dDAE_2.081) --- */
 #page-lavanderia .laundry-gen-wrap{
   width: 100%;
   display: flex;
@@ -4899,7 +4844,7 @@ grid-template-rows: 34px repeat(7, 54px);
 
 
 
-/* dDAE_2.079 — Lavanderia: titolo centrale grande + period tab centrale + bottone full-width */
+/* dDAE_2.081 — Lavanderia: titolo centrale grande + period tab centrale + bottone full-width */
 #page-lavanderia .card .hd{
   justify-content: center;
   padding-top: 10px;
@@ -4916,7 +4861,7 @@ grid-template-rows: 34px repeat(7, 54px);
   letter-spacing: 0.2px;
 }
 
-/* dDAE_2.079 — Lavanderia: header come le altre pagine (fix titolo + spazio sopra) */
+/* dDAE_2.081 — Lavanderia: header come le altre pagine (fix titolo + spazio sopra) */
 #page-lavanderia .card .hd{
   justify-content: space-between;
   padding: 12px 14px;
@@ -4962,7 +4907,7 @@ grid-template-rows: 34px repeat(7, 54px);
 
 
 
-/* dDAE_2.079 — Ospiti: layout flat + trasparenze 20% */
+/* dDAE_2.081 — Ospiti: layout flat + trasparenze 20% */
 #page-ospiti .guest-cards-card{
   background: transparent !important;
   border: none !important;
@@ -4997,7 +4942,7 @@ grid-template-rows: 34px repeat(7, 54px);
 
 
 
-/* ===== dDAE_2.079 UI fixes ===== */
+/* ===== dDAE_2.081 UI fixes ===== */
 
 /* OSPITI – tasti riordino (Oggi / Ordina per / Freccia):
    sfondo azzurro 20% opacità, testo nero bold e centrato */
@@ -5054,7 +4999,7 @@ grid-template-rows: 34px repeat(7, 54px);
 }
 
 
-/* dDAE_2.079 — Pagine senza vetro (Tassa/Impostazioni) */
+/* dDAE_2.081 — Pagine senza vetro (Tassa/Impostazioni) */
 #page-tassa .card,
 #page-impostazioni .card{
   background: transparent !important;
@@ -5079,7 +5024,7 @@ grid-template-rows: 34px repeat(7, 54px);
 }
 
 
-/* dDAE_2.079 — Pagine senza vetro (Tassa / Impostazioni) */
+/* dDAE_2.081 — Pagine senza vetro (Tassa / Impostazioni) */
 #page-tassa .card,
 #page-impostazioni .card{
   background: transparent !important;
@@ -5103,7 +5048,7 @@ grid-template-rows: 34px repeat(7, 54px);
   padding-right: 0 !important;
 }
 
-/* dDAE_2.079 — Impostazioni: titolo a sinistra + underline full-width (nero, sottile) */
+/* dDAE_2.081 — Impostazioni: titolo a sinistra + underline full-width (nero, sottile) */
 #page-impostazioni .card .hd{
   justify-content: flex-start !important;
 }
@@ -5130,7 +5075,7 @@ grid-template-rows: 34px repeat(7, 54px);
 }
 
 
-/* --- Inserisci: card senza vetro (dDAE_2.079) --- */
+/* --- Inserisci: card senza vetro (dDAE_2.081) --- */
 #page-inserisci .card--plain{
   background: transparent !important;
   backdrop-filter: none !important;
@@ -5148,7 +5093,7 @@ grid-template-rows: 34px repeat(7, 54px);
   padding-right: 0;
 }
 
-/* dDAE_2.079 — OSPITE: pulsante azione tinta unita (no gradient)
+/* dDAE_2.081 — OSPITE: pulsante azione tinta unita (no gradient)
    - Crea (Inserisci): arancione 40%
    - Salva modifiche: azzurro 40%
 */
@@ -5163,7 +5108,7 @@ grid-template-rows: 34px repeat(7, 54px);
   color: rgba(15,23,42,0.92) !important;
 }
 
-/* dDAE_2.079 — Lavanderia UI fixes */
+/* dDAE_2.081 — Lavanderia UI fixes */
 #page-lavanderia #btnLaundryGenerate{
   background-color: rgba(155,92,32,0.40) !important; /* arancione tinta unita 40% */
   background-image: none !important;
@@ -5180,7 +5125,7 @@ grid-template-rows: 34px repeat(7, 54px);
 }
 
 
-/* dDAE_2.079 Lavanderia */
+/* dDAE_2.081 Lavanderia */
 #page-lavanderia #btnLaundryGenerate{
   background-color: rgba(155,92,32,0.40) !important;
   background-image: none !important;
@@ -5198,7 +5143,7 @@ grid-template-rows: 34px repeat(7, 54px);
 }
 
 /* ============================
-   dDAE_2.079 — FIX UI mirati (richiesta utente)
+   dDAE_2.081 — FIX UI mirati (richiesta utente)
    - Spese > Inserisci spesa: senza vetro sotto (elementi sullo sfondo)
    - Pulsante Salva: arancione 40% opacita
    - Popup tipologia letti: Annulla/Conferma identici, centrati; rosso/verde 40%
@@ -5251,7 +5196,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 }
 
 /* =========================
-   dDAE_2.079 — HOME: Year pill sopra le icone (>=30px)
+   dDAE_2.081 — HOME: Year pill sopra le icone (>=30px)
 ========================= */
 #page-home .home-page{
   display:flex;
@@ -5379,7 +5324,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 }
 
 /* =========================
- * STATISTICHE (dDAE_2.079)
+ * STATISTICHE (dDAE_2.081)
  * - elementi appoggiati allo sfondo
  * - schede tinta unita 20% (se usate)
  * - tasti tinta unita 40%
@@ -5442,9 +5387,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   font-weight: 950;
   color: var(--blue);
   border: 1px solid rgba(15,23,42,0.10);
-  background:
-    radial-gradient(140% 120% at 30% 0%, rgba(255,255,255,0.88), rgba(255,255,255,0.60)),
-    linear-gradient(to bottom, rgba(255,255,255,0.90), rgba(255,255,255,0.72));
+  background: var(--glass);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   margin: 0 auto;
@@ -5686,7 +5629,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 }
 
 
-/* dDAE_2.079 — iPhone: evita taglio pillole/tabs a destra nella scheda ospite */
+/* dDAE_2.081 — iPhone: evita taglio pillole/tabs a destra nella scheda ospite */
 @media (max-width: 430px){
   #page-ospite .field.two-col.payment-row{
     grid-template-columns: minmax(0,1fr) !important;
@@ -5717,7 +5660,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 #calGrid.is-loading{opacity:.6;transition:opacity .12s ease;}
 
 
-/* dDAE_2.079 — HOME: sposta pill+icone più in basso (evita overlap topbar) */
+/* dDAE_2.081 — HOME: sposta pill+icone più in basso (evita overlap topbar) */
 #page-home .year-pill{ margin-top: 10px; }
 #page-home .home-page{ padding-top: 6px; }
 
@@ -6005,10 +5948,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 .prod-add-card{
   width: min(460px, 94vw);
   border-radius: 18px;
-  background:
-    radial-gradient(120% 120% at 12% 0%, rgba(43,124,180,0.14), transparent 58%),
-    radial-gradient(120% 120% at 92% 0%, rgba(201,119,43,0.14), transparent 58%),
-    linear-gradient(to bottom, var(--glass), var(--glass2));
+  background: var(--glass);
   backdrop-filter: blur(16px);
   -webkit-backdrop-filter: blur(16px);
   border: 1px solid var(--border);
