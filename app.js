@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.074";
+const BUILD_VERSION = "dDAE_2.078";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -1815,7 +1815,7 @@ function invalidateApiCache(prefix){
 }
 
 // ===== LocalStorage cache (perceived speed on iOS) =====
-const __lsPrefix = "ddae_cache_v1:";
+const __lsPrefix = "ddae_cache_v2:";
 function __lsClearAll(){
   try{
     const keys = [];
@@ -1954,7 +1954,12 @@ const lav = e.target.closest && e.target.closest("#goLavanderia") || e.target.cl
     const s4 = e.target.closest && e.target.closest("#goStatPrenotazioni");
     if (s4){ hideLauncher(); showPage("statprenotazioni"); return; }
 
-  });
+  
+    const s5 = e.target.closest && e.target.closest("#goStatAdmin");
+    if (s5){ hideLauncher(); showPage("statadmin"); return; }
+    const s6 = e.target.closest && e.target.closest("#goStatSrl");
+    if (s6){ hideLauncher(); showPage("statsrl"); return; }
+});
 }
 
 function bindLauncherDelegation(){
@@ -2160,6 +2165,17 @@ state.page = page;
     statPrenTopTools.hidden = (page !== "statprenotazioni");
   }
 
+
+  const statAdminTopTools = $("#statAdminTopTools");
+  if (statAdminTopTools){
+    statAdminTopTools.hidden = (page !== "statadmin");
+  }
+
+  const statSrlTopTools = $("#statSrlTopTools");
+  if (statSrlTopTools){
+    statSrlTopTools.hidden = (page !== "statsrl");
+  }
+
 // render on demand
   if (page === "prodotti") {
     const _nav = navId;
@@ -2244,6 +2260,25 @@ state.page = page;
       loadOspiti({ ...(state.period || {}), force:false }),
     ])
       .then(()=>{ if (state.navId !== _nav || state.page !== "statprenotazioni") return; renderStatPrenotazioni(); })
+      .catch(e=>toast(e.message));
+  }
+
+
+  if (page === "statadmin") {
+    const _nav = navId;
+    // usa solo dati locali (popup)
+    Promise.resolve()
+      .then(()=>{ if (state.navId !== _nav || state.page !== "statadmin") return; renderStatAdmin(); })
+      .catch(e=>toast(e.message));
+  }
+
+  if (page === "statsrl") {
+    const _nav = navId;
+    Promise.all([
+      ensurePeriodData({ showLoader:true }),
+      loadOspiti({ ...(state.period || {}), force:false }),
+    ])
+      .then(()=>{ if (state.navId !== _nav || state.page !== "statsrl") return; renderStatSrl(); })
       .catch(e=>toast(e.message));
   }
 
@@ -2424,7 +2459,12 @@ if (goCalendarioTopOspiti){
   const s4 = $("#goStatPrenotazioni");
   if (s4){ bindFastTap(s4, () => { hideLauncher(); showPage("statprenotazioni"); }); }
 
-  // STATGEN: topbar tools
+  
+  const s5 = $("#goStatAdmin");
+  if (s5){ bindFastTap(s5, () => { hideLauncher(); showPage("statadmin"); }); }
+  const s6 = $("#goStatSrl");
+  if (s6){ bindFastTap(s6, () => { hideLauncher(); showPage("statsrl"); }); }
+// STATGEN: topbar tools
   const btnBackStats = $("#btnBackStatistiche");
   if (btnBackStats){ bindFastTap(btnBackStats, () => { closeStatPieModal(); showPage("statistiche"); }); }
   // STATMENSILI: topbar tools
@@ -2461,6 +2501,27 @@ if (goCalendarioTopOspiti){
   if (btnBackStatsSpese){ bindFastTap(btnBackStatsSpese, () => { closeStatSpesePieModal(); showPage("statistiche"); }); }
   const btnBackStatsPren = $("#btnBackStatistichePrenotazioni");
   if (btnBackStatsPren){ bindFastTap(btnBackStatsPren, () => { showPage("statistiche"); }); }
+
+  // STATISTICHE: Amministratore / SRL topbar tools
+  const btnBackStatsAdmin = $("#btnBackStatisticheAdmin");
+  if (btnBackStatsAdmin){ bindFastTap(btnBackStatsAdmin, () => { showPage("statistiche"); }); }
+  const btnBackStatsSrl = $("#btnBackStatisticheSrl");
+  if (btnBackStatsSrl){ bindFastTap(btnBackStatsSrl, () => { showPage("statistiche"); }); }
+
+  const btnDataAdmin = $("#btnStatAdminData");
+  if (btnDataAdmin){ bindFastTap(btnDataAdmin, () => { openStatDataModal(); }); }
+  const btnDataSrl = $("#btnStatSrlData");
+  if (btnDataSrl){ bindFastTap(btnDataSrl, () => { openStatDataModal(); }); }
+
+  const statDataClose = $("#statDataClose");
+  if (statDataClose){ bindFastTap(statDataClose, () => closeStatDataModal()); }
+  const statDataModal = $("#statDataModal");
+  if (statDataModal){
+    statDataModal.addEventListener("click", (e)=>{ if (e.target === statDataModal) closeStatDataModal(); });
+  }
+  const statDataSave = $("#statDataSave");
+  if (statDataSave){ bindFastTap(statDataSave, () => saveStatDataFromModal()); }
+
   const btnPieSpese = $("#btnStatSpesePie");
   if (btnPieSpese){ bindFastTap(btnPieSpese, () => { openStatSpesePieModal(); }); }
 
@@ -2781,8 +2842,8 @@ async function ensurePeriodData({ showLoader=true, force=false } = {}){
   }
 
   // Prefill immediato da cache locale (perceived speed) — poi refresh SWR
-  const lsSpeseKey = `spese|${from}|${to}`;
-  const lsReportKey = `report|${from}|${to}`;
+  const lsSpeseKey = `spese|${ctxKey}|${from}|${to}`;
+  const lsReportKey = `report|${ctxKey}|${from}|${to}`;
   const hitS = !force ? __lsGet(lsSpeseKey) : null;
   const hitR = !force ? __lsGet(lsReportKey) : null;
   const hasLocal = !!((hitS && hitS.data) || (hitR && hitR.data));
