@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.081";
+const BUILD_VERSION = "dDAE_2.082";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -1319,7 +1319,7 @@ ids.forEach((id, idx) => {
 // Se sessione OPERATORE: in Pulizie mostra solo il nome dell'operatore loggato
 try{
   if (state && state.session && isOperatoreSession(state.session)){
-    const rawU = String(state.session.username || state.session.user || state.session.nome || state.session.name || state.session.email || "").trim();
+    const rawU = String(state.session._op_local || state.session.username || state.session.user || state.session.nome || state.session.name || state.session.email || "").trim();
     const normU = rawU.toLowerCase();
     if (normU){
       const names2 = names;
@@ -1554,6 +1554,14 @@ function setupImpostazioni() {
 
       const ownerUsername = String(s.username || "").trim();
       const operatorUsername = String(opUser?.value || "").trim();
+      const __composeOpUser = (tenant, opu)=>{
+        const t = String(tenant || '').trim();
+        const o = String(opu || '').trim();
+        if (!t || !o) return o;
+        if (o.includes('__')) return o;
+        return `${t}__${o}`;
+      };
+      const operatorFullUsername = __composeOpUser(ownerUsername, operatorUsername);
       const operatorPassword = String(opPass?.value || "");
       const ownerPassword = String(opOwnerPass?.value || "");
 
@@ -1569,7 +1577,7 @@ function setupImpostazioni() {
             op:"create_operator",
             username: ownerUsername,
             password: ownerPassword,
-            operator_username: operatorUsername,
+            operator_username: operatorFullUsername,
             operator_password: operatorPassword,
           },
           showLoader:true,
@@ -1588,7 +1596,7 @@ function setupImpostazioni() {
             op:"update_operator",
             username: ownerUsername,
             password: ownerPassword,
-            operator_username: operatorUsername,
+            operator_username: operatorFullUsername,
             newPassword: operatorPassword,
           },
           showLoader:true,
@@ -1609,7 +1617,7 @@ function setupImpostazioni() {
             op:"delete_operator",
             username: ownerUsername,
             password: ownerPassword,
-            operator_username: operatorUsername,
+            operator_username: operatorFullUsername,
           },
           showLoader:true,
         });
@@ -1620,7 +1628,14 @@ function setupImpostazioni() {
       }
 
       __opSetMsg("Operazione non valida", "err");
-    }catch(e){ __opSetMsg(e.message || "Errore", "err"); }
+    }catch(e){
+      const msg = String(e && e.message ? e.message : "Errore");
+      if (msg.toLowerCase().includes("username operatore già esistente")){
+        __opSetMsg(`Nella struttura "${ownerUsername}" questo username operatore è già in uso. Scegli un nome diverso.`, "err");
+      } else {
+        __opSetMsg(msg, "err");
+      }
+    }
   }
 
   if (opBtn) bindFastTap(opBtn, __opOpen);
@@ -1634,9 +1649,26 @@ function setupImpostazioni() {
 
 
 function setupAuth(){
+  const menu = document.getElementById("authMenu");
+  const form = document.getElementById("authForm");
+
+  const btnMenuCreate = document.getElementById("btnMenuCreate");
+  const btnMenuEdit = document.getElementById("btnMenuEdit");
+  const btnMenuAdmin = document.getElementById("btnMenuAdmin");
+  const btnMenuOperator = document.getElementById("btnMenuOperator");
+
+  const btnBack = document.getElementById("btnAuthBack");
+  const btnSubmit = document.getElementById("btnAuthSubmit");
+
+  const tenantWrap = document.getElementById("authOperatorTenant");
+  const tenantIn = document.getElementById("authTenant");
+  const tenantRemember = document.getElementById("authTenantRemember");
+
+  const credsWrap = document.getElementById("authCredsWrap");
   const u = document.getElementById("authUsername");
   const p = document.getElementById("authPassword");
-  const hint = document.getElementById("authHint");
+  const uLabel = document.getElementById("authUsernameLabel");
+  const pLabel = document.getElementById("authPasswordLabel");
 
   const extra = document.getElementById("authExtra");
   const nome = document.getElementById("authNome");
@@ -1648,137 +1680,262 @@ function setupAuth(){
   const np2 = document.getElementById("authNewPassword2");
   const npWrap = document.getElementById("authNewPasswordWrap");
 
-  const setHint = (msg)=>{ try{ if (hint) hint.textContent = msg || ""; }catch(_){ } };
+  const hint = document.getElementById("authHint");
+  const setHint = (msg)=>{ try{ if (hint) hint.textContent = msg || ""; }catch(_ ){} };
 
-  const btnCreate = document.getElementById("btnCreateAccount");
-  const btnEdit = document.getElementById("btnEditAccount");
-  const btnLogin = document.getElementById("btnLogin");
+  const LS_TENANT_KEY = "dDAE_lastTenant";
 
-  let mode = "login"; // login | create | edit
+  const normalizeTenant = (s)=>{
+    let v = String(s || "").trim().toLowerCase();
+    // rimuovi spazi
+    v = v.replace(/\s+/g, "");
+    // consenti solo [a-z0-9_-]
+    v = v.replace(/[^a-z0-9_-]/g, "");
+    return v;
+  };
+
+  const composeOperatorUsername = (tenant, opUser)=>{
+    const t = normalizeTenant(tenant);
+    const o = String(opUser || "").trim();
+    if (!t || !o) return o;
+    // se già contiene separatore, lascia com'è (compat / avanzato)
+    if (o.includes("__")) return o;
+    return `${t}__${o}`;
+  };
+
+  let mode = "menu"; // menu | create | edit | login_admin | op_tenant | login_operator
+  let opTenant = "";
+
+  const showMenu = ()=>{
+    mode = "menu";
+    if (menu) menu.hidden = false;
+    if (form) form.hidden = true;
+    setHint("");
+    try{ if (tenantWrap) tenantWrap.hidden = true; }catch(_ ){}
+    try{ if (extra) extra.hidden = true; }catch(_ ){}
+    try{ if (p2Wrap) p2Wrap.hidden = true; }catch(_ ){}
+    try{ if (npWrap) npWrap.hidden = true; }catch(_ ){}
+    try{ if (u) u.value = ""; if (p) p.value = ""; }catch(_ ){}
+    try{ if (tenantIn) tenantIn.value = ""; if (tenantRemember) tenantRemember.checked = false; }catch(_ ){}
+    try{ refreshFloatingLabels(); }catch(_ ){}
+  };
 
   const setMode = (m)=>{
     mode = m;
-    // active button styling
-    try{
-      [btnCreate, btnEdit, btnLogin].forEach(b=>b && b.classList.remove("is-active"));
-      if (m === "create" && btnCreate) btnCreate.classList.add("is-active");
-      if (m === "edit" && btnEdit) btnEdit.classList.add("is-active");
-      if (m === "login" && btnLogin) btnLogin.classList.add("is-active");
-    }catch(_){ }
+    if (menu) menu.hidden = true;
+    if (form) form.hidden = false;
 
-    // show/hide extra form
-    const needExtra = (m === "create" || m === "edit");
-    if (extra) extra.hidden = !needExtra;
+    // defaults
+    try{ if (tenantWrap) tenantWrap.hidden = true; }catch(_ ){}
+    try{ if (credsWrap) credsWrap.hidden = false; }catch(_ ){}
+    try{ if (extra) extra.hidden = true; }catch(_ ){}
+    try{ if (p2Wrap) p2Wrap.hidden = true; }catch(_ ){}
+    try{ if (npWrap) npWrap.hidden = true; }catch(_ ){}
+    try{ if (btnSubmit) btnSubmit.textContent = "continua"; }catch(_ ){}
+    try{ if (uLabel) uLabel.textContent = "Username"; }catch(_ ){}
+    try{ if (pLabel) pLabel.textContent = "Password"; }catch(_ ){}
+    setHint("");
 
-    if (p2Wrap) p2Wrap.hidden = (m !== "create");
-    if (npWrap) npWrap.hidden = (m !== "edit");
-
-    // reset fields that don't apply
-    if (m !== "create" && p2) p2.value = "";
-    if (m !== "edit"){
-      if (np) np.value = "";
-      if (np2) np2.value = "";
+    if (m === "create"){
+      try{ if (extra) extra.hidden = false; }catch(_ ){}
+      try{ if (p2Wrap) p2Wrap.hidden = false; }catch(_ ){}
+      try{ if (btnSubmit) btnSubmit.textContent = "crea account"; }catch(_ ){}
+      try{ if (uLabel) uLabel.textContent = "Struttura"; }catch(_ ){}
+      try{ if (u) u.autocapitalize = "none"; }catch(_ ){}
+      try{ u && u.focus(); }catch(_ ){}
+      return;
     }
 
-    if (m === "login") setHint("");
-    if (m === "create") setHint("Inserisci i dati e premi di nuovo: crea account");
-    if (m === "edit") setHint("Inserisci i dati e premi di nuovo: modifica account");
+    if (m === "edit"){
+      try{ if (extra) extra.hidden = false; }catch(_ ){}
+      try{ if (npWrap) npWrap.hidden = false; }catch(_ ){}
+      try{ if (btnSubmit) btnSubmit.textContent = "modifica account"; }catch(_ ){}
+      try{ if (uLabel) uLabel.textContent = "Struttura"; }catch(_ ){}
+      try{ u && u.focus(); }catch(_ ){}
+      return;
+    }
+
+    if (m === "login_admin"){
+      try{ if (btnSubmit) btnSubmit.textContent = "accedi"; }catch(_ ){}
+      try{ if (uLabel) uLabel.textContent = "Username"; }catch(_ ){}
+      try{ u && u.focus(); }catch(_ ){}
+      return;
+    }
+
+    if (m === "op_tenant"){
+      try{ if (tenantWrap) tenantWrap.hidden = false; }catch(_ ){}
+      try{ if (credsWrap) credsWrap.hidden = true; }catch(_ ){}
+      try{ if (btnSubmit) btnSubmit.textContent = "continua"; }catch(_ ){}
+      // prefill
+      try{
+        const last = localStorage.getItem(LS_TENANT_KEY);
+        if (tenantIn) tenantIn.value = String(last || "");
+        if (tenantRemember) tenantRemember.checked = !!(last);
+      }catch(_ ){}
+      try{ tenantIn && tenantIn.focus(); }catch(_ ){}
+      return;
+    }
+
+    if (m === "login_operator"){
+      try{ if (btnSubmit) btnSubmit.textContent = "accedi"; }catch(_ ){}
+      try{ if (uLabel) uLabel.textContent = "Username operatore"; }catch(_ ){}
+      try{ if (pLabel) pLabel.textContent = "Password operatore"; }catch(_ ){}
+      try{ u && u.focus(); }catch(_ ){}
+      return;
+    }
   };
 
-  const readCreds = ()=>({
-    username: String(u?.value||"").trim(),
-    password: String(p?.value||"")
-  });
+  const goAfterLogin = ()=>{
+    try{ invalidateApiCache(); }catch(_ ){}
+    state.exerciseYear = loadExerciseYear();
+    updateYearPill();
+    try{ applyRoleMode(); }catch(_ ){}
+    showPage(isOperatoreSession(state.session) ? "pulizie" : "home");
+  };
 
-  const readProfile = ()=>({
-    nome: String(nome?.value||"").trim(),
-    telefono: String(tel?.value||"").trim(),
-    email: String(email?.value||"").trim(),
-  });
-
-  // default state
-  setMode("login");
-
-  if (btnCreate) bindFastTap(btnCreate, async ()=>{
-    if (mode !== "create"){
-      setMode("create");
-      try{ u && u.focus(); }catch(_){ }
-      return;
+  const mapAuthError = (msg)=>{
+    const m = String(msg || "").trim();
+    const low = m.toLowerCase();
+    if (mode === "create" && low.includes("username già esistente")) {
+      return "Nome struttura già in uso. Scegli un nome diverso.";
     }
+    return m || "Errore";
+  };
 
-    const {username, password} = readCreds();
-    const profile = readProfile();
-    const confirm = String(p2?.value||"");
+  if (btnMenuCreate) bindFastTap(btnMenuCreate, ()=>setMode("create"));
+  if (btnMenuEdit) bindFastTap(btnMenuEdit, ()=>setMode("edit"));
+  if (btnMenuAdmin) bindFastTap(btnMenuAdmin, ()=>setMode("login_admin"));
+  if (btnMenuOperator) bindFastTap(btnMenuOperator, ()=>setMode("op_tenant"));
 
-    if (!username || !password) { setHint("Inserisci username e password"); return; }
-    if (password !== confirm) { setHint("Le password non coincidono"); return; }
+  if (btnBack) bindFastTap(btnBack, showMenu);
 
+  if (btnSubmit) bindFastTap(btnSubmit, async ()=>{
     try{
-      setHint("...");
-      const data = await api("utenti", { method:"POST", body:{ op:"create", username, password, ...profile } });
-      setHint("Account creato");
-      if (data && data.user){
+      if (mode === "op_tenant"){
+        const t = normalizeTenant(tenantIn ? tenantIn.value : "");
+        if (!t) { setHint("Inserisci il nome struttura"); return; }
+        opTenant = t;
+        try{
+          if (tenantRemember && tenantRemember.checked) localStorage.setItem(LS_TENANT_KEY, opTenant);
+          if (tenantRemember && !tenantRemember.checked) localStorage.removeItem(LS_TENANT_KEY);
+        }catch(_ ){}
+        setMode("login_operator");
+        try{ if (u) u.value = ""; if (p) p.value = ""; }catch(_ ){}
+        try{ refreshFloatingLabels(); }catch(_ ){}
+        return;
+      }
+
+      if (mode === "login_operator"){
+        const opUserLocal = String(u ? u.value : "").trim();
+        const opPass = String(p ? p.value : "");
+        if (!opTenant) { setMode("op_tenant"); return; }
+        if (!opUserLocal || !opPass) { setHint("Inserisci username e password"); return; }
+
+        setHint("...");
+        let data = null;
+        const composed = composeOperatorUsername(opTenant, opUserLocal);
+
+        try{
+          data = await api("utenti", { method:"POST", body:{ op:"login", username: composed, password: opPass } });
+        }catch(e1){
+          const em = String(e1 && e1.message ? e1.message : "");
+          // fallback legacy: username operatore globale
+          const low = em.toLowerCase();
+          if (low.includes("credenziali") || low.includes("non valide")){
+            data = await api("utenti", { method:"POST", body:{ op:"login", username: opUserLocal, password: opPass } });
+          } else {
+            throw e1;
+          }
+        }
+
+        if (!data || !data.user) throw new Error("Credenziali non valide");
+        state.session = data.user;
+        try{ state.session._tenant = opTenant; state.session._op_local = opUserLocal; }catch(_ ){}
+        saveSession(state.session);
+        setHint("");
+        goAfterLogin();
+        return;
+      }
+
+      if (mode === "login_admin"){
+        const username = String(u ? u.value : "").trim();
+        const password = String(p ? p.value : "");
+        if (!username || !password) { setHint("Inserisci username e password"); return; }
+        setHint("...");
+        const data = await api("utenti", { method:"POST", body:{ op:"login", username, password } });
+        if (!data || !data.user) throw new Error("Credenziali non valide");
         state.session = data.user;
         saveSession(state.session);
-        state.exerciseYear = loadExerciseYear();
-        updateYearPill();
-        try{ applyRoleMode(); }catch(_){ }
-        showPage(isOperatoreSession(state.session) ? "pulizie" : "home");
+        setHint("");
+        goAfterLogin();
+        return;
       }
-    } catch(e){ setHint(e.message || "Errore"); }
-  });
 
-  if (btnEdit) bindFastTap(btnEdit, async ()=>{
-    if (mode !== "edit"){
-      setMode("edit");
-      try{ u && u.focus(); }catch(_){ }
-      return;
-    }
-
-    const {username, password} = readCreds();
-    const profile = readProfile();
-    const newPassword = String(np?.value||"");
-    const newPassword2 = String(np2?.value||"");
-
-    if (!username || !password) { setHint("Inserisci username e password"); return; }
-    if ((newPassword || newPassword2) && newPassword !== newPassword2) { setHint("Le nuove password non coincidono"); return; }
-
-    try{
-      setHint("...");
-      const data = await api("utenti", { method:"POST", body:{ op:"update", username, password, newPassword, ...profile } });
-      setHint("Account aggiornato");
-      if (data && data.user){
+      if (mode === "create"){
+        const username = normalizeTenant(u ? u.value : "");
+        const password = String(p ? p.value : "");
+        const password2 = String(p2 ? p2.value : "");
+        if (!username || !password) { setHint("Inserisci struttura e password"); return; }
+        if (password !== password2) { setHint("Le password non coincidono"); return; }
+        setHint("...");
+        const data = await api("utenti", {
+          method:"POST",
+          body:{
+            op:"create",
+            username,
+            password,
+            nome: String(nome ? nome.value : "").trim(),
+            telefono: String(tel ? tel.value : "").trim(),
+            email: String(email ? email.value : "").trim(),
+          }
+        });
+        if (!data || !data.user) throw new Error("Errore creazione account");
         state.session = data.user;
         saveSession(state.session);
-        try{ applyRoleMode(); }catch(_){ }
+        setHint("");
+        goAfterLogin();
+        return;
       }
-    } catch(e){ setHint(e.message || "Errore"); }
-  });
 
-  if (btnLogin) bindFastTap(btnLogin, async ()=>{
-    if (mode !== "login"){
-      setMode("login");
-      try{ u && u.focus(); }catch(_){ }
-      return;
+      if (mode === "edit"){
+        const username = normalizeTenant(u ? u.value : "");
+        const password = String(p ? p.value : "");
+        const newPassword = String(np ? np.value : "");
+        const newPassword2 = String(np2 ? np2.value : "");
+        if (!username || !password) { setHint("Inserisci struttura e password"); return; }
+        if ((newPassword || newPassword2) && newPassword !== newPassword2) { setHint("Le nuove password non coincidono"); return; }
+        setHint("...");
+        const data = await api("utenti", {
+          method:"POST",
+          body:{
+            op:"update",
+            username,
+            password,
+            newPassword: newPassword,
+            nome: String(nome ? nome.value : "").trim(),
+            telefono: String(tel ? tel.value : "").trim(),
+            email: String(email ? email.value : "").trim(),
+          }
+        });
+        if (!data || !data.user) throw new Error("Errore modifica account");
+        state.session = data.user;
+        saveSession(state.session);
+        setHint("");
+        goAfterLogin();
+        return;
+      }
+
+      // fallback
+      showMenu();
+    }catch(e){
+      setHint(mapAuthError(e && e.message ? e.message : e));
     }
-
-    const {username, password} = readCreds();
-    if (!username || !password) { setHint("Inserisci username e password"); return; }
-    try{
-      setHint("...");
-      const data = await api("utenti", { method:"POST", body:{ op:"login", username, password } });
-      if (!data || !data.user) throw new Error("Credenziali non valide");
-      state.session = data.user;
-      saveSession(state.session);
-      try{ invalidateApiCache(); }catch(_){ }
-      state.exerciseYear = loadExerciseYear();
-      updateYearPill();
-      try{ applyRoleMode(); }catch(_){ }
-      setHint("");
-      showPage(isOperatoreSession(state.session) ? "pulizie" : "home");
-    } catch(e){ setHint(e.message || "Errore"); }
   });
+
+  // init
+  showMenu();
 }
+
 
 
 // ===== API Cache (speed + dedupe richieste) =====
@@ -6611,7 +6768,7 @@ async function init(){
   // Sessione OPERATORE: mostra solo il proprio nome
   try{
     if (state && state.session && isOperatoreSession(state.session)){
-      const rawU = String(state.session.username || state.session.user || state.session.nome || state.session.name || state.session.email || "").trim();
+      const rawU = String(state.session._op_local || state.session.username || state.session.user || state.session.nome || state.session.name || state.session.email || "").trim();
       const normU = rawU.toLowerCase();
       if (normU){
         const active = (names||[]).find(n => String(n||"").trim().toLowerCase() === normU) || rawU;
@@ -6909,7 +7066,7 @@ if (cleanSaveHours){
         const hasAnyName = names.some(n => String(n || '').trim());
         if (!hasAnyName) throw new Error("Imposta i nomi operatori in Impostazioni");
 
-        const rawU = String(state.session.username || state.session.user || state.session.nome || state.session.name || state.session.email || '').trim();
+        const rawU = String(state.session._op_local || state.session.username || state.session.user || state.session.nome || state.session.name || state.session.email || '').trim();
         if (!rawU) throw new Error('Operatore non valido');
         const normU = rawU.toLowerCase();
         const activeName = (names||[]).find(n => String(n||'').trim().toLowerCase() === normU) || rawU;
