@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.083";
+const BUILD_VERSION = "dDAE_2.084";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -1849,6 +1849,8 @@ function setupAuth(){
         }
 
         if (!data || !data.user) throw new Error("Credenziali non valide");
+        // blocca login admin se account è operatore
+        if (isOperatoreSession(data.user)) { setHint("Questo account è un operatore. Accedi dal tasto Operatore."); return; }
         state.session = data.user;
         try{ state.session._tenant = opTenant; state.session._op_local = opUserLocal; }catch(_ ){}
         saveSession(state.session);
