@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.088";
+const BUILD_VERSION = "dDAE_2.090";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -61,7 +61,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.088)
+// AUTH + SESSION (dDAE_2.090)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -487,7 +487,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.088 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.090 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2345,6 +2345,16 @@ state.page = page;
   if (statAmmTopTools){
     statAmmTopTools.hidden = (page !== "statamministratore");
   }
+
+  const btnAdminEditTop = $("#btnAdminEditTop");
+  if (btnAdminEditTop){
+    btnAdminEditTop.hidden = (page !== "statamministratore");
+  }
+
+  const btnAdminChartTop = $("#btnAdminChartTop");
+  if (btnAdminChartTop){
+    btnAdminChartTop.hidden = (page !== "statamministratore");
+  }
 // render on demand
   if (page === "prodotti") {
     const _nav = navId;
@@ -2453,7 +2463,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.088: fallback visualizzazione Pulizie
+  // dDAE_2.090: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -2469,6 +2479,13 @@ function setupHeader(){
 
   const btnIrapTop = document.getElementById("btnIrapTop");
   if (btnIrapTop) bindFastTap(btnIrapTop, () => { openIrapModal(); });
+
+
+  const btnAdminEditTop = document.getElementById("btnAdminEditTop");
+  if (btnAdminEditTop) bindFastTap(btnAdminEditTop, () => { openAdminPayModal(); });
+
+  const btnAdminChartTop = document.getElementById("btnAdminChartTop");
+  if (btnAdminChartTop) bindFastTap(btnAdminChartTop, () => { openAdminChartModal(); });
 
 
 
@@ -2764,8 +2781,20 @@ function setupGuestListControls(){
   if (btnIrapCancel) bindFastTap(btnIrapCancel, () => closeIrapModal());
   const btnIrapSave = document.getElementById("btnIrapSave");
   if (btnIrapSave) bindFastTap(btnIrapSave, () => saveIrapModal());
+  // Amministratore: popup compenso/TFM
+  const adminPayModal = document.getElementById("adminPayModal");
+  if (adminPayModal){
+    adminPayModal.addEventListener("click", (e)=>{ if (e.target === adminPayModal) closeAdminPayModal(); });
+  }
 
-  // Amministratore: salva compenso/TFM
+  const adminChartModal = document.getElementById("adminChartModal");
+  if (adminChartModal){
+    adminChartModal.addEventListener("click", (e)=>{ if (e.target === adminChartModal) closeAdminChartModal(); });
+  }
+  const adminChartClose = document.getElementById("adminChartClose");
+  if (adminChartClose) bindFastTap(adminChartClose, () => closeAdminChartModal());
+  const btnAdminCancel = document.getElementById("btnAdminCancel");
+  if (btnAdminCancel) bindFastTap(btnAdminCancel, () => closeAdminPayModal());
   const btnAdminSave = document.getElementById("btnAdminSave");
   if (btnAdminSave) bindFastTap(btnAdminSave, () => saveStatAmministratore());
 
@@ -3385,7 +3414,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.088)
+// STATISTICHE (dDAE_2.090)
 // =========================
 
 function computeStatGen(){
@@ -4021,17 +4050,158 @@ function renderStatAzienda(){
 }
 
 
+
+function getAdminStats(){
+  const compenso = _lsGetNum(LS_ADMIN_COMPENSO, 25000);
+  const tfm = _lsGetNum(LS_ADMIN_TFM, 15000);
+
+  // Stima IRPEF: scaglioni + detrazione (approssimata) + addizionali stimate
+  const computeIrpefNetta = (imponibile) => {
+    const x = Math.max(0, Number(imponibile || 0));
+    let lorda = 0;
+    if (x <= 28000) lorda = x * 0.23;
+    else if (x <= 50000) lorda = (28000 * 0.23) + ((x - 28000) * 0.35);
+    else lorda = (28000 * 0.23) + (22000 * 0.35) + ((x - 50000) * 0.43);
+
+    let det = 0;
+    if (x <= 15000) det = 1880;
+    else if (x <= 28000) det = 1910 + (1190 * (28000 - x) / 13000);
+    else if (x <= 50000) det = 1910 * (50000 - x) / 22000;
+    else det = 0;
+
+    const base = Math.max(0, lorda - det);
+
+    // addizionali (stima): ~2%
+    const addiz = x * 0.02;
+    return Math.max(0, base + addiz);
+  };
+
+  const inpsTua = compenso * 0.08; // 1/3 di 24% (8%)
+  const imponibile = Math.max(0, compenso - inpsTua);
+  const irpef = computeIrpefNetta(imponibile);
+  const totaleTasse = Math.max(0, inpsTua + irpef);
+  const netto = Math.max(0, compenso - inpsTua - irpef);
+  const nettoMensile = netto / 12;
+
+  return { compenso, tfm, inpsTua, imponibile, irpef, totaleTasse, netto, nettoMensile };
+}
+
 function renderStatAmministratore(){
   const cIn = document.getElementById("adminCompensoInput");
   const tIn = document.getElementById("adminTfmInput");
   if (!cIn || !tIn) return;
+
+  const rowsWrap = document.getElementById("ammRows");
+  if (!rowsWrap) return;
+
+  const s = getAdminStats();
+
+  // Mantieni i valori anche nel popup
+  cIn.value = String(s.compenso).replace(".", ",");
+  tIn.value = String(s.tfm).replace(".", ",");
+
+  const signedPlus = (n) => {
+    const v = Number(n || 0);
+    if (!isFinite(v) || v === 0) return euro(0);
+    if (v < 0) return "− " + euro(Math.abs(v));
+    return "+ " + euro(v);
+  };
+  const signedMinus = (n) => "− " + euro(Math.abs(Number(n || 0)));
+
+  const rows = [
+    { k: "COMPENSO LORDO", v: signedPlus(s.compenso), cls: "c-blue", strong: true },
+    { k: "INPS (Quota tua 1/3)", v: signedMinus(s.inpsTua), cls: "c-bordeaux" },
+    { k: "Imponibile IRPEF", v: euro(s.imponibile), cls: "" },
+    // IRPEF: deve essere NERA
+    { k: "IRPEF Netta", v: signedMinus(s.irpef), cls: "" },
+    { k: "TOTALE TASSE", v: signedMinus(s.totaleTasse), cls: "c-red", strong: true },
+    { k: `NETTO IN TASCA (Mensile ~${euro(s.nettoMensile)})`, v: euro(s.netto), cls: "c-green", strong: true },
+    { sep: true },
+    { k: "ACCANTONAMENTO TFM", v: signedPlus(s.tfm), cls: "c-blue", strong: true },
+  ];
+
+  rowsWrap.innerHTML = rows.map(r => {
+    if (r.sep){
+      return `<div class="fin3-sep"><span>---</span><span class="fin3-val">---</span></div>`;
+    }
+    const cls = `fin3-row ${r.cls || ""} ${r.strong ? "is-strong" : ""}`.trim();
+    return `<div class="${cls}"><div class="fin3-label">${escapeHtml(r.k)}</div><div class="fin3-val">${escapeHtml(r.v)}</div></div>`;
+  }).join("");
+}
+
+
+
+function openAdminPayModal(){
+  const m = document.getElementById("adminPayModal");
+  const cIn = document.getElementById("adminCompensoInput");
+  const tIn = document.getElementById("adminTfmInput");
+  if (!m || !cIn || !tIn) return;
 
   const compenso = _lsGetNum(LS_ADMIN_COMPENSO, 25000);
   const tfm = _lsGetNum(LS_ADMIN_TFM, 15000);
 
   cIn.value = String(compenso).replace(".", ",");
   tIn.value = String(tfm).replace(".", ",");
+
+  m.hidden = false;
+  m.setAttribute("aria-hidden","false");
+
+  setTimeout(()=>{ try{ cIn.focus(); cIn.select(); }catch(_){ } }, 0);
 }
+function closeAdminPayModal(){
+  const m = document.getElementById("adminPayModal");
+  if (!m) return;
+  m.hidden = true;
+  m.setAttribute("aria-hidden","true");
+}
+
+
+function openAdminChartModal(){
+  const m = document.getElementById("adminChartModal");
+  if (!m) return;
+  m.hidden = false;
+  m.setAttribute("aria-hidden","false");
+  try{ renderAdminChart(); }catch(_){}
+}
+
+function closeAdminChartModal(){
+  const m = document.getElementById("adminChartModal");
+  if (!m) return;
+  m.hidden = true;
+  m.setAttribute("aria-hidden","true");
+}
+
+function renderAdminChart(){
+  const s = getAdminStats();
+  const slices = [
+    { label: "Netto in tasca", value: s.netto, color: "#22c55e" },
+    { label: "Tasse totali", value: s.totaleTasse, color: "#dc2626" },
+    { label: "Accantonamento TFM", value: s.tfm, color: "#2B7CB4" },
+  ];
+
+  drawPie("adminChartCanvas", slices);
+
+  const leg = document.getElementById("adminChartLegend");
+  if (leg){
+    const total = slices.reduce((a,x)=>a+Math.max(0,Number(x.value||0)),0);
+    leg.innerHTML = "";
+    slices.forEach((sl)=>{
+      const v = Math.max(0, Number(sl.value || 0));
+      const pct = total > 0 ? (v/total*100) : 0;
+      const row = document.createElement("div");
+      row.className = "legrow";
+      row.innerHTML = `
+        <div class="legleft">
+          <div class="dot" style="background:${sl.color}"></div>
+          <div class="legname">${escapeHtml(sl.label)}</div>
+        </div>
+        <div class="legright">${pct.toFixed(1)}% · ${euro(v)}</div>
+      `;
+      leg.appendChild(row);
+    });
+  }
+}
+
 
 function saveStatAmministratore(){
   const cIn = document.getElementById("adminCompensoInput");
@@ -4045,7 +4215,10 @@ function saveStatAmministratore(){
   _lsSetNum(LS_ADMIN_TFM, tfm);
 
   toast("Salvato");
-  try{ if (state.page === "statazienda") renderStatAzienda(); }catch(_){}
+  try{ closeAdminPayModal(); }catch(_){ }
+  try{ renderStatAmministratore(); }catch(_){ }
+  try{ if (!document.getElementById("adminChartModal")?.hidden) renderAdminChart(); }catch(_){ }
+  try{ if (state.page === "statazienda") renderStatAzienda(); }catch(_){ }
 }
 
 /* IRAP modal */
@@ -4790,7 +4963,7 @@ function renderRoomsReadOnly(ospite){
   `;
 }
 
-// ===== dDAE_2.088 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.090 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -7521,7 +7694,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.088) =====
+// ===== CALENDARIO (dDAE_2.090) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -7946,7 +8119,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.088)
+   Lavanderia (dDAE_2.090)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -8342,7 +8515,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.088: renderSpese allineato al backend ---
+// --- FIX dDAE_2.090: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -8438,7 +8611,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.088: delete reale ospiti ---
+// --- FIX dDAE_2.090: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -8473,7 +8646,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.088: mostra nome ospite ---
+// --- FIX dDAE_2.090: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -8727,7 +8900,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.088
+   Build: dDAE_2.090
 ========================= */
 
 state.orepulizia = state.orepulizia || {
