@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.095";
+const BUILD_VERSION = "dDAE_2.096";
 
 // Conferma (fallback semplice: su iOS Safari evitare variabili mancanti)
 function confirmModal(message){
@@ -71,7 +71,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.095)
+// AUTH + SESSION (dDAE_2.096)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -497,7 +497,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.095 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.096 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -1437,6 +1437,7 @@ function setupImpostazioni() {
   });
 
 const driveFolders = document.getElementById("settingsDriveFoldersBtn");
+  const driveFoldersText = document.getElementById("settingsDriveFoldersTextBtn");
   if (driveFolders) driveFolders.addEventListener("click", async () => {
     try{
       const ok = await confirmModal("Crea cartelle Drive mancanti per tutti gli ospiti?");
@@ -1449,6 +1450,20 @@ const driveFolders = document.getElementById("settingsDriveFoldersBtn");
       toast(e?.message || String(e));
     }
   });
+
+  if (driveFoldersText) driveFoldersText.addEventListener("click", async () => {
+    try{
+      const ok = await confirmModal("Crea cartelle Drive mancanti per tutti gli ospiti?");
+      if (!ok) return;
+      const out = await api("drive", { method:"POST", body:{ op:"bulk_missing" } });
+      const created = out?.created || 0;
+      const skipped = out?.skipped || 0;
+      toast(`Drive: create ${created}, già presenti ${skipped}`);
+    }catch(e){
+      toast(e?.message || String(e));
+    }
+  });
+
   const del = document.getElementById("settingsDeleteBtn");
   if (del) bindFastTap(del, async () => {
     try{
@@ -2485,7 +2500,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.095: fallback visualizzazione Pulizie
+  // dDAE_2.096: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3440,7 +3455,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.095)
+// STATISTICHE (dDAE_2.096)
 // =========================
 
 function computeStatGen(){
@@ -5108,7 +5123,7 @@ function renderRoomsReadOnly(ospite){
   `;
 }
 
-// ===== dDAE_2.095 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.096 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -5466,8 +5481,14 @@ function setupOspite(){
             return;
           }
           const existingUrl = String(g?.driveFolderUrl || g?.drivefolderurl || g?.drive_folder_url || "").trim();
+          const existingId = String(g?.driveFolderId || g?.drivefolderid || g?.drive_folder_id || "").trim();
           if (existingUrl){
             try{ window.open(existingUrl, "_blank", "noopener"); }catch(_){ window.location.href = existingUrl; }
+            return;
+          }
+          if (existingId){
+            const u = "https://drive.google.com/drive/folders/" + encodeURIComponent(existingId);
+            try{ window.open(u, "_blank", "noopener"); }catch(_){ window.location.href = u; }
             return;
           }
 
@@ -7918,7 +7939,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.095) =====
+// ===== CALENDARIO (dDAE_2.096) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -8343,7 +8364,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.095)
+   Lavanderia (dDAE_2.096)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -8739,7 +8760,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.095: renderSpese allineato al backend ---
+// --- FIX dDAE_2.096: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -8835,7 +8856,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.095: delete reale ospiti ---
+// --- FIX dDAE_2.096: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -8870,7 +8891,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.095: mostra nome ospite ---
+// --- FIX dDAE_2.096: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -9124,7 +9145,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.095
+   Build: dDAE_2.096
 ========================= */
 
 state.orepulizia = state.orepulizia || {

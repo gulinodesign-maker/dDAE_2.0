@@ -14,7 +14,7 @@ const API_KEY = "daedalium2026";
 // =========================
 // Cartella base su Google Drive dove creare l'albero (Anno/Mese/Giorno-NOME)
 const DRIVE_BASE_FOLDER_ID = "1KKzDig2bw9cA0syAQWgDDXw_f64EN2Yl";
-const DRIVE_MONTHS_IT = ["gennaio","febbraio","marzo","aprile","maggio","giugno","luglio","agosto","settembre","ottobre","novembre","dicembre"];
+const DRIVE_MONTHS_IT = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
 
 const SHEETS = {
   COLAZIONE: "colazione",
@@ -139,7 +139,7 @@ function handleRequest_(e, method) {
       if (!yr) return jsonError_("anno mancante");
     }
 
-    switch (action) {
+    switch (actionLc) {
       case "utenti":
         return handleUtenti_(e, method);
       case "ospiti":
@@ -225,6 +225,13 @@ function ensureGuestDriveFolder_(e, guestId){
     return { folderId: existingId, folderUrl: existingUrl, created: false };
   }
 
+  if (existingId && !existingUrl){
+    const folderUrl = "https://drive.google.com/drive/folders/" + existingId;
+    const nowIso = new Date().toISOString();
+    upsertById_(sh, { id: String(g.id || "").trim(), driveFolderId: existingId, driveFolderUrl: folderUrl, updated_at: nowIso, updatedAt: nowIso }, "id");
+    return { folderId: existingId, folderUrl: folderUrl, created: false };
+  }
+
   const folder = createOrGetGuestFolder_(g);
   const folderId = folder.getId();
   const folderUrl = "https://drive.google.com/drive/folders/" + folderId;
@@ -289,7 +296,7 @@ function createOrGetGuestFolder_(g){
   const guestFolderName = day + "-" + safeName;
 
   const yearFolder = getOrCreateChildFolderByName_(base, year);
-  const monthFolder = getOrCreateChildFolderByName_(yearFolder, monthName);
+  const monthFolder = getOrCreateChildFolderByNameVariants_(yearFolder, [monthName, String(monthName||"").toLowerCase()]);
   const guestFolder = getOrCreateChildFolderByName_(monthFolder, guestFolderName);
 
   return guestFolder;
@@ -303,9 +310,26 @@ function getOrCreateChildFolderByName_(parent, name){
   return parent.createFolder(name);
 }
 
+
+// Variante: riusa cartelle con nomi equivalenti (es. Maiuscole/minuscole) per evitare duplicati
+function getOrCreateChildFolderByNameVariants_(parent, names){
+  const arr = Array.isArray(names) ? names : [names];
+  for (const nm of arr){
+    const it = parent.getFoldersByName(String(nm));
+    if (it && it.hasNext()) return it.next();
+  }
+  return parent.createFolder(String(arr[0] || "Nuova cartella"));
+}
+
+
 function sanitizeDriveName_(s){
   s = String(s || "").trim();
-  // rimuovi caratteri problematici
+  try{
+    // rimuovi diacritici (accenti)
+    s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
+  }catch(_){}
+
+  // rimuovi caratteri problematici per Drive
   s = s.replace(/[\\\/\?\%\*\:\|\"<>\u0000-\u001F]/g, " ");
   s = s.replace(/\s+/g, "_");
   s = s.replace(/_+/g, "_");
@@ -890,20 +914,35 @@ function handleOspiti_(e, method) {
     return jsonOk_({ saved: results.length, results: results });
   }
 
-  if (method === "DELETE") {
-    const id = String(e.parameter.id || "").trim();
-    if (!id) return jsonError_("Parametro id mancante (DELETE ospiti)");
+  
+if (method === "DELETE") {
+  const id = String(e.parameter.id || "").trim();
+  if (!id) return jsonError_("Parametro id mancante (DELETE ospiti)");
 
-    const deleted = deleteById_(sh, id, "id");
-
-    // elimina anche le stanze collegate
-    const shSt = getSheet_(SHEETS.STANZE);
-    const deletedRooms = deleteWhere_(shSt, "ospite_id", id);
-
-    return jsonOk_({ deleted: deleted, deletedRooms: deletedRooms, id: id });
+  // Se esiste una cartella Drive associata, cestinala prima (bloccante)
+  try{
+    const { rows } = readAll_(sh);
+    const ctx = getCtx_(e);
+    const scopedRows = filterByUserAnno_(rows, ctx);
+    const g = scopedRows.find(r => String(r.id || "").trim() === id);
+    const fid = String(g && (g.driveFolderId || g.drivefolderid || "") || "").trim();
+    if (fid){
+      DriveApp.getFolderById(fid).setTrashed(true);
+    }
+  }catch(err){
+    return jsonError_("Impossibile eliminare la cartella Drive: " + errToString_(err));
   }
 
-  return jsonError_("Metodo non supportato per ospiti: " + method);
+  const deleted = deleteById_(sh, id, "id");
+
+  // elimina anche le stanze collegate
+  const shSt = getSheet_(SHEETS.STANZE);
+  const deletedRooms = deleteWhere_(shSt, "ospite_id", id);
+
+  return jsonOk_({ deleted: deleted, deletedRooms: deletedRooms, id: id });
+}
+
+return jsonError_("Metodo non supportato per ospiti: " + method);
 }
 
 function normalizeOspite_(d) {
