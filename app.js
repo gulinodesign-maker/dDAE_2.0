@@ -5,57 +5,6 @@
  */
 const BUILD_VERSION = "dDAE_2.087";
 
-// =========================
-// SETTINGS (local) — Azienda/Amministratore/IRAP
-// =========================
-
-const __IRAP_PERC_KEY = "dDAE_irap_percent";
-const __AMM_COMP_KEY = "dDAE_admin_compenso";
-const __AMM_TFM_KEY = "dDAE_admin_tfm";
-
-function __lsNumberGet(key, fallback){
-  try{
-    const raw = localStorage.getItem(key);
-    if (raw === null || raw === undefined || raw === "") return fallback;
-    let s = String(raw).trim();
-    if (!s) return fallback;
-    if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
-    else if (s.includes(",")) s = s.replace(",", ".");
-    const n = Number(s);
-    return Number.isFinite(n) ? n : fallback;
-  }catch(_){ return fallback; }
-}
-function __lsNumberSet(key, n){
-  try{
-    const v = Number(n);
-    localStorage.setItem(key, String(Number.isFinite(v) ? v : 0));
-  }catch(_){ }
-}
-function __clamp(n, min, max){
-  const v = Number(n);
-  if (!Number.isFinite(v)) return min;
-  return Math.max(min, Math.min(max, v));
-}
-
-function getIrapPercent(){
-  return __clamp(__lsNumberGet(__IRAP_PERC_KEY, 0), 0, 100);
-}
-function setIrapPercent(p){
-  __lsNumberSet(__IRAP_PERC_KEY, __clamp(p, 0, 100));
-}
-function getAmmCompenso(){
-  return Math.max(0, __lsNumberGet(__AMM_COMP_KEY, 25000));
-}
-function setAmmCompenso(v){
-  __lsNumberSet(__AMM_COMP_KEY, Math.max(0, v));
-}
-function getAmmTfm(){
-  return Math.max(0, __lsNumberGet(__AMM_TFM_KEY, 15000));
-}
-function setAmmTfm(v){
-  __lsNumberSet(__AMM_TFM_KEY, Math.max(0, v));
-}
-
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
   try{ return String(sess?.ruolo || "").trim().toLowerCase() === "operatore"; }
@@ -92,8 +41,6 @@ function applyRoleMode(){
     try{ const statMensiliTopTools = document.getElementById("statMensiliTopTools"); if (statMensiliTopTools) statMensiliTopTools.hidden = true; }catch(_){ }
     try{ const statSpeseTopTools = document.getElementById("statSpeseTopTools"); if (statSpeseTopTools) statSpeseTopTools.hidden = true; }catch(_){ }
     try{ const statPrenTopTools = document.getElementById("statPrenTopTools"); if (statPrenTopTools) statPrenTopTools.hidden = true; }catch(_){ }
-    try{ const statAziendaTopTools = document.getElementById("statAziendaTopTools"); if (statAziendaTopTools) statAziendaTopTools.hidden = true; }catch(_){ }
-    try{ const statAmmTopTools = document.getElementById("statAmmTopTools"); if (statAmmTopTools) statAmmTopTools.hidden = true; }catch(_){ }
   }
 }
 
@@ -2271,6 +2218,8 @@ function showPage(page){
     state._calendarPrev = prevPage;
   }
 
+  try{ closeIrapModal(); }catch(_){ }
+
 state.page = page;
   document.body.dataset.page = page;
 
@@ -2307,14 +2256,15 @@ state.page = page;
   try{
     const hb2 = document.getElementById("hamburgerBtn");
     const hs2 = document.getElementById("homeSettingsTop");
-    const irapTop = document.getElementById("btnIrapTop");
     const leds2 = document.getElementById("prodTopLeds");
     const isHome = (page === "home");
     const isOp = !!(state.session && isOperatoreSession(state.session));
     if (hb2) hb2.hidden = isHome;
     if (hs2) hs2.hidden = (!isHome) || isOp;
-    if (irapTop) irapTop.hidden = isHome || isOp || !(state.session && state.session.user_id) || (page === "auth");
     if (leds2) leds2.hidden = (page !== "home") || isOp;
+    const ir = document.getElementById("btnIrapTop");
+    if (ir) ir.hidden = (page !== "statazienda");
+
   }catch(_){ }
 
   // Top back button (Ore pulizia + Calendario)
@@ -2482,6 +2432,7 @@ state.page = page;
       .catch(e=>toast(e.message));
   }
 
+  
   if (page === "statazienda") {
     const _nav = navId;
     Promise.all([
@@ -2493,10 +2444,13 @@ state.page = page;
   }
 
   if (page === "statamministratore") {
-    try{ initStatAmministratore(); }catch(e){ toast(e.message || "Errore"); }
+    const _nav = navId;
+    Promise.resolve()
+      .then(()=>{ if (state.navId !== _nav || state.page !== "statamministratore") return; renderStatAmministratore(); })
+      .catch(e=>toast(e.message));
   }
 
-  if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
+if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
   // dDAE_2.087: fallback visualizzazione Pulizie
@@ -2513,11 +2467,10 @@ function setupHeader(){
   const hb = $("#hamburgerBtn");
   if (hb) hb.addEventListener("click", () => { hideLauncher(); showPage("home"); });
 
-  // IRAP popup (top bar)
-  const irapTop = $("#btnIrapTop");
-  if (irapTop){
-    bindFastTap(irapTop, () => { try{ openIrapModal(); }catch(e){ toast(e.message || "Errore"); } });
-  }
+  const btnIrapTop = document.getElementById("btnIrapTop");
+  if (btnIrapTop) bindFastTap(btnIrapTop, () => { openIrapModal(); });
+
+
 
   const opLogout = document.getElementById("opLogoutTop");
   if (opLogout) bindFastTap(opLogout, () => {
@@ -2737,25 +2690,10 @@ const btnPieSpese = $("#btnStatSpesePie");
     });
   }
 
-  // IRAP modal
-  const irapClose = $("#irapClose");
-  if (irapClose){ bindFastTap(irapClose, () => closeIrapModal()); }
-  const irapSave = $("#irapSave");
-  if (irapSave){ bindFastTap(irapSave, () => saveIrapFromModal()); }
-  const irapModal = $("#irapModal");
-  if (irapModal){
-    irapModal.addEventListener("click", (e)=>{
-      if (e.target === irapModal) closeIrapModal();
-    });
-  }
-
 
   // Escape chiude il launcher
   document.addEventListener("keydown", (e) => {
-    if (e.key === "Escape"){
-      try{ closeIrapModal(); }catch(_){ }
-      hideLauncher();
-    }
+    if (e.key === "Escape") hideLauncher();
   });
 }
 
@@ -2815,6 +2753,22 @@ function setupGuestListControls(){
       renderGuestCards();
     });
   }
+
+
+  // IRAP modal buttons
+  const irapModal = document.getElementById("irapModal");
+  if (irapModal){
+    irapModal.addEventListener("click", (e)=>{ if (e.target === irapModal) closeIrapModal(); });
+  }
+  const btnIrapCancel = document.getElementById("btnIrapCancel");
+  if (btnIrapCancel) bindFastTap(btnIrapCancel, () => closeIrapModal());
+  const btnIrapSave = document.getElementById("btnIrapSave");
+  if (btnIrapSave) bindFastTap(btnIrapSave, () => saveIrapModal());
+
+  // Amministratore: salva compenso/TFM
+  const btnAdminSave = document.getElementById("btnAdminSave");
+  if (btnAdminSave) bindFastTap(btnAdminSave, () => saveStatAmministratore());
+
 }
 
 function guestIdOf(g){
@@ -3890,136 +3844,228 @@ function closeStatMensiliPieModal(){
 }
 
 
-// =========================
-// STATISTICHE → AZIENDA (stima tassazione)
-// =========================
+/* =========================
+ * Statistiche: Azienda / Amministratore (tassazione stimata)
+ * Regole:
+ * - Fatturato netto IVA: somma incassi CON ricevuta (acconto+saldo), al netto del 10% IVA
+ * - Spese operative: esclude categorie "contanti" (e "tassa soggiorno"), al netto dell'IVA
+ * - IRAP: percentuale editabile (stima)
+ * ========================= */
 
-function computeStatAzienda(){
-  const sg = computeStatGen();
-  const conRicevutaGross = Number(sg?.conRicevuta || 0) || 0;
-  const fatturatoNettoIva = conRicevutaGross / 1.10; // IVA 10%
+const LS_ADMIN_COMPENSO = "ddae_admin_compenso";
+const LS_ADMIN_TFM = "ddae_admin_tfm";
+const LS_IRAP_PCT = "ddae_irap_pct";
 
-  const isContanti = (r) => {
-    try{
-      const raw = (r?.categoria ?? r?.cat ?? "").toString().toLowerCase();
-      if (raw.includes("contant")) return true;
-      if (typeof normCat === "function"){
-        return (normCat(r) === "CONTANTI");
-      }
-    }catch(_){ }
-    return false;
-  };
-
-  const itemsAll = Array.isArray(state.spese) ? state.spese : [];
-  const items = itemsAll.filter((r)=>{
-    try{
-      if (truthy(r?.isDeleted)) return false;
-    }catch(_){ }
-    return !isContanti(r);
-  });
-
-  let speseOperativeNettoIva = 0;
+function _num(v){
+  if (v === null || v === undefined) return 0;
+  if (typeof v === "number") return isFinite(v) ? v : 0;
+  let s = String(v).trim();
+  if (!s) return 0;
+  if (s.includes(",") && s.includes(".")) s = s.replace(/\./g, "").replace(",", ".");
+  else if (s.includes(",")) s = s.replace(",", ".");
+  const n = Number(s);
+  return isFinite(n) ? n : 0;
+}
+function _lsGetNum(key, fallback){
   try{
-    const rep = buildReportFromSpese(items);
-    speseOperativeNettoIva = Number(rep?.totals?.imponibile || 0) || 0;
-  }catch(_){ speseOperativeNettoIva = 0; }
+    const v = localStorage.getItem(key);
+    if (v === null || v === undefined || v === "") return fallback;
+    const n = _num(v);
+    return isFinite(n) ? n : fallback;
+  }catch(_){ return fallback; }
+}
+function _lsSetNum(key, value){
+  try{ localStorage.setItem(key, String(value)); }catch(_){}
+}
 
-  const compenso = getAmmCompenso();
-  const tfm = getAmmTfm();
-  const inps = compenso * 0.16; // stima quota azienda 2/3 (gestione separata)
+function _isRicevutaFlag(g, kind){
+  try{
+    if (kind === "acconto"){
+      const b = truthy(g?.acconto_ricevuta ?? g?.accontoRicevuta ?? g?.ricevuta_acconto ?? g?.ricevutaAcconto ?? g?.acconto_ricevutain);
+      if (b) return true;
+      const t = (g?.acconto_tipo ?? g?.accontoTipo ?? "").toString().toLowerCase();
+      if (t.includes("ricev")) return true;
+      if (t.includes("contant")) return false;
+    } else {
+      const b = truthy(g?.saldo_ricevuta ?? g?.saldoRicevuta ?? g?.ricevuta_saldo ?? g?.ricevutaSaldo ?? g?.saldo_ricevutain);
+      if (b) return true;
+      const t = (g?.saldo_tipo ?? g?.saldoTipo ?? "").toString().toLowerCase();
+      if (t.includes("ricev")) return true;
+      if (t.includes("contant")) return false;
+    }
+  }catch(_){}
+  return false;
+}
 
-  const ebt = fatturatoNettoIva - speseOperativeNettoIva - compenso - inps - tfm;
-  const base = Math.max(0, ebt);
-  const ires = base * 0.24;
-  const irap = base * (getIrapPercent() / 100);
+function computeAziendaBilancio(){
+  const guests = Array.isArray(state.guests) ? state.guests : [];
+  const spese = Array.isArray(state.spese) ? state.spese : [];
+
+  // Incassi con/senza ricevuta: acconto + saldo
+  let incassiCon = 0;
+  let incassiSenza = 0;
+
+  for (const g of guests){
+    const dep = _num(g?.acconto_importo ?? g?.accontoImporto ?? 0);
+    const saldo = _num(g?.saldo_pagato ?? g?.saldoPagato ?? g?.saldo ?? 0);
+
+    if (dep > 0){
+      if (_isRicevutaFlag(g, "acconto")) incassiCon += dep;
+      else incassiSenza += dep;
+    }
+    if (saldo > 0){
+      if (_isRicevutaFlag(g, "saldo")) incassiCon += saldo;
+      else incassiSenza += saldo;
+    }
+  }
+
+  // Fatturato netto IVA (assumiamo IVA 10%)
+  const fatturatoNettoIva = incassiCon / 1.10;
+
+  // Spese operative nette IVA: escludi contanti e tassa soggiorno; togli IVA
+  let speseNetteIva = 0;
+
+  for (const s of spese){
+    const lordo = _num(s?.importoLordo ?? s?.lordo ?? 0);
+    if (!isFinite(lordo) || lordo <= 0) continue;
+
+    const cat = (s?.categoria ?? s?.cat ?? "").toString().trim().toLowerCase();
+    if (cat.includes("contant")) continue;
+    if (cat.includes("tassa") && cat.includes("sogg")) continue;
+
+    let rate = 0;
+    if (cat.includes("iva")){
+      if (cat.includes("22")) rate = 22;
+      else if (cat.includes("10")) rate = 10;
+      else if (cat.includes("4")) rate = 4;
+    } else {
+      const n = parseFloat(String(s?.aliquotaIva ?? s?.aliquota_iva ?? s?.aliquota ?? "").replace(",", "."));
+      if (!isNaN(n)) {
+        if (n >= 21.5) rate = 22;
+        else if (n >= 9.5 && n < 11.5) rate = 10;
+        else if (n >= 3.5 && n < 5.5) rate = 4;
+      }
+    }
+
+    const imponibile = rate > 0 ? (lordo / (1 + rate/100)) : lordo;
+    if (isFinite(imponibile)) speseNetteIva += imponibile;
+  }
+
+  const compenso = _lsGetNum(LS_ADMIN_COMPENSO, 25000);
+  const tfm = _lsGetNum(LS_ADMIN_TFM, 15000);
+  const irapPct = _lsGetNum(LS_IRAP_PCT, 3.9);
+
+  const inps = compenso * 0.16;
+
+  const ebt = fatturatoNettoIva - speseNetteIva - compenso - inps - tfm;
+  const ires = Math.max(0, ebt * 0.24);
+  const irap = Math.max(0, ebt * (irapPct/100));
   const utileNetto = ebt - ires - irap;
 
   return {
+    incassiConRicevuta: incassiCon,
+    incassiSenzaRicevuta: incassiSenza,
     fatturatoNettoIva,
-    speseOperativeNettoIva,
-    compenso,
-    inps,
-    tfm,
+    speseOperativeNetteIva: speseNetteIva,
+    compensoAmministratore: compenso,
+    tfmAccantonamento: tfm,
+    inpsQuotaAzienda: inps,
     ebt,
     ires,
+    irapPct,
     irap,
     utileNetto,
-    irapPercent: getIrapPercent(),
   };
+}
+
+function _euroSigned(n){
+  const v = Number(n || 0);
+  if (!isFinite(v) || v === 0) return euro(0);
+  if (v < 0) return "− " + euro(Math.abs(v));
+  return "+ " + euro(v);
 }
 
 function renderStatAzienda(){
-  const s = computeStatAzienda();
-  const set = (id, value) => {
-    const el = document.getElementById(id);
-    if (el) el.textContent = euro(value);
-  };
-  set("azFattNetto", s.fatturatoNettoIva);
-  set("azSpeseNetto", s.speseOperativeNettoIva);
-  set("azCompenso", s.compenso);
-  set("azInps", s.inps);
-  set("azTfm", s.tfm);
-  set("azEbt", s.ebt);
-  set("azIres", s.ires);
-  set("azIrap", s.irap);
-  set("azUtileNetto", s.utileNetto);
+  const rowsWrap = document.getElementById("aziendaRows");
+  if (!rowsWrap) return;
+
+  const s = computeAziendaBilancio();
+  state.statAzienda = s;
+
+  const rows = [
+    { k: "FATTURATO NETTO IVA", v: +s.fatturatoNettoIva },
+    { k: "Spese Operative nette IVA", v: -s.speseOperativeNetteIva },
+    { k: "Compenso Amministratore (Lordo)", v: -s.compensoAmministratore },
+    { k: "INPS (Quota Azienda 2/3)", v: -s.inpsQuotaAzienda },
+    { k: "Accantonamento TFM", v: -s.tfmAccantonamento },
+    { k: "UTILE ANTE TASSE (EBT)", v: +s.ebt },
+    { k: "IRES (24%)", v: -s.ires },
+    { k: `IRAP (${Number(s.irapPct || 0).toFixed(1)}%)`, v: -s.irap },
+    { k: "UTILE NETTO SRL", v: +s.utileNetto },
+  ];
+
+  rowsWrap.innerHTML = rows.map(r => {
+    const isNeg = (Number(r.v||0) < 0);
+    return `<div class="fin-row${isNeg ? " is-neg":""}">
+      <div class="fin-label">${escapeHtml(r.k)}</div>
+      <div class="fin-val">${_euroSigned(r.v)}</div>
+    </div>`;
+  }).join("");
 }
 
-function initStatAmministratore(){
-  const comp = document.getElementById("ammCompenso");
-  const tfm = document.getElementById("ammTfm");
-  const btn = document.getElementById("ammSave");
-  const hint = document.getElementById("ammHint");
-  if (comp) comp.value = String(getAmmCompenso());
-  if (tfm) tfm.value = String(getAmmTfm());
-  if (btn && !btn.__bound){
-    btn.__bound = true;
-    bindFastTap(btn, () => {
-      const c = comp ? Number(String(comp.value||"0").replace(",",".")) : getAmmCompenso();
-      const t = tfm ? Number(String(tfm.value||"0").replace(",",".")) : getAmmTfm();
-      setAmmCompenso(Number.isFinite(c) ? c : 0);
-      setAmmTfm(Number.isFinite(t) ? t : 0);
-      if (hint) hint.textContent = "Salvato";
-      try{ if (state.page === "statazienda") renderStatAzienda(); }catch(_){ }
-    });
-  }
+function renderStatAmministratore(){
+  const cIn = document.getElementById("adminCompensoInput");
+  const tIn = document.getElementById("adminTfmInput");
+  if (!cIn || !tIn) return;
+
+  const compenso = _lsGetNum(LS_ADMIN_COMPENSO, 25000);
+  const tfm = _lsGetNum(LS_ADMIN_TFM, 15000);
+
+  cIn.value = String(compenso).replace(".", ",");
+  tIn.value = String(tfm).replace(".", ",");
 }
 
+function saveStatAmministratore(){
+  const cIn = document.getElementById("adminCompensoInput");
+  const tIn = document.getElementById("adminTfmInput");
+  if (!cIn || !tIn) return;
 
-// =========================
-// IRAP popup (percentuale)
-// =========================
+  const compenso = _num(cIn.value);
+  const tfm = _num(tIn.value);
 
+  _lsSetNum(LS_ADMIN_COMPENSO, compenso);
+  _lsSetNum(LS_ADMIN_TFM, tfm);
+
+  toast("Salvato");
+  try{ if (state.page === "statazienda") renderStatAzienda(); }catch(_){}
+}
+
+/* IRAP modal */
 function openIrapModal(){
   const m = document.getElementById("irapModal");
-  if (!m) return;
-  const input = document.getElementById("irapPercentInput");
-  const hint = document.getElementById("irapHint");
-  if (hint) hint.textContent = "";
-  if (input) input.value = String(getIrapPercent());
+  const input = document.getElementById("irapPctInput");
+  if (!m || !input) return;
+  const v = _lsGetNum(LS_IRAP_PCT, 3.9);
+  input.value = String(v).replace(".", ",");
   m.hidden = false;
-  try{ m.setAttribute("aria-hidden", "false"); }catch(_){ }
-  if (input){
-    setTimeout(()=>{ try{ input.focus(); input.select(); }catch(_){ } }, 50);
-  }
+  m.setAttribute("aria-hidden","false");
+  setTimeout(()=>{ try{ input.focus(); input.select(); }catch(_){ } }, 0);
 }
-
 function closeIrapModal(){
   const m = document.getElementById("irapModal");
   if (!m) return;
   m.hidden = true;
-  try{ m.setAttribute("aria-hidden", "true"); }catch(_){ }
+  m.setAttribute("aria-hidden","true");
 }
-
-function saveIrapFromModal(){
-  const input = document.getElementById("irapPercentInput");
-  const hint = document.getElementById("irapHint");
-  const v = input ? Number(String(input.value||"0").replace(",",".")) : 0;
-  setIrapPercent(Number.isFinite(v) ? v : 0);
-  if (hint) hint.textContent = "Salvato";
-  try{ if (state.page === "statazienda") renderStatAzienda(); }catch(_){ }
+function saveIrapModal(){
+  const input = document.getElementById("irapPctInput");
+  if (!input) return;
+  const v = _num(input.value);
+  _lsSetNum(LS_IRAP_PCT, v);
+  closeIrapModal();
+  toast("IRAP salvata");
+  try{ if (state.page === "statazienda") renderStatAzienda(); }catch(_){}
 }
-
 
 function computeStatSpese(){
   const items = Array.isArray(state.spese) ? state.spese : [];

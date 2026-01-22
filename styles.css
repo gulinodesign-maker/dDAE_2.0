@@ -1844,7 +1844,7 @@ body::before{
   position:absolute;
   left:0; right:0; bottom:-1px;
   height: 4px;
-  background: linear-gradient(90deg, var(--p1), var(--p2), var(--p3), var(--p4), var(--p5), var(--p6), var(--p7), var(--p8));
+  background: var(--p1);
   opacity: 1;
   pointer-events:none;
 }
@@ -5390,110 +5390,6 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   margin: 0 10px 14px;
 }
 
-/* Statistiche → Azienda (simulazione tasse) */
-.azienda-note{
-  margin: 0 10px 14px;
-  padding: 14px 14px;
-  border-radius: 18px;
-  background: var(--glass);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow);
-  color: rgba(15,23,42,0.86);
-  font-size: 14px;
-  line-height: 1.35;
-}
-
-.azienda-table{
-  margin: 0 10px 8px;
-  border-radius: 18px;
-  overflow: hidden;
-  background: rgba(255,255,255,0.78);
-  border: 1px solid rgba(15,23,42,0.12);
-  box-shadow: 0 10px 22px rgba(15,23,42,0.10);
-}
-
-.azienda-head,
-.azienda-row{
-  display: grid;
-  grid-template-columns: minmax(0, 1.35fr) minmax(0, 0.7fr) minmax(0, 1.05fr);
-  column-gap: 10px;
-  align-items: center;
-}
-
-.azienda-head{
-  background: rgba(15,23,42,0.06);
-  padding: 12px 14px;
-  font-weight: 950;
-  color: rgba(15,23,42,0.92);
-}
-
-.azienda-row{
-  padding: 14px 14px;
-  border-top: 1px solid rgba(15,23,42,0.10);
-  color: rgba(15,23,42,0.92);
-}
-
-.azienda-row.strong{
-  background: rgba(15,23,42,0.03);
-  font-weight: 950;
-}
-
-.azienda-col.name{ font-weight: 950; }
-.azienda-col.val{ text-align: right; font-variant-numeric: tabular-nums; font-weight: 950; }
-.azienda-col.note{ color: rgba(15,23,42,0.70); font-weight: 700; font-size: 13px; }
-
-@media (max-width: 420px){
-  .azienda-head,
-  .azienda-row{
-    grid-template-columns: minmax(0, 1.2fr) minmax(0, 0.8fr);
-    row-gap: 6px;
-  }
-  .azienda-col.note{ grid-column: 1 / -1; }
-}
-
-/* Statistiche → Amministratore (dati editabili) */
-.amm-card{
-  margin: 0 10px;
-  padding: 14px 14px 16px;
-  border-radius: 18px;
-  background: var(--glass);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow);
-}
-.amm-card .auth-btn{ width: 100%; text-transform: lowercase; }
-.amm-hint{
-  margin-top: 10px;
-  font-size: 13px;
-  font-weight: 800;
-  color: rgba(15,23,42,0.70);
-}
-
-/* Popup IRAP */
-.irap-card{
-  position: relative;
-  background: var(--glass);
-  border: 1px solid var(--border);
-  box-shadow: var(--shadow);
-}
-.irap-top{
-  display:flex;
-  align-items:center;
-  justify-content:space-between;
-  gap: 10px;
-}
-.irap-title{
-  font-weight: 950;
-  letter-spacing: 0.2px;
-  font-size: 18px;
-  color: rgba(15,23,42,0.92);
-}
-.irap-hint{
-  margin-top: 10px;
-  font-size: 13px;
-  font-weight: 800;
-  color: rgba(15,23,42,0.70);
-}
-
 /* Conteggio generale: voci piu' leggibili (60%) */
 #page-statgen .stat-row::before{
   opacity: 0.75;
@@ -6168,4 +6064,40 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 }
 .home-main.colazione-attn{
   animation: colazioneBlink 1.15s infinite;
+}
+/* Statistiche: Azienda/Amministratore — tabella bilancio (flat) */
+.fin-card{
+  margin: 0 10px;
+  border: 1px solid rgba(15,23,42,0.14);
+  border-radius: 18px;
+  background: rgba(255,255,255,0.92);
+  box-shadow: none;
+  overflow: hidden;
+}
+.fin-head{
+  display:flex;
+  justify-content:space-between;
+  gap: 12px;
+  padding: 14px 14px;
+  font-weight: 950;
+  letter-spacing: 0.2px;
+  background: rgba(15,23,42,0.06);
+}
+.fin-right{ text-align:right; white-space:nowrap; }
+.fin-row{
+  display:flex;
+  justify-content:space-between;
+  gap: 12px;
+  padding: 14px 14px;
+  border-top: 1px solid rgba(15,23,42,0.10);
+}
+.fin-row .fin-label{
+  font-weight: 900;
+  color: rgba(15,23,42,0.92);
+}
+.fin-row .fin-val{
+  font-weight: 950;
+  text-align:right;
+  white-space:nowrap;
+  color: rgba(15,23,42,0.92);
 }
