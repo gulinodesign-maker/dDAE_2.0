@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.090";
+const BUILD_VERSION = "dDAE_2.093";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -61,7 +61,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.090)
+// AUTH + SESSION (dDAE_2.093)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -487,7 +487,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.090 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.093 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -520,6 +520,12 @@ const state = {
   stanzeByKey: {},
   guestRooms: new Set(),
   guestDepositType: "contante",
+
+  // HOME: ricevute mancanti (check a ogni riavvio)
+  pendingReceipts: [],
+  pendingReceiptsGuests: [],
+  pendingReceiptsCount: 0,
+
   guestEditId: null,
   guestMode: "create",
   lettiPerStanza: {},
@@ -2267,6 +2273,9 @@ state.page = page;
 
   }catch(_){ }
 
+  // HOME: ricevute indicator
+  try{ updateHomeReceiptsIndicator(); }catch(_){ }
+
   // Top back button (Ore pulizia + Calendario)
   const backBtnTop = $("#backBtnTop");
   if (backBtnTop){
@@ -2344,16 +2353,6 @@ state.page = page;
   const statAmmTopTools = $("#statAmmTopTools");
   if (statAmmTopTools){
     statAmmTopTools.hidden = (page !== "statamministratore");
-  }
-
-  const btnAdminEditTop = $("#btnAdminEditTop");
-  if (btnAdminEditTop){
-    btnAdminEditTop.hidden = (page !== "statamministratore");
-  }
-
-  const btnAdminChartTop = $("#btnAdminChartTop");
-  if (btnAdminChartTop){
-    btnAdminChartTop.hidden = (page !== "statamministratore");
   }
 // render on demand
   if (page === "prodotti") {
@@ -2463,7 +2462,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.090: fallback visualizzazione Pulizie
+  // dDAE_2.093: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -2477,15 +2476,31 @@ function setupHeader(){
   const hb = $("#hamburgerBtn");
   if (hb) hb.addEventListener("click", () => { hideLauncher(); showPage("home"); });
 
-  const btnIrapTop = document.getElementById("btnIrapTop");
-  if (btnIrapTop) bindFastTap(btnIrapTop, () => { openIrapModal(); });
+  // HOME: ricevute mancanti (solo in HOME)
+  const btnRec = document.getElementById("homeReceiptsTop");
+  if (btnRec) bindFastTap(btnRec, () => { openReceiptDueModal(); });
 
+  const recClose = document.getElementById("receiptDueClose");
+  if (recClose) bindFastTap(recClose, () => closeReceiptDueModal());
+  const recModal = document.getElementById("receiptDueModal");
+  if (recModal) recModal.addEventListener("click", (e)=>{ if (e.target === recModal) closeReceiptDueModal(); });
 
-  const btnAdminEditTop = document.getElementById("btnAdminEditTop");
-  if (btnAdminEditTop) bindFastTap(btnAdminEditTop, () => { openAdminPayModal(); });
-
+  // AMMINISTRATORE: popup dati + grafico
+  const btnAdminInputsTop = document.getElementById("btnAdminInputsTop");
+  if (btnAdminInputsTop) bindFastTap(btnAdminInputsTop, () => { openAdminInputsModal(); });
   const btnAdminChartTop = document.getElementById("btnAdminChartTop");
   if (btnAdminChartTop) bindFastTap(btnAdminChartTop, () => { openAdminChartModal(); });
+  const adminInputsClose = document.getElementById("adminInputsClose");
+  if (adminInputsClose) bindFastTap(adminInputsClose, () => closeAdminInputsModal());
+  const adminChartClose = document.getElementById("adminChartClose");
+  if (adminChartClose) bindFastTap(adminChartClose, () => closeAdminChartModal());
+  const adminInputsModal = document.getElementById("adminInputsModal");
+  if (adminInputsModal) adminInputsModal.addEventListener("click", (e)=>{ if (e.target === adminInputsModal) closeAdminInputsModal(); });
+  const adminChartModal = document.getElementById("adminChartModal");
+  if (adminChartModal) adminChartModal.addEventListener("click", (e)=>{ if (e.target === adminChartModal) closeAdminChartModal(); });
+
+  const btnIrapTop = document.getElementById("btnIrapTop");
+  if (btnIrapTop) bindFastTap(btnIrapTop, () => { openIrapModal(); });
 
 
 
@@ -2781,20 +2796,8 @@ function setupGuestListControls(){
   if (btnIrapCancel) bindFastTap(btnIrapCancel, () => closeIrapModal());
   const btnIrapSave = document.getElementById("btnIrapSave");
   if (btnIrapSave) bindFastTap(btnIrapSave, () => saveIrapModal());
-  // Amministratore: popup compenso/TFM
-  const adminPayModal = document.getElementById("adminPayModal");
-  if (adminPayModal){
-    adminPayModal.addEventListener("click", (e)=>{ if (e.target === adminPayModal) closeAdminPayModal(); });
-  }
 
-  const adminChartModal = document.getElementById("adminChartModal");
-  if (adminChartModal){
-    adminChartModal.addEventListener("click", (e)=>{ if (e.target === adminChartModal) closeAdminChartModal(); });
-  }
-  const adminChartClose = document.getElementById("adminChartClose");
-  if (adminChartClose) bindFastTap(adminChartClose, () => closeAdminChartModal());
-  const btnAdminCancel = document.getElementById("btnAdminCancel");
-  if (btnAdminCancel) bindFastTap(btnAdminCancel, () => closeAdminPayModal());
+  // Amministratore: salva compenso/TFM
   const btnAdminSave = document.getElementById("btnAdminSave");
   if (btnAdminSave) bindFastTap(btnAdminSave, () => saveStatAmministratore());
 
@@ -3414,7 +3417,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.090)
+// STATISTICHE (dDAE_2.093)
 // =========================
 
 function computeStatGen(){
@@ -3926,6 +3929,167 @@ function _isRicevutaFlag(g, kind){
   return false;
 }
 
+
+
+/* RICEVUTE MANCANTI (HOME) */
+function _isElectronicTypeStr_(s){
+  const t = String(s ?? "").toLowerCase();
+  return t.includes("elet");
+}
+
+function computePendingReceipts(guests){
+  const now = Date.now();
+  const out = [];
+  const src = Array.isArray(guests) ? guests : [];
+  for (const g of src){
+    const checkout = parseDateTs(g?.check_out ?? g?.checkOut ?? g?.checkout ?? g?.data_check_out ?? "");
+    if (!checkout) continue;
+    if (now < (checkout + 24*60*60*1000)) continue;
+
+    const dep = _num(g?.acconto_importo ?? g?.accontoImporto ?? 0);
+    const depType = (g?.acconto_tipo ?? g?.accontoTipo ?? "");
+    const depRec = truthy(g?.acconto_ricevuta ?? g?.accontoRicevuta ?? g?.ricevuta_acconto ?? g?.ricevutaAcconto ?? false);
+
+    const saldo = _num(g?.saldo_pagato ?? g?.saldoPagato ?? g?.saldo ?? 0);
+    const saldoType = (g?.saldo_tipo ?? g?.saldoTipo ?? "");
+    const saldoRec = truthy(g?.saldo_ricevuta ?? g?.saldoRicevuta ?? g?.ricevuta_saldo ?? g?.ricevutaSaldo ?? false);
+
+    const missing = [];
+    if (dep > 0 && _isElectronicTypeStr_(depType) && !depRec) missing.push("Acconto");
+    if (saldo > 0 && _isElectronicTypeStr_(saldoType) && !saldoRec) missing.push("Saldo");
+
+    if (!missing.length) continue;
+
+    const rawName = g?.nome ?? g?.name ?? "";
+    const name = collapseSpaces(String(rawName || "").trim()) || "Prenotazione";
+    out.push({
+      id: guestIdOf(g),
+      name,
+      missing,
+      checkout,
+      guest: g
+    });
+  }
+
+  out.sort((a,b)=> (b.checkout||0) - (a.checkout||0));
+  return out;
+}
+
+function updateHomeReceiptsIndicator(){
+  try{
+    const btn = document.getElementById("homeReceiptsTop");
+    const dot = document.getElementById("homeReceiptsDot");
+    if (!btn) return;
+
+    const isHome = (state.page === "home");
+    const isOp = !!(state.session && isOperatoreSession(state.session));
+    const has = (state.pendingReceiptsCount || 0) > 0;
+
+    // visibile SOLO in HOME e solo admin
+    btn.hidden = (!isHome) || isOp;
+
+    btn.classList.toggle("is-alert", has);
+    if (dot) dot.hidden = !has;
+
+    // accessibilità
+    if (has){
+      btn.setAttribute("aria-label", `Ricevute mancanti (${state.pendingReceiptsCount})`);
+    }else{
+      btn.setAttribute("aria-label", "Ricevute");
+    }
+  }catch(_){}
+}
+
+function openReceiptDueModal(){
+  const modal = document.getElementById("receiptDueModal");
+  const list = document.getElementById("receiptDueList");
+  const title = document.getElementById("receiptDueTitle");
+  if (!modal || !list) return;
+
+  const items = Array.isArray(state.pendingReceipts) ? state.pendingReceipts : [];
+  const n = items.length;
+
+  if (title){
+    title.textContent = n ? `Ricevute mancanti (${n})` : "Ricevute mancanti";
+  }
+
+  list.innerHTML = "";
+  if (!n){
+    const empty = document.createElement("div");
+    empty.className = "muted";
+    empty.style.padding = "8px 2px";
+    empty.textContent = "Nessuna ricevuta da emettere.";
+    list.appendChild(empty);
+  } else {
+    for (const it of items){
+      const row = document.createElement("button");
+      row.type = "button";
+      row.className = "receipt-row";
+      const miss = (it.missing || []).join(", ");
+      row.innerHTML = `<div>
+          <div class="rr-name">${escapeHtml(it.name)}</div>
+          <div class="rr-meta">${escapeHtml(miss)}</div>
+        </div>
+        <div class="rr-meta">apri</div>`;
+      bindFastTap(row, () => {
+        try{ closeReceiptDueModal(); }catch(_){}
+        try{
+          if (it.guest){
+            enterGuestViewMode(it.guest);
+            showPage("ospite");
+            return;
+          }
+          // fallback: cerca tra ospiti già in memoria
+          const id = String(it.id || "").trim();
+          const g = (Array.isArray(state.pendingReceiptsGuests) ? state.pendingReceiptsGuests : [])
+            .find(x => guestIdOf(x) === id);
+          if (g){
+            enterGuestViewMode(g);
+            showPage("ospite");
+          }
+        }catch(e){
+          console.error(e);
+        }
+      });
+      list.appendChild(row);
+    }
+  }
+
+  modal.hidden = false;
+  modal.setAttribute("aria-hidden","false");
+  updateHomeReceiptsIndicator();
+}
+
+function closeReceiptDueModal(){
+  const modal = document.getElementById("receiptDueModal");
+  if (!modal) return;
+  modal.hidden = true;
+  modal.setAttribute("aria-hidden","true");
+}
+
+async function checkReceiptsOnStartup(){
+  try{
+    if (!(state.session && state.session.user_id)) { state.pendingReceipts = []; state.pendingReceiptsCount = 0; updateHomeReceiptsIndicator(); return; }
+    if (state.session && isOperatoreSession(state.session)) { state.pendingReceipts = []; state.pendingReceiptsCount = 0; updateHomeReceiptsIndicator(); return; }
+
+    // dati ospiti (no popup, no loader)
+    let rows = [];
+    try{
+      const data = await cachedGet("ospiti", {}, { showLoader:false, ttlMs: 0, force:true });
+      rows = Array.isArray(data) ? data : [];
+    }catch(_){ rows = []; }
+
+    state.pendingReceiptsGuests = rows;
+    state.pendingReceipts = computePendingReceipts(rows);
+    state.pendingReceiptsCount = state.pendingReceipts.length;
+
+    updateHomeReceiptsIndicator();
+  }catch(e){
+    console.error(e);
+    try{ updateHomeReceiptsIndicator(); }catch(_){}
+  }
+}
+
 function computeAziendaBilancio(){
   const guests = Array.isArray(state.guests) ? state.guests : [];
   const spese = Array.isArray(state.spese) ? state.spese : [];
@@ -4051,117 +4215,64 @@ function renderStatAzienda(){
 
 
 
-function getAdminStats(){
-  const compenso = _lsGetNum(LS_ADMIN_COMPENSO, 25000);
-  const tfm = _lsGetNum(LS_ADMIN_TFM, 15000);
-
-  // Stima IRPEF: scaglioni + detrazione (approssimata) + addizionali stimate
-  const computeIrpefNetta = (imponibile) => {
-    const x = Math.max(0, Number(imponibile || 0));
-    let lorda = 0;
-    if (x <= 28000) lorda = x * 0.23;
-    else if (x <= 50000) lorda = (28000 * 0.23) + ((x - 28000) * 0.35);
-    else lorda = (28000 * 0.23) + (22000 * 0.35) + ((x - 50000) * 0.43);
-
-    let det = 0;
-    if (x <= 15000) det = 1880;
-    else if (x <= 28000) det = 1910 + (1190 * (28000 - x) / 13000);
-    else if (x <= 50000) det = 1910 * (50000 - x) / 22000;
-    else det = 0;
-
-    const base = Math.max(0, lorda - det);
-
-    // addizionali (stima): ~2%
-    const addiz = x * 0.02;
-    return Math.max(0, base + addiz);
-  };
-
-  const inpsTua = compenso * 0.08; // 1/3 di 24% (8%)
-  const imponibile = Math.max(0, compenso - inpsTua);
-  const irpef = computeIrpefNetta(imponibile);
-  const totaleTasse = Math.max(0, inpsTua + irpef);
-  const netto = Math.max(0, compenso - inpsTua - irpef);
-  const nettoMensile = netto / 12;
-
-  return { compenso, tfm, inpsTua, imponibile, irpef, totaleTasse, netto, nettoMensile };
-}
-
-function renderStatAmministratore(){
-  const cIn = document.getElementById("adminCompensoInput");
-  const tIn = document.getElementById("adminTfmInput");
-  if (!cIn || !tIn) return;
-
-  const rowsWrap = document.getElementById("ammRows");
-  if (!rowsWrap) return;
-
-  const s = getAdminStats();
-
-  // Mantieni i valori anche nel popup
-  cIn.value = String(s.compenso).replace(".", ",");
-  tIn.value = String(s.tfm).replace(".", ",");
-
-  const signedPlus = (n) => {
-    const v = Number(n || 0);
-    if (!isFinite(v) || v === 0) return euro(0);
-    if (v < 0) return "− " + euro(Math.abs(v));
-    return "+ " + euro(v);
-  };
-  const signedMinus = (n) => "− " + euro(Math.abs(Number(n || 0)));
-
-  const rows = [
-    { k: "COMPENSO LORDO", v: signedPlus(s.compenso), cls: "c-blue", strong: true },
-    { k: "INPS (Quota tua 1/3)", v: signedMinus(s.inpsTua), cls: "c-bordeaux" },
-    { k: "Imponibile IRPEF", v: euro(s.imponibile), cls: "" },
-    // IRPEF: deve essere NERA
-    { k: "IRPEF Netta", v: signedMinus(s.irpef), cls: "" },
-    { k: "TOTALE TASSE", v: signedMinus(s.totaleTasse), cls: "c-red", strong: true },
-    { k: `NETTO IN TASCA (Mensile ~${euro(s.nettoMensile)})`, v: euro(s.netto), cls: "c-green", strong: true },
-    { sep: true },
-    { k: "ACCANTONAMENTO TFM", v: signedPlus(s.tfm), cls: "c-blue", strong: true },
-  ];
-
-  rowsWrap.innerHTML = rows.map(r => {
-    if (r.sep){
-      return `<div class="fin3-sep"><span>---</span><span class="fin3-val">---</span></div>`;
-    }
-    const cls = `fin3-row ${r.cls || ""} ${r.strong ? "is-strong" : ""}`.trim();
-    return `<div class="${cls}"><div class="fin3-label">${escapeHtml(r.k)}</div><div class="fin3-val">${escapeHtml(r.v)}</div></div>`;
-  }).join("");
-}
-
-
-
-function openAdminPayModal(){
-  const m = document.getElementById("adminPayModal");
-  const cIn = document.getElementById("adminCompensoInput");
-  const tIn = document.getElementById("adminTfmInput");
-  if (!m || !cIn || !tIn) return;
-
-  const compenso = _lsGetNum(LS_ADMIN_COMPENSO, 25000);
-  const tfm = _lsGetNum(LS_ADMIN_TFM, 15000);
-
-  cIn.value = String(compenso).replace(".", ",");
-  tIn.value = String(tfm).replace(".", ",");
-
+function openAdminInputsModal(){
+  const m = document.getElementById("adminInputsModal");
+  if (!m) return;
+  try{ renderStatAmministratore(); }catch(_){}
   m.hidden = false;
   m.setAttribute("aria-hidden","false");
-
-  setTimeout(()=>{ try{ cIn.focus(); cIn.select(); }catch(_){ } }, 0);
+  setTimeout(()=>{ try{ const c = document.getElementById("adminCompensoInput"); if (c) c.focus(); }catch(_){ } }, 50);
 }
-function closeAdminPayModal(){
-  const m = document.getElementById("adminPayModal");
+function closeAdminInputsModal(){
+  const m = document.getElementById("adminInputsModal");
   if (!m) return;
   m.hidden = true;
   m.setAttribute("aria-hidden","true");
 }
 
+function _buildLegend_(el, slices){
+  if (!el) return;
+  const total = slices.reduce((a,x)=>a+Math.max(0,Number(x.value||0)),0);
+  el.innerHTML = "";
+  slices.forEach((sl)=>{
+    const v = Math.max(0, Number(sl.value || 0));
+    const pct = total > 0 ? (v/total*100) : 0;
+    const row = document.createElement("div");
+    row.className = "legrow";
+    row.innerHTML = `
+      <div class="legleft">
+        <div class="dot" style="background:${sl.color}"></div>
+        <div class="legname">${escapeHtml(sl.label)}</div>
+      </div>
+      <div class="legval">${_euroNoSign(v)}</div>
+      <div class="legpct">${pct.toFixed(1)}%</div>
+    `;
+    el.appendChild(row);
+  });
+}
 
-function openAdminChartModal(){
+async function openAdminChartModal(){
   const m = document.getElementById("adminChartModal");
   if (!m) return;
+
+  try{ await ensurePeriodData({ showLoader:true, force:false }); }catch(_){}
+
+  // Usa i dati di bilancio azienda (IRES / IRAP / INPS quota azienda / totale tasse)
+  let s = null;
+  try{ s = computeAziendaBilancio(); }catch(_){ s = null; }
+  if (!s) s = { ires:0, irap:0, inpsQuotaAzienda:0 };
+
+  const slices = [
+    { label: "IRES", value: Math.max(0, Number(s.ires||0)), color: "#2b7cb4" },
+    { label: "IRAP", value: Math.max(0, Number(s.irap||0)), color: "#c9772b" },
+    { label: "INPS (Quota Azienda)", value: Math.max(0, Number(s.inpsQuotaAzienda||0)), color: "#7a3d9b" },
+  ];
+
+  drawPie("adminPieCanvas", slices);
+  try{ _buildLegend_(document.getElementById("adminPieLegend"), slices); }catch(_){}
+
   m.hidden = false;
   m.setAttribute("aria-hidden","false");
-  try{ renderAdminChart(); }catch(_){}
 }
 
 function closeAdminChartModal(){
@@ -4171,37 +4282,49 @@ function closeAdminChartModal(){
   m.setAttribute("aria-hidden","true");
 }
 
-function renderAdminChart(){
-  const s = getAdminStats();
-  const slices = [
-    { label: "Netto in tasca", value: s.netto, color: "#22c55e" },
-    { label: "Tasse totali", value: s.totaleTasse, color: "#dc2626" },
-    { label: "Accantonamento TFM", value: s.tfm, color: "#2B7CB4" },
+function renderStatAmministratore(){
+  const compenso = _lsGetNum(LS_ADMIN_COMPENSO, 25000);
+  const tfm = _lsGetNum(LS_ADMIN_TFM, 15000);
+
+  // Se presenti, aggiorna gli input nel popup (dati amministratore)
+  const cIn = document.getElementById("adminCompensoInput");
+  const tIn = document.getElementById("adminTfmInput");
+  if (cIn) cIn.value = String(compenso).replace(".", ",");
+  if (tIn) tIn.value = String(tfm).replace(".", ",");
+
+  // Se presente, renderizza la tabella nella pagina "Amministratore"
+  const rowsWrap = document.getElementById("amministratoreRows");
+  if (!rowsWrap) return;
+
+  const inpsPct = 0.08; // quota tua (1/3) ~ 8% (default)
+  const irpefPct = _lsGetNum("dDAE_IRPEF_PCT", 15) / 100; // % salvabile, default 15%
+
+  const inpsQuotaTua = Math.round((compenso * inpsPct) * 100) / 100;
+  const imponibileIrpef = Math.round((compenso - inpsQuotaTua) * 100) / 100;
+  const irpefNetta = Math.round((imponibileIrpef * irpefPct) * 100) / 100;
+
+  const totaleTasse = Math.round((inpsQuotaTua + irpefNetta) * 100) / 100;
+  const nettoInTasca = Math.round((compenso - totaleTasse) * 100) / 100;
+
+  const rows = [
+    { k: "COMPENSO LORDO", v: +compenso, cls: "c-blue" },
+    { k: "INPS (Quota tua 1/3)", v: -inpsQuotaTua },
+    { k: "Imponibile IRPEF", v: +imponibileIrpef },
+    // IRPEF Netta richiesta in nero (nessuna classe colore)
+    { k: "IRPEF Netta", v: -irpefNetta },
+    { k: "TOTALE TASSE", v: -totaleTasse, cls: "c-red" },
+    { k: "NETTO IN TASCA", v: +nettoInTasca, cls: "c-green" },
+    { k: "ACCANTONAMENTO TFM", v: +tfm },
   ];
 
-  drawPie("adminChartCanvas", slices);
-
-  const leg = document.getElementById("adminChartLegend");
-  if (leg){
-    const total = slices.reduce((a,x)=>a+Math.max(0,Number(x.value||0)),0);
-    leg.innerHTML = "";
-    slices.forEach((sl)=>{
-      const v = Math.max(0, Number(sl.value || 0));
-      const pct = total > 0 ? (v/total*100) : 0;
-      const row = document.createElement("div");
-      row.className = "legrow";
-      row.innerHTML = `
-        <div class="legleft">
-          <div class="dot" style="background:${sl.color}"></div>
-          <div class="legname">${escapeHtml(sl.label)}</div>
-        </div>
-        <div class="legright">${pct.toFixed(1)}% · ${euro(v)}</div>
-      `;
-      leg.appendChild(row);
-    });
-  }
+  rowsWrap.innerHTML = rows.map(r => {
+    const extra = r.cls ? (" " + r.cls) : "";
+    return `<div class="fin-row${extra}">
+      <div class="fin-label">${escapeHtml(r.k)}</div>
+      <div class="fin-val">${_euroSigned(r.v)}</div>
+    </div>`;
+  }).join("");
 }
-
 
 function saveStatAmministratore(){
   const cIn = document.getElementById("adminCompensoInput");
@@ -4215,10 +4338,8 @@ function saveStatAmministratore(){
   _lsSetNum(LS_ADMIN_TFM, tfm);
 
   toast("Salvato");
-  try{ closeAdminPayModal(); }catch(_){ }
-  try{ renderStatAmministratore(); }catch(_){ }
-  try{ if (!document.getElementById("adminChartModal")?.hidden) renderAdminChart(); }catch(_){ }
   try{ if (state.page === "statazienda") renderStatAzienda(); }catch(_){ }
+  try{ if (state.page === "statamministratore") renderStatAmministratore(); }catch(_){ }
 }
 
 /* IRAP modal */
@@ -4245,7 +4366,8 @@ function saveIrapModal(){
   _lsSetNum(LS_IRAP_PCT, v);
   closeIrapModal();
   toast("IRAP salvata");
-  try{ if (state.page === "statazienda") renderStatAzienda(); }catch(_){}
+  try{ if (state.page === "statazienda") renderStatAzienda(); }catch(_){ }
+  try{ if (state.page === "statamministratore") renderStatAmministratore(); }catch(_){ }
 }
 
 function computeStatSpese(){
@@ -4963,7 +5085,7 @@ function renderRoomsReadOnly(ospite){
   `;
 }
 
-// ===== dDAE_2.090 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.093 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -5256,6 +5378,29 @@ if (!name) return toast("Inserisci il nome");
 function setupOspite(){
   const hb = document.getElementById("hamburgerBtnOspite");
   if (hb) hb.addEventListener("click", () => { hideLauncher(); showPage("home"); });
+
+  // HOME: ricevute mancanti (solo in HOME)
+  const btnRec = document.getElementById("homeReceiptsTop");
+  if (btnRec) bindFastTap(btnRec, () => { openReceiptDueModal(); });
+
+  const recClose = document.getElementById("receiptDueClose");
+  if (recClose) bindFastTap(recClose, () => closeReceiptDueModal());
+  const recModal = document.getElementById("receiptDueModal");
+  if (recModal) recModal.addEventListener("click", (e)=>{ if (e.target === recModal) closeReceiptDueModal(); });
+
+  // AMMINISTRATORE: popup dati + grafico
+  const btnAdminInputsTop = document.getElementById("btnAdminInputsTop");
+  if (btnAdminInputsTop) bindFastTap(btnAdminInputsTop, () => { openAdminInputsModal(); });
+  const btnAdminChartTop = document.getElementById("btnAdminChartTop");
+  if (btnAdminChartTop) bindFastTap(btnAdminChartTop, () => { openAdminChartModal(); });
+  const adminInputsClose = document.getElementById("adminInputsClose");
+  if (adminInputsClose) bindFastTap(adminInputsClose, () => closeAdminInputsModal());
+  const adminChartClose = document.getElementById("adminChartClose");
+  if (adminChartClose) bindFastTap(adminChartClose, () => closeAdminChartModal());
+  const adminInputsModal = document.getElementById("adminInputsModal");
+  if (adminInputsModal) adminInputsModal.addEventListener("click", (e)=>{ if (e.target === adminInputsModal) closeAdminInputsModal(); });
+  const adminChartModal = document.getElementById("adminChartModal");
+  if (adminChartModal) adminChartModal.addEventListener("click", (e)=>{ if (e.target === adminChartModal) closeAdminChartModal(); });
 
   // Azioni Scheda ospite (solo lettura): verde=indietro, giallo=modifica, rosso=elimina
   const hdActions = document.getElementById("ospiteHdActions");
@@ -6980,6 +7125,9 @@ async function init(){
   setupHeader();
   setupAuth();
   setupHome();
+  // Check ricevute mancanti (solo a riavvio)
+  try{ setTimeout(()=>{ try{ checkReceiptsOnStartup(); }catch(_){ } }, 120); }catch(_){ }
+
   try{ applyRoleMode(); }catch(_){ }
   setupCalendario();
   setupImpostazioni();
@@ -7694,7 +7842,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.090) =====
+// ===== CALENDARIO (dDAE_2.093) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -8119,7 +8267,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.090)
+   Lavanderia (dDAE_2.093)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -8515,7 +8663,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.090: renderSpese allineato al backend ---
+// --- FIX dDAE_2.093: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -8611,7 +8759,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.090: delete reale ospiti ---
+// --- FIX dDAE_2.093: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -8646,7 +8794,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.090: mostra nome ospite ---
+// --- FIX dDAE_2.093: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -8900,7 +9048,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.090
+   Build: dDAE_2.093
 ========================= */
 
 state.orepulizia = state.orepulizia || {
