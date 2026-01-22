@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.093";
+const BUILD_VERSION = "dDAE_2.094";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -61,7 +61,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.093)
+// AUTH + SESSION (dDAE_2.094)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -487,7 +487,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.093 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.094 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -1426,6 +1426,19 @@ function setupImpostazioni() {
     try { await loadImpostazioniPage({ force: true }); toast("Impostazioni ricaricate"); } catch (e) { toast(e.message); }
   });
 
+const driveFolders = document.getElementById("settingsDriveFoldersBtn");
+  if (driveFolders) driveFolders.addEventListener("click", async () => {
+    try{
+      const ok = await confirmModal("Crea cartelle Drive mancanti per tutti gli ospiti?");
+      if (!ok) return;
+      const out = await api("drive", { method:"POST", body:{ op:"bulk_missing" } });
+      const created = out?.created || 0;
+      const skipped = out?.skipped || 0;
+      toast(`Drive: create ${created}, già presenti ${skipped}`);
+    }catch(e){
+      toast(e?.message || String(e));
+    }
+  });
   const del = document.getElementById("settingsDeleteBtn");
   if (del) bindFastTap(del, async () => {
     try{
@@ -2462,7 +2475,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.093: fallback visualizzazione Pulizie
+  // dDAE_2.094: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3417,7 +3430,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.093)
+// STATISTICHE (dDAE_2.094)
 // =========================
 
 function computeStatGen(){
@@ -5085,7 +5098,7 @@ function renderRoomsReadOnly(ospite){
   `;
 }
 
-// ===== dDAE_2.093 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.094 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -5201,6 +5214,7 @@ function updateOspiteHdActions(){
   // Mostra il contenitore (poi nascondiamo i singoli pallini senza azione)
   hdActions.hidden = false;
 
+  const btnDrive = hdActions.querySelector("[data-guest-drive]");
   const btnCal  = hdActions.querySelector("[data-guest-cal]");
   const btnBack = hdActions.querySelector("[data-guest-back]");
   const btnEdit = hdActions.querySelector("[data-guest-edit]");
@@ -5208,7 +5222,10 @@ function updateOspiteHdActions(){
 
   const mode = state.guestMode; // "create" | "edit" | "view"
 
-  // Indaco: vai al calendario (sempre presente)
+  // Azzurro: Drive (solo in sola lettura)
+  if (btnDrive) btnDrive.hidden = (mode !== "view");
+
+// Indaco: vai al calendario (sempre presente)
   if (btnCal) btnCal.hidden = false;
 
   // Verde: sempre presente (torna alla lista ospiti)
@@ -5424,6 +5441,55 @@ function setupOspite(){
         showPage("calendario");
         return;
       }
+
+      // Azzurro: crea/apri cartella Drive per questa prenotazione (solo in sola lettura)
+      if (btn.hasAttribute("data-guest-drive")){
+        try{
+          if (String(state.guestMode||"") !== "view"){
+            toast("Disponibile solo in sola lettura");
+            return;
+          }
+          const g = state.guestViewItem || null;
+          const gid = String(g?.id || "").trim();
+          if (!gid){
+            toast("Ospite mancante");
+            return;
+          }
+          const existingUrl = String(g?.driveFolderUrl || g?.drivefolderurl || g?.drive_folder_url || "").trim();
+          if (existingUrl){
+            try{ window.open(existingUrl, "_blank", "noopener"); }catch(_){ window.location.href = existingUrl; }
+            return;
+          }
+
+          const out = await api("drive", { method:"POST", body:{ op:"guest_folder", id: gid } });
+          const folderUrl = String(out?.folderUrl || out?.driveFolderUrl || "").trim();
+          const folderId  = String(out?.folderId  || out?.driveFolderId  || "").trim();
+
+          if (folderId) g.driveFolderId = folderId;
+          if (folderUrl) g.driveFolderUrl = folderUrl;
+
+          // Aggiorna anche cache locale lista ospiti
+          try{
+            if (Array.isArray(state.guests)){
+              state.guests = state.guests.map(x => (String(x?.id||"")===gid ? Object.assign({}, x, { driveFolderId: folderId, driveFolderUrl: folderUrl }) : x));
+            }
+            if (Array.isArray(state.ospiti)){
+              state.ospiti = state.ospiti.map(x => (String(x?.id||"")===gid ? Object.assign({}, x, { driveFolderId: folderId, driveFolderUrl: folderUrl }) : x));
+            }
+          }catch(_){}
+
+          if (folderUrl){
+            try{ window.open(folderUrl, "_blank", "noopener"); }catch(_){ window.location.href = folderUrl; }
+            toast("Cartella Drive creata");
+          }else{
+            toast("Cartella creata ma link non disponibile");
+          }
+        }catch(err){
+          toast(String(err?.message || err || "Errore Drive"));
+        }
+        return;
+      }
+
 
       // Verde: torna sempre alla lista ospiti (anche in Nuovo/Modifica)
       if (btn.hasAttribute("data-guest-back")){
@@ -7842,7 +7908,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.093) =====
+// ===== CALENDARIO (dDAE_2.094) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -8267,7 +8333,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.093)
+   Lavanderia (dDAE_2.094)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -8663,7 +8729,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.093: renderSpese allineato al backend ---
+// --- FIX dDAE_2.094: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -8759,7 +8825,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.093: delete reale ospiti ---
+// --- FIX dDAE_2.094: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -8794,7 +8860,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.093: mostra nome ospite ---
+// --- FIX dDAE_2.094: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -9048,7 +9114,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.093
+   Build: dDAE_2.094
 ========================= */
 
 state.orepulizia = state.orepulizia || {
