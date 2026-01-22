@@ -9,7 +9,16 @@
 
 const API_KEY = "daedalium2026";
 
+// =========================
+// DRIVE (cartelle ospiti)
+// =========================
+// Cartella base su Google Drive dove creare l'albero (Anno/Mese/Giorno-NOME)
+const DRIVE_BASE_FOLDER_ID = "1KKzDig2bw9cA0syAQWgDDXw_f64EN2Yl";
+const DRIVE_MONTHS_IT = ["gennaio","febbraio","marzo","aprile","maggio","giugno","luglio","agosto","settembre","ottobre","novembre","dicembre"];
+
 const SHEETS = {
+  COLAZIONE: "colazione",
+  PRODOTTI_PULIZIA: "prodotti_pulizia",
   IMPOSTAZIONI: "impostazioni",
   UTENTI: "utenti",
   LAVANDERIA: "lavanderia",
@@ -45,9 +54,11 @@ function operatorAllowed_(actionLc, method){
   const m = String(method || "GET").toUpperCase();
   if (a === "pulizie" || a === "lavanderia" || a === "operatori") return true;
   if (a === "calendario") return true;
+  if (a === "colazione" || a === "prodotti_pulizia") return true;
   if (a === "ospiti" || a === "stanze") return m === "GET";
   if (a === "impostazioni") return m === "GET";
   if (a === "ping") return true;
+  if (a === "getalldata") return m === "GET";
   return false;
 }
 
@@ -91,6 +102,8 @@ function handleRequest_(e, method) {
       "pulizie",
       "lavanderia",
       "operatori",
+      "colazione",
+      "prodotti_pulizia",
       "report",
     ].indexOf(actionLc) >= 0;
 
@@ -143,18 +156,259 @@ function handleRequest_(e, method) {
         return handleLavanderia_(e, method);
       case "operatori":
         return handleOperatori_(e, method);
+      case "getalldata":
+        return handleGetAllData_(e);
       case "impostazioni":
         return handleImpostazioni_(e, method);
       case "report":
         return handleReport_(e);
       case "ping":
         return jsonOk_({ ts: new Date().toISOString() });
+      case "colazione":
+        return handleProdottiList_(e, method, SHEETS.COLAZIONE);
+      case "prodotti_pulizia":
+        return handleProdottiList_(e, method, SHEETS.PRODOTTI_PULIZIA);
+      case "drive":
+        return handleDrive_(e, method);
       default:
         return jsonError_("Action non valida: " + action);
     }
   } catch (err) {
     return jsonError_(errToString_(err));
   }
+}
+
+
+
+/* =========================
+   DRIVE (cartelle ospiti)
+   action = "drive"
+   POST body:
+     - { op:"guest_folder", id:"<ospiteId>" }
+     - { op:"bulk_missing" }
+========================= */
+
+function handleDrive_(e, method){
+  if (method !== "POST") return jsonError_("Metodo non supportato");
+
+  const payload = parseBody_(e) || {};
+  const op = String(pick_(payload.op, payload.operation, payload.cmd, "") || "").trim().toLowerCase();
+
+  if (op === "guest_folder" || op === "guestfolder" || op === "guest"){
+    const guestId = String(pick_(payload.id, payload.ospite_id, payload.ospiteId, "") || "").trim();
+    if (!guestId) return jsonError_("ID ospite mancante");
+
+    const out = ensureGuestDriveFolder_(e, guestId);
+    return jsonOk_(out);
+  }
+
+  if (op === "bulk_missing" || op === "bulkmissing" || op === "bulk"){
+    const out = ensureAllMissingDriveFolders_(e);
+    return jsonOk_(out);
+  }
+
+  return jsonError_("Operazione Drive non valida");
+}
+
+function ensureGuestDriveFolder_(e, guestId){
+  const sh = getSheet_(SHEETS.OSPITI);
+  const { rows } = readAll_(sh);
+  const ctx = getCtx_(e);
+  const scoped = filterByUserAnno_(rows, ctx);
+
+  const g = scoped.find(r => String(r.id || "").trim() === String(guestId).trim());
+  if (!g) throw new Error("Ospite non trovato");
+
+  const existingId = String(g.driveFolderId || "").trim();
+  const existingUrl = String(g.driveFolderUrl || "").trim();
+  if (existingId && existingUrl){
+    return { folderId: existingId, folderUrl: existingUrl, created: false };
+  }
+
+  const folder = createOrGetGuestFolder_(g);
+  const folderId = folder.getId();
+  const folderUrl = "https://drive.google.com/drive/folders/" + folderId;
+
+  // salva su foglio ospiti
+  const nowIso = new Date().toISOString();
+  upsertById_(sh, { id: String(g.id || "").trim(), driveFolderId: folderId, driveFolderUrl: folderUrl, updated_at: nowIso, updatedAt: nowIso }, "id");
+
+  return { folderId, folderUrl, created: true };
+}
+
+function ensureAllMissingDriveFolders_(e){
+  const sh = getSheet_(SHEETS.OSPITI);
+  const { rows } = readAll_(sh);
+  const ctx = getCtx_(e);
+  const scoped = filterByUserAnno_(rows, ctx);
+
+  let created = 0;
+  let skipped = 0;
+  const errors = [];
+
+  for (const g of scoped){
+    try{
+      const existingId = String(g.driveFolderId || "").trim();
+      const existingUrl = String(g.driveFolderUrl || "").trim();
+      if (existingId && existingUrl){ skipped++; continue; }
+
+      const folder = createOrGetGuestFolder_(g);
+      const folderId = folder.getId();
+      const folderUrl = "https://drive.google.com/drive/folders/" + folderId;
+
+      const nowIso = new Date().toISOString();
+      upsertById_(sh, { id: String(g.id || "").trim(), driveFolderId: folderId, driveFolderUrl: folderUrl, updated_at: nowIso, updatedAt: nowIso }, "id");
+      created++;
+    }catch(err){
+      errors.push({ id: String(g.id || ""), nome: String(g.nome || ""), error: errToString_(err) });
+    }
+  }
+
+  return { created, skipped, errorsCount: errors.length, errors: errors.slice(0,20) };
+}
+
+function createOrGetGuestFolder_(g){
+  if (!DRIVE_BASE_FOLDER_ID) throw new Error("DRIVE_BASE_FOLDER_ID non impostato");
+
+  const base = DriveApp.getFolderById(DRIVE_BASE_FOLDER_ID);
+
+  const ci = normalizeDateCell_(pick_(g.check_in, g.checkIn, g.checkin, ""));
+  if (!ci) throw new Error("check_in mancante");
+  const d = new Date(ci + "T00:00:00");
+  if (isNaN(d.getTime())) throw new Error("check_in non valido");
+
+  const year = String(d.getFullYear());
+  const monthIndex = d.getMonth(); // 0-11
+  const monthName = DRIVE_MONTHS_IT[monthIndex] || String(monthIndex+1);
+  const day = String(d.getDate()).padStart(2, "0");
+
+  const rawName = String(pick_(g.nome, g.name, "") || "").trim();
+  if (!rawName) throw new Error("nome mancante");
+  const safeName = sanitizeDriveName_(rawName).toUpperCase();
+
+  const guestFolderName = day + "-" + safeName;
+
+  const yearFolder = getOrCreateChildFolderByName_(base, year);
+  const monthFolder = getOrCreateChildFolderByName_(yearFolder, monthName);
+  const guestFolder = getOrCreateChildFolderByName_(monthFolder, guestFolderName);
+
+  return guestFolder;
+}
+
+function getOrCreateChildFolderByName_(parent, name){
+  name = String(name || "").trim();
+  if (!name) throw new Error("Nome cartella non valido");
+  const it = parent.getFoldersByName(name);
+  if (it.hasNext()) return it.next();
+  return parent.createFolder(name);
+}
+
+function sanitizeDriveName_(s){
+  s = String(s || "").trim();
+  // rimuovi caratteri problematici
+  s = s.replace(/[\\\/\?\%\*\:\|\"<>\u0000-\u001F]/g, " ");
+  s = s.replace(/\s+/g, "_");
+  s = s.replace(/_+/g, "_");
+  s = s.replace(/^_+|_+$/g, "");
+  if (!s) s = "OSPITE";
+  return s;
+}
+
+/* =========================
+   LISTE PRODOTTI (colazione / prodotti_pulizia)
+========================= */
+
+function handleProdottiList_(e, method, sheetName){
+  method = String(method||"GET").toUpperCase();
+  const ctx = _ctx_(e);
+  if (!ctx.user_id) return jsonError_("user_id mancante");
+  if (!ctx.anno) return jsonError_("anno mancante");
+
+  const sh = getSheet_(sheetName);
+  const required = [
+    "id","user_id","anno","prodotto","qty","checked","saved","isDeleted","createdAt","updatedAt"
+  ];
+  const headers = ensureHeaders_(sh, required);
+
+  if (method === "GET"){
+    const all = readAll_(sh).rows || [];
+    const rows = filterByUserAnno_(all, ctx).filter(r => !toOneOrEmpty_(r.isDeleted));
+    return jsonOk_({ rows: rows });
+  }
+
+  const body = parseBody_(e);
+  const op = String(body.op || "").trim().toLowerCase();
+  const nowIso = new Date().toISOString();
+
+  if (method === "POST"){
+    if (op === "create"){
+      const prodotto = String(body.prodotto || "").trim();
+      if (!prodotto) return jsonError_("prodotto mancante");
+      const row = {
+        id: uuid_(),
+        user_id: ctx.user_id,
+        anno: ctx.anno,
+        prodotto: prodotto,
+        qty: 0,
+        checked: 0,
+        saved: 0,
+        isDeleted: 0,
+        createdAt: nowIso,
+        updatedAt: nowIso,
+      };
+      upsertById_(sh, row, "id");
+      return jsonOk_({ id: row.id });
+    }
+
+    if (op === "resetqty"){
+      const all = readAll_(sh).rows || [];
+      const rows = filterByUserAnno_(all, ctx);
+      for (const r of rows){
+        if (!r) continue;
+        if (toOneOrEmpty_(r.isDeleted)) continue;
+        const id = String(r.id || "").trim();
+        if (!id) continue;
+        upsertById_(sh, { id:id, user_id: ctx.user_id, anno: ctx.anno, qty: 0, saved: 0, updatedAt: nowIso }, "id");
+      }
+      return jsonOk_({ ok: true });
+    }
+
+    if (op === "save"){
+      const all = readAll_(sh).rows || [];
+      const rows = filterByUserAnno_(all, ctx);
+      for (const r of rows){
+        if (!r) continue;
+        if (toOneOrEmpty_(r.isDeleted)) continue;
+        const id = String(r.id || "").trim();
+        if (!id) continue;
+        const q = Number(String(r.qty ?? 0).replace(",","."));
+        const saved = (!isNaN(q) && q > 0) ? 1 : 0;
+        upsertById_(sh, { id:id, user_id: ctx.user_id, anno: ctx.anno, saved: saved, updatedAt: nowIso }, "id");
+      }
+      return jsonOk_({ ok: true });
+    }
+
+    return jsonError_("Op non valida (prodotti): " + (body.op||""));
+  }
+
+  if (method === "PUT"){
+    const id = String(body.id || "").trim();
+    if (!id) return jsonError_("id mancante");
+
+    const patch = {};
+    for (const k of ["prodotto","qty","checked","saved","isDeleted"]){
+      if (k in body) patch[k] = body[k];
+    }
+    patch.id = id;
+    patch.user_id = ctx.user_id;
+    patch.anno = ctx.anno;
+    patch.updatedAt = nowIso;
+
+    upsertById_(sh, patch, "id");
+    return jsonOk_({ id: id });
+  }
+
+  return jsonError_("Metodo non supportato (prodotti): " + method);
 }
 
 /* =========================
@@ -349,6 +603,55 @@ function sha256Hex_(s){
   const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(s || ""), Utilities.Charset.UTF_8);
   return bytes.map(b => (b + 256).toString(16).slice(-2)).join("");
 }
+
+/**
+ * Bootstrap batch load: restituisce dataset principali in 1 chiamata
+ * Privacy-safe:
+ * - ospiti/motivazioni/operatori filtrati per user_id + anno
+ * - stanze filtrate sugli ospite_id consentiti
+ * - impostazioni filtrate per user_id
+ */
+function handleGetAllData_(e){
+  const ctx = getCtx_(e);
+
+  // 1) OSPITI (scopati)
+  const ospitiAll = readAll_(getSheet_(SHEETS.OSPITI)).rows || [];
+  const ospiti = filterByUserAnno_(ospitiAll, ctx) || [];
+
+  // 2) STANZE filtrate per ospite_id consentiti (privacy-safe)
+  const ospiteIds = {};
+  for (const o of ospiti){
+    const id = String(o && (o.id || o.ID) || "").trim();
+    if (id) ospiteIds[id] = true;
+  }
+  const stanzeAll = readAll_(getSheet_(SHEETS.STANZE)).rows || [];
+  const stanze = (stanzeAll || []).filter(s => {
+    const oid = String(s && (s.ospite_id || s.ospiteId) || "").trim();
+    return !!(oid && ospiteIds[oid]);
+  });
+
+  // 3) IMPOSTAZIONI per user_id (privacy-safe)
+  const impAll = readAll_(getSheet_(SHEETS.IMPOSTAZIONI)).rows || [];
+  const impostazioni = (impAll || []).filter(r => {
+    const uid = String(r && (r.user_id || r.userId) || "").trim();
+    return uid === String(ctx.user_id || "").trim();
+  });
+
+  // 4) MOTIVAZIONI / OPERATORI (scopati)
+  const motivazioni = filterByUserAnno_(readAll_(getSheet_(SHEETS.MOTIVAZIONI)).rows || [], ctx);
+  const operatori = filterByUserAnno_(readAll_(getSheet_(SHEETS.OPERATORI)).rows || [], ctx);
+
+  return jsonOk_({
+    ospiti,
+    stanze,
+    impostazioni,
+    motivazioni,
+    operatori,
+    ts: new Date().toISOString()
+  });
+}
+
+
 
 function getSheet_(name) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -1517,6 +1820,32 @@ function handleUtenti_(e, method){
     upd.updatedAt = nowIso;
     upsertById_(sh, upd, "id");
     return jsonOk_({ user: sanitizeUserOut_(upd) });
+  }
+
+  if (op === "delete_operator"){
+    if (!operator_username) return jsonError_("Username operatore mancante");
+
+    const role = String(existing.ruolo || "").trim().toLowerCase();
+    if (role === "operatore") return jsonError_("Operazione non consentita");
+
+    const ownerId = String(existing.id || existing.ID || "").trim();
+    const tenant = String(existing.tenant_id || existing.tenantId || "").trim() || ownerId;
+    if (!tenant) return jsonError_("Tenant owner mancante");
+
+    const target = findUserByUsername_(rows, operator_username);
+    if (!target) return jsonError_("Operatore non trovato");
+    const tRole = String(target.ruolo || "").trim().toLowerCase();
+    if (tRole !== "operatore") return jsonError_("Utente non è un operatore");
+    const tTenant = String(target.tenant_id || target.tenantId || "").trim();
+    if (tTenant !== tenant) return jsonError_("Operatore non appartiene a questo account");
+
+    const uid = String(target.id || target.ID || target.user_id || target.userId || "").trim();
+    if (!uid) return jsonError_("ID operatore mancante");
+
+    // purge eventuali dati legacy associati all'ID operatore (non intacca i dati del tenant)
+    try{ purgeAllUserData_(uid); }catch(_){ }
+    deleteUserRowById_(uid);
+    return jsonOk_({ deleted: true });
   }
 
   if (op === "login"){
