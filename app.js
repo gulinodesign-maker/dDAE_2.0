@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.099";
+const BUILD_VERSION = "dDAE_2.100";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -61,7 +61,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.099)
+// AUTH + SESSION (dDAE_2.100)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -487,7 +487,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.099 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.100 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2545,7 +2545,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.099: fallback visualizzazione Pulizie
+  // dDAE_2.100: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3512,7 +3512,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.099)
+// STATISTICHE (dDAE_2.100)
 // =========================
 
 function computeStatGen(){
@@ -5175,7 +5175,7 @@ function renderRoomsReadOnly(ospite){
   `;
 }
 
-// ===== dDAE_2.099 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.100 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -6337,7 +6337,7 @@ function updateProdottiHomeBlink(){
             if (__normBool01(i?.isDeleted)) return false;
             const q = parseInt(String(i?.qty ?? 0), 10);
             const qty = isNaN(q) ? 0 : Math.max(0, q);
-            return qty > 0 && __normBool01(i?.saved) === 1;
+            return qty > 0;
           });
         }catch(_){ return false; }
       };
@@ -6388,6 +6388,16 @@ async function loadColazione({ force=false, showLoader=true } = {}){
   const res = await api("colazione", { method:"GET", params:{}, showLoader });
   const rows = Array.isArray(res) ? res : (res && Array.isArray(res.rows) ? res.rows : (res && Array.isArray(res.data) ? res.data : []));
   s.items = (rows || []).filter(r => !__normBool01(r.isDeleted));
+  // Normalizza qty/saved per coerenza multi-dispositivo (LED + pallini rossi)
+  try{
+    (s.items || []).forEach((it)=>{
+      if (__normBool01(it?.isDeleted)) return;
+      const n = parseInt(String(it?.qty ?? 0), 10);
+      const q = isNaN(n) ? 0 : Math.max(0, n);
+      it.qty = q;
+      it.saved = q > 0 ? 1 : 0;
+    });
+  }catch(_){ }
   s.loaded = true;
   s.loadedAt = now;
   updateProdottiHomeBlink();
@@ -6416,7 +6426,7 @@ function renderColazione(){
     const q = (isNaN(qty) ? 0 : Math.max(0, qty));
     qtyBtn.textContent = q > 0 ? String(q) : "";
 
-    const saved = hasDraft ? 0 : __normBool01(it.saved);
+    const saved = hasDraft ? 0 : (q > 0 ? 1 : 0);
     qtyBtn.classList.toggle("is-saved", saved && q > 0);
 
     const text = document.createElement("div");
@@ -6582,7 +6592,7 @@ function renderProdotti(){
     const q = (isNaN(qty) ? 0 : Math.max(0, qty));
     qtyBtn.textContent = q > 0 ? String(q) : "";
 
-    const saved = hasDraft ? 0 : __normBool01(it.saved);
+    const saved = hasDraft ? 0 : (q > 0 ? 1 : 0);
     qtyBtn.classList.toggle("is-saved", saved && q > 0);
 
     const text = document.createElement("div");
@@ -7932,7 +7942,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.099) =====
+// ===== CALENDARIO (dDAE_2.100) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -8357,7 +8367,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.099)
+   Lavanderia (dDAE_2.100)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -8753,7 +8763,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.099: renderSpese allineato al backend ---
+// --- FIX dDAE_2.100: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -8849,7 +8859,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.099: delete reale ospiti ---
+// --- FIX dDAE_2.100: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -8884,7 +8894,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.099: mostra nome ospite ---
+// --- FIX dDAE_2.100: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -9138,7 +9148,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.099
+   Build: dDAE_2.100
 ========================= */
 
 state.orepulizia = state.orepulizia || {
