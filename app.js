@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.101";
+const BUILD_VERSION = "dDAE_2.102";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -61,7 +61,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.101)
+// AUTH + SESSION (dDAE_2.102)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -487,7 +487,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.101 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.102 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2038,8 +2038,7 @@ function refreshAllDataInBackground(){
           try{ await ensurePeriodData({ showLoader:false, force:true }); }catch(_){}
 
           try{ await loadOspiti({ from:"", to:"", force:true }); }catch(_){}
-          try{ await loadColazione({ force:true, showLoader:false }); }catch(_){}
-          try{ await loadProdottiList_("prodotti_pulizia", state.prodotti_pulizia, { force:true, showLoader:false }); }catch(_){ }
+          try{ await loadSpesaAll({ force:true, showLoader:false }); }catch(_){ }
 
           try{ if (typeof loadPulizieForDay === "function") await loadPulizieForDay({ clearFirst:false }); }catch(_){}
           try{ if (typeof loadOperatoriForDay === "function") await loadOperatoriForDay({ clearFirst:false }); }catch(_){}
@@ -2545,7 +2544,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.101: fallback visualizzazione Pulizie
+  // dDAE_2.102: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3512,7 +3511,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.101)
+// STATISTICHE (dDAE_2.102)
 // =========================
 
 function computeStatGen(){
@@ -5175,7 +5174,7 @@ function renderRoomsReadOnly(ospite){
   `;
 }
 
-// ===== dDAE_2.101 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.102 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -6451,84 +6450,110 @@ function renderColazione(){
 
 
 // =========================
-// PRODOTTI (colazione + prodotti_pulizia)
+// SPESA (Colazione + Prodotti)
+// Modulo riscritto da zero per stabilità multi-dispositivo:
+// - stato LED Home calcolato SEMPRE su liste caricate (loadSpesaAll)
+// - tab Colazione/Prodotti indipendenti (draft separati)
+// - Salva: UI immediata + sync backend in background + reload forzato
 // =========================
 
+// ---- UI key helpers ----
+function __spesaEnsureUI_(){
+  state.prodottiUI = state.prodottiUI || { list:"colazione" };
+  const raw = String(state.prodottiUI.list || "colazione").toLowerCase();
+  state.prodottiUI.list = (raw === "pulizia" || raw === "prodotti") ? "pulizia" : "colazione";
+  return state.prodottiUI.list;
+}
+
 function __prodListKey_(){
-  return (state.prodottiUI && state.prodottiUI.list === "pulizia") ? "pulizia" : "colazione";
+  return __spesaEnsureUI_();
+}
+
+function __spesaActionByKey_(key){
+  return (key === "pulizia") ? "prodotti_pulizia" : "colazione";
 }
 
 function __prodAction_(){
-  return __prodListKey_() === "pulizia" ? "prodotti_pulizia" : "colazione";
+  return __spesaActionByKey_(__prodListKey_());
+}
+
+function __spesaBucketByKey_(key){
+  return (key === "pulizia") ? state.prodotti_pulizia : state.colazione;
 }
 
 function __prodStateBucket_(){
-  return __prodListKey_() === "pulizia" ? state.prodotti_pulizia : state.colazione;
+  return __spesaBucketByKey_(__prodListKey_());
 }
 
-// Draft qty (non persistito finche' non premi Salva)
-function __prodDraftEnsure_(){
-  state._prodDraft = state._prodDraft || { colazione:{}, pulizia:{} };
-  state._prodDraftDirty = state._prodDraftDirty || { colazione:{}, pulizia:{} };
+// ---- Draft (non persistito finché non premi SALVA) ----
+function __spesaDraftEnsure_(){
+  state._spesaDraft = state._spesaDraft || { colazione:{}, pulizia:{} };
+  state._spesaDirty = state._spesaDirty || { colazione:{}, pulizia:{} };
   const key = __prodListKey_();
-  state._prodDraft[key] = state._prodDraft[key] || {};
-  state._prodDraftDirty[key] = state._prodDraftDirty[key] || {};
+  state._spesaDraft[key] = state._spesaDraft[key] || {};
+  state._spesaDirty[key] = state._spesaDirty[key] || {};
   return key;
 }
 
 function __prodDraftBucket_(){
-  const key = __prodDraftEnsure_();
-  return state._prodDraft[key];
+  const key = __spesaDraftEnsure_();
+  return state._spesaDraft[key];
 }
 
 function __prodDraftDirtyBucket_(){
-  const key = __prodDraftEnsure_();
-  return state._prodDraftDirty[key];
+  const key = __spesaDraftEnsure_();
+  return state._spesaDirty[key];
 }
 
 function __prodDraftGetQty_(id){
   try{
     const sid = String(id||"");
     const b = __prodDraftBucket_();
-    if (b && Object.prototype.hasOwnProperty.call(b, sid)) return b[sid];
-  }catch(_){ }
-  return null;
+    if (!b || !Object.prototype.hasOwnProperty.call(b, sid)) return null;
+    return b[sid];
+  }catch(_){ return null; }
 }
 
 function __prodDraftSetQty_(id, qty){
   try{
     const sid = String(id||"");
-    const n = parseInt(String(qty ?? 0), 10);
-    const q = isNaN(n) ? 0 : Math.max(0, n);
     const b = __prodDraftBucket_();
     const d = __prodDraftDirtyBucket_();
-    if (b) b[sid] = q;
-    if (d) d[sid] = 1;
-    return q;
-  }catch(_){ }
-  return 0;
+    if (!b || !d) return;
+    const n = parseInt(String(qty ?? 0), 10);
+    const q = isNaN(n) ? 0 : Math.max(0, n);
+    b[sid] = q;
+    d[sid] = 1;
+  }catch(_){}
 }
 
 function __prodDraftClear_(){
   try{
-    const key = __prodListKey_();
-    state._prodDraft = state._prodDraft || { colazione:{}, pulizia:{} };
-    state._prodDraftDirty = state._prodDraftDirty || { colazione:{}, pulizia:{} };
-    state._prodDraft[key] = {};
-    state._prodDraftDirty[key] = {};
-  }catch(_){ }
+    const key = __spesaDraftEnsure_();
+    state._spesaDraft[key] = {};
+    state._spesaDirty[key] = {};
+  }catch(_){}
 }
 
+// ---- Data helpers ----
 function __prodNameKey_(it){
-  return String(it?.prodotto ?? "").trim().toUpperCase();
+  return String(it?.prodotto || it?.nome || "").trim().toLowerCase();
 }
 
-async function loadProdotti({ force=false, showLoader=true } = {}){
-  const key = __prodListKey_();
-  if (key === "pulizia") return loadProdottiList_("prodotti_pulizia", state.prodotti_pulizia, { force, showLoader });
-  return loadProdottiList_("colazione", state.colazione, { force, showLoader });
+function __spesaNormalizeItem_(it){
+  try{
+    if (!it) return it;
+    if (__normBool01(it.isDeleted)) return it;
+    const n = parseInt(String(it.qty ?? 0), 10);
+    const q = isNaN(n) ? 0 : Math.max(0, n);
+    it.qty = q;
+    it.saved = (q > 0) ? 1 : 0;
+    it.checked = __normBool01(it.checked) ? 1 : 0;
+  }catch(_){}
+  return it;
 }
 
+// ---- Loaders ----
 async function loadProdottiList_(action, bucket, { force=false, showLoader=true } = {}){
   const s = bucket;
   const now = Date.now();
@@ -6537,38 +6562,56 @@ async function loadProdottiList_(action, bucket, { force=false, showLoader=true 
     updateProdottiHomeBlink();
     return s.items || [];
   }
+
   const res = await api(action, { method:"GET", params:{}, showLoader });
   const rows = Array.isArray(res) ? res : (res && Array.isArray(res.rows) ? res.rows : (res && Array.isArray(res.data) ? res.data : []));
-  s.items = (rows || []).filter(r => !__normBool01(r.isDeleted));
+  const items = (rows || []).filter(r => !__normBool01(r.isDeleted));
+  items.forEach(__spesaNormalizeItem_);
+
+  s.items = items;
   s.loaded = true;
   s.loadedAt = now;
+
   updateProdottiHomeBlink();
   return s.items;
 }
 
-function updateProdottiControls_(){
-  const tabC = document.getElementById("prodTabColazione");
-  const tabP = document.getElementById("prodTabPulizia");
-  const sF = document.getElementById("prodSortFreq");
-  const sA = document.getElementById("prodSortAlpha");
+async function loadProdotti({ force=false, showLoader=true } = {}){
   const key = __prodListKey_();
-  const sort = (state.prodottiUI && state.prodottiUI.sort) ? state.prodottiUI.sort : "frequent";
-  if (tabC) tabC.classList.toggle("is-active", key === "colazione");
-  if (tabP) tabP.classList.toggle("is-active", key === "pulizia");
-  if (sF) sF.classList.toggle("is-active", sort !== "alpha");
-  if (sA) sA.classList.toggle("is-active", sort === "alpha");
+  const action = __spesaActionByKey_(key);
+  const bucket = __spesaBucketByKey_(key);
+  return loadProdottiList_(action, bucket, { force, showLoader });
+}
+
+// Carica SEMPRE entrambe le liste (serve per LED Home multi-dispositivo)
+async function loadSpesaAll({ force=false, showLoader=true } = {}){
+  await Promise.all([
+    loadProdottiList_("colazione", state.colazione, { force, showLoader }),
+    loadProdottiList_("prodotti_pulizia", state.prodotti_pulizia, { force, showLoader }),
+  ]);
+  updateProdottiHomeBlink();
+  return true;
+}
+
+// ---- UI controls ----
+function updateProdottiControls_(){
+  try{
+    const tabC = document.getElementById("prodTabColazione");
+    const tabP = document.getElementById("prodTabPulizia");
+    const key = __prodListKey_();
+    if (tabC) tabC.classList.toggle("is-active", key === "colazione");
+    if (tabP) tabP.classList.toggle("is-active", key === "pulizia");
+  }catch(_){}
 }
 
 function renderProdotti(){
   const wrap = document.getElementById("prodottiList");
   if (!wrap) return;
 
-  const key = __prodListKey_();
   const bucket = __prodStateBucket_();
   const items = (bucket.items || []).filter(r => !__normBool01(r.isDeleted));
 
   let arr = items.slice();
-  // sempre ordine alfabetico
   arr.sort((a,b)=> __prodNameKey_(a).localeCompare(__prodNameKey_(b), "it", { sensitivity:"base" }));
 
   wrap.innerHTML = "";
@@ -6586,18 +6629,21 @@ function renderProdotti(){
     const qtyBtn = document.createElement("button");
     qtyBtn.type = "button";
     qtyBtn.className = "colazione-dot colazione-qtydot";
+
     const draftQty = __prodDraftGetQty_(it.id);
     const hasDraft = (draftQty !== null);
-    const qty = hasDraft ? parseInt(String(draftQty ?? 0), 10) : parseInt(String(it.qty ?? 0), 10);
-    const q = (isNaN(qty) ? 0 : Math.max(0, qty));
-    qtyBtn.textContent = q > 0 ? String(q) : "";
+    const qtySrc = hasDraft ? draftQty : (it.qty ?? 0);
+    const n = parseInt(String(qtySrc ?? 0), 10);
+    const q = isNaN(n) ? 0 : Math.max(0, n);
 
+    qtyBtn.textContent = q > 0 ? String(q) : "";
+    // se NON c'è draft, mostra saved in base alla qty persistita
     const saved = hasDraft ? 0 : (q > 0 ? 1 : 0);
-    qtyBtn.classList.toggle("is-saved", saved && q > 0);
+    qtyBtn.classList.toggle("is-saved", !!saved && q > 0);
 
     const text = document.createElement("div");
     text.className = "colazione-text";
-    text.textContent = String(it.prodotto || "").trim();
+    text.textContent = String(it.prodotto || it.nome || "").trim();
 
     const checkBtn = document.createElement("button");
     checkBtn.type = "button";
@@ -6617,17 +6663,15 @@ function renderProdotti(){
   updateProdottiControls_();
 }
 
+// ---- Setup & handlers ----
 function setupProdotti(){
   const btnAdd = document.getElementById("prodAddBtn");
   const btnReset = document.getElementById("prodResetBtn");
   const btnSave = document.getElementById("prodSaveBtn");
-  const btnHome = document.getElementById("prodHomeBtn");
   const list = document.getElementById("prodottiList");
 
   const tabC = document.getElementById("prodTabColazione");
   const tabP = document.getElementById("prodTabPulizia");
-  const sF = document.getElementById("prodSortFreq");
-  const sA = document.getElementById("prodSortAlpha");
 
   const modal = document.getElementById("prodAddModal");
   const close = document.getElementById("prodAddClose");
@@ -6638,20 +6682,18 @@ function setupProdotti(){
   const openModal = () => {
     if (!modal) return;
     modal.hidden = false;
-    try{ modal.setAttribute("aria-hidden", "false"); }catch(_){ }
-    try{ input && input.focus(); }catch(_){ }
+    try{ modal.setAttribute("aria-hidden", "false"); }catch(_){}
+    try{ input && input.focus(); }catch(_){}
   };
   const closeModal = () => {
     if (!modal) return;
     modal.hidden = true;
-    try{ modal.setAttribute("aria-hidden", "true"); }catch(_){ }
+    try{ modal.setAttribute("aria-hidden", "true"); }catch(_){}
   };
 
   if (btnAdd) bindFastTap(btnAdd, openModal);
   if (close) bindFastTap(close, closeModal);
-  if (modal) {
-    modal.addEventListener("click", (e)=>{ if (e.target === modal) closeModal(); });
-  }
+  if (modal) modal.addEventListener("click", (e)=>{ if (e.target === modal) closeModal(); });
 
   const createItem = async (action) => {
     const raw = String(input?.value || "");
@@ -6662,7 +6704,7 @@ function setupProdotti(){
     closeModal();
     try{
       await api(action, { method:"POST", body:{ op:"create", prodotto }, showLoader:true });
-      // aggiorna bucket relativo
+      // reload lista target
       if (action === "colazione") await loadProdottiList_("colazione", state.colazione, { force:true, showLoader:false });
       if (action === "prodotti_pulizia") await loadProdottiList_("prodotti_pulizia", state.prodotti_pulizia, { force:true, showLoader:false });
       renderProdotti();
@@ -6672,74 +6714,44 @@ function setupProdotti(){
 
   if (toC) bindFastTap(toC, () => createItem("colazione"));
   if (toP) bindFastTap(toP, () => createItem("prodotti_pulizia"));
-
-  if (input) {
-    input.addEventListener("keydown", (e)=>{ if (e.key === "Enter") { e.preventDefault(); createItem(__prodAction_()); } });
-  }
-
-  if (btnHome) bindFastTap(btnHome, () => { closeModal(); showPage("home"); });
+  if (input) input.addEventListener("keydown", (e)=>{ if (e.key === "Enter") { e.preventDefault(); createItem(__prodAction_()); } });
 
   if (tabC) bindFastTap(tabC, async () => {
-    state.prodottiUI = state.prodottiUI || { list:"colazione", sort:"alpha" };
+    state.prodottiUI = state.prodottiUI || { list:"colazione" };
     state.prodottiUI.list = "colazione";
-    await loadProdottiList_("colazione", state.colazione, { force:false, showLoader:true });
+    await loadProdotti({ force:false, showLoader:true });
     renderProdotti();
   });
+
   if (tabP) bindFastTap(tabP, async () => {
-    state.prodottiUI = state.prodottiUI || { list:"colazione", sort:"alpha" };
+    state.prodottiUI = state.prodottiUI || { list:"colazione" };
     state.prodottiUI.list = "pulizia";
-    await loadProdottiList_("prodotti_pulizia", state.prodotti_pulizia, { force:false, showLoader:true });
+    await loadProdotti({ force:false, showLoader:true });
     renderProdotti();
   });
-  const scrollTopList = () => { try{ const w = document.getElementById("prodottiList"); if (w) w.scrollTop = 0; }catch(_){ } };
-  if (sF) bindFastTap(sF, () => { state.prodottiUI = state.prodottiUI || {}; state.prodottiUI.sort = "frequent"; scrollTopList(); renderProdotti(); });
-  if (sA) bindFastTap(sA, () => { state.prodottiUI = state.prodottiUI || {}; state.prodottiUI.sort = "alpha"; scrollTopList(); renderProdotti(); });
-
-
-
-
 
   if (btnReset) bindFastTap(btnReset, async () => {
     const action = __prodAction_();
+    const bucket = __prodStateBucket_();
     try{
-      // UI immediata: azzera anche le spunte verdi
+      // UI immediata: azzera qty + checked e pulisci draft
       __prodDraftClear_();
-
-      const bucket = __prodStateBucket_();
-      const items = (bucket.items || []);
-      const checkedIds = [];
-
-      items.forEach((it) => {
+      (bucket.items || []).forEach((it)=>{
         if (__normBool01(it?.isDeleted)) return;
-        const id = String(it?.id || "").trim();
-        if (id && __normBool01(it?.checked) === 1) checkedIds.push(id);
         it.qty = 0;
         it.saved = 0;
         it.checked = 0;
         it.updatedAt = new Date().toISOString();
       });
-
       renderProdotti();
       updateProdottiHomeBlink();
 
-      // Backend sync (non bloccare UI)
+      // backend (non bloccare)
       api(action, { method:"POST", body:{ op:"resetQty" }, showLoader:false })
+        .then(() => loadProdotti({ force:true, showLoader:false }).then(()=>{ renderProdotti(); updateProdottiHomeBlink(); }).catch(()=>{}))
         .catch((e)=>{ try{ toast(e.message || "Errore"); }catch(_){ } });
-
-      if (checkedIds.length){
-        Promise.all(checkedIds.map((id) => (
-          api(action, { method:"PUT", body:{ id:String(id), checked:0 }, showLoader:false })
-        )))
-          .catch((e)=>{ try{ toast(e.message || "Errore"); }catch(_){ } });
-      }
     }catch(e){ toast(e.message); }
   });
-
-
-
-
-
-
 
   if (btnSave) bindFastTap(btnSave, async () => {
     const action = __prodAction_();
@@ -6747,6 +6759,14 @@ function setupProdotti(){
       const draft = __prodDraftBucket_();
       const dirty = __prodDraftDirtyBucket_();
       const ids = Object.keys(dirty || {});
+      if (!ids.length){
+        // comunque forza normalizzazione LED
+        updateProdottiHomeBlink();
+        return;
+      }
+
+      const bucket = __prodStateBucket_();
+      const items = bucket.items || [];
 
       const qtyById = {};
       for (const id of ids){
@@ -6754,42 +6774,32 @@ function setupProdotti(){
         const qty = isNaN(qn) ? 0 : Math.max(0, qn);
         qtyById[id] = qty;
 
-        const it = findItem(id);
+        const it = items.find(x => String(x.id||"") === String(id));
         if (it){
           it.qty = qty;
-          it.saved = 0;
+          __spesaNormalizeItem_(it);
           it.updatedAt = new Date().toISOString();
         }
       }
 
-      // UI immediata: alla pressione di SALVA, i pallini rossi e i LED in Home devono aggiornarsi subito
-      (__prodStateBucket_().items || []).forEach((it)=>{
-        if (__normBool01(it?.isDeleted)) return;
-        const n = parseInt(String(it?.qty ?? 0), 10);
-        const q = isNaN(n) ? 0 : Math.max(0, n);
-        it.saved = q > 0 ? 1 : 0;
-        it.updatedAt = new Date().toISOString();
-      });
-
+      // UI immediata
       __prodDraftClear_();
       renderProdotti();
       updateProdottiHomeBlink();
 
-      // Backend sync in background (non blocca UI)
+      // Sync backend in background + reload forzato (stato consistente multi-dispositivo)
       const sync = async () => {
-        if (ids.length){
-          await Promise.all(ids.map((id) => (
-            api(action, { method:"PUT", body:{ id:String(id), qty: qtyById[id], saved: 0 }, showLoader:false })
-          )));
-        }
+        await Promise.all(ids.map((id) => (
+          api(action, { method:"PUT", body:{ id:String(id), qty: qtyById[id], saved: 0 }, showLoader:false })
+        )));
         await api(action, { method:"POST", body:{ op:"save" }, showLoader:false });
+        // aggiorna entrambe le liste (LED Home su altri device)
+        await loadSpesaAll({ force:true, showLoader:false });
       };
 
       sync().catch((e)=>{ try{ toast(e.message || "Errore"); }catch(_){ } });
     }catch(e){ toast(e.message); }
   });
-
-
 
   if (!list) return;
 
@@ -6806,171 +6816,55 @@ function setupProdotti(){
     updateProdottiHomeBlink();
     try{
       await api(action, { method:"PUT", body: Object.assign({ id: String(id) }, patch), showLoader });
+      // ricarica in background per coerenza
+      loadProdotti({ force:true, showLoader:false }).then(()=>{ renderProdotti(); updateProdottiHomeBlink(); }).catch(()=>{});
     }catch(e){
       toast(e.message);
     }
   };
 
-  // Qty dot: tap increment, long-press (0.5s) reset qty only
-  let qtyTimer = null;
-  let qtyTargetId = null;
-  let qtyLongFired = false;
-  let lastQtyTouch = 0;
-
-  const clearQtyPress = () => {
-    if (qtyTimer){ clearTimeout(qtyTimer); qtyTimer = null; }
-    qtyTargetId = null;
-    qtyLongFired = false;
-  };
-
-  const startQtyPress = (id) => {
-    clearQtyPress();
-    qtyTargetId = id;
-    qtyTimer = setTimeout(() => {
-      qtyLongFired = true;
-      __prodDraftSetQty_(id, 0);
-      renderProdotti();
-      updateProdottiHomeBlink();
-
-      // Flash rosso neon SOLO sul riquadro del prodotto azzerato (0.5s)
-      try{
-        const sid = String(id || "");
-        const esc = sid.replace(/\\/g, "\\\\").replace(/\"/g, "\\\"");
-        const sel = `.prod-item-block[data-id="${esc}"]`;
-        const el = document.querySelector(sel);
-        if (el){
-          el.classList.add("prod-flash-red");
-          setTimeout(() => {
-            try{ el.classList.remove("prod-flash-red"); }catch(_){ }
-          }, 500);
-        }
-      }catch(_){ }
-    }, 500);
-  };
-
-  const tapQty = (id) => {
-    const it = findItem(id);
-    const base = __prodDraftGetQty_(id);
-    const cur = (base !== null && base !== undefined) ? parseInt(String(base ?? 0), 10) : parseInt(String(it?.qty ?? 0), 10);
-    const c = isNaN(cur) ? 0 : Math.max(0, cur);
-    const next = c + 1;
-    incFreq_(__prodAction_(), String(id));
-    __prodDraftSetQty_(id, next);
-    renderProdotti();
-    updateProdottiHomeBlink();
-  };
-
-  // Delete: long press 2s on text
-  let delTimer = null;
-  let delTargetId = null;
-  let delFired = false;
-  let lastDelTouch = 0;
-
-  const clearDelPress = () => {
-    if (delTimer){ clearTimeout(delTimer); delTimer = null; }
-    delTargetId = null;
-    delFired = false;
-  };
-
-  const startDelPress = (id) => {
-    clearDelPress();
-    delTargetId = id;
-    delTimer = setTimeout(() => {
-      delFired = true;
-      persistPatch(id, { isDeleted: 1, qty: 0, checked: 0, saved: 0 }, { showLoader:true }).catch(()=>{});
-    }, 2000);
-  };
-
-  const toggleCheck = (id) => {
-    const it = findItem(id);
-    const cur = __normBool01(it?.checked);
-    const next = cur ? 0 : 1;
-    if (next === 1) incFreq_(__prodAction_(), String(id));
-    persistPatch(id, { checked: next }, { showLoader:false }).catch(()=>{});
-  };
-
-  // Delegation (touch)
-  list.addEventListener("touchstart", (e) => {
-    const row = e.target.closest && e.target.closest(".colazione-item");
-    if (!row) return;
-    const id = row.dataset.id;
-
-    if (e.target.closest && e.target.closest(".colazione-qtydot")) {
-      lastQtyTouch = Date.now();
-      startQtyPress(id);
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
-
-    if (e.target.closest && e.target.closest(".colazione-text")) {
-      lastDelTouch = Date.now();
-      startDelPress(id);
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
-  }, { passive:false, capture:true });
-
-  list.addEventListener("touchend", (e) => {
-    const row = e.target.closest && e.target.closest(".colazione-item");
-    if (!row) return;
-    const id = row.dataset.id;
-
-    if (e.target.closest && e.target.closest(".colazione-qtydot")) {
-      if (qtyTimer){ clearTimeout(qtyTimer); qtyTimer = null; }
-      if (!qtyLongFired) tapQty(id);
-      clearQtyPress();
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
-
-    if (e.target.closest && e.target.closest(".colazione-text")) {
-      if (delTimer){ clearTimeout(delTimer); delTimer = null; }
-      clearDelPress();
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
-
-    if (e.target.closest && e.target.closest(".colazione-checkdot")) {
-      toggleCheck(id);
-      e.preventDefault();
-      e.stopPropagation();
-      return;
-    }
-  }, { passive:false, capture:true });
-
-  list.addEventListener("touchcancel", (e) => {
-    clearQtyPress();
-    clearDelPress();
-    try{ e.preventDefault(); e.stopPropagation(); }catch(_){ }
-  }, { passive:false, capture:true });
-
-  // Click (desktop) + anti ghost-click after touch
+  // Event delegation: qty / check
   list.addEventListener("click", (e) => {
-    const row = e.target.closest && e.target.closest(".colazione-item");
-    if (!row) return;
-    const id = row.dataset.id;
+    const t = e.target;
+    const qtyBtn = t && t.closest ? t.closest(".colazione-qtydot") : null;
+    const chkBtn = t && t.closest ? t.closest(".colazione-checkdot") : null;
+    const row = t && t.closest ? t.closest(".colazione-item") : null;
+    const id = row ? String(row.dataset.id || "") : "";
+    if (!id) return;
 
-    if (e.target.closest && e.target.closest(".colazione-qtydot")) {
-      if (Date.now() - lastQtyTouch < 450) { e.preventDefault(); e.stopPropagation(); return; }
-      tapQty(id);
+    // qty: ciclo 0->1->2..->9->0 (draft)
+    if (qtyBtn){
       e.preventDefault();
-      e.stopPropagation();
+      const it = findItem(id);
+      const base = (()=>{
+        const draftQty = __prodDraftGetQty_(id);
+        if (draftQty !== null) return draftQty;
+        const n = parseInt(String(it?.qty ?? 0), 10);
+        return isNaN(n) ? 0 : Math.max(0, n);
+      })();
+      const next = (base >= 9) ? 0 : (base + 1);
+      __prodDraftSetQty_(id, next);
+      renderProdotti();
       return;
     }
 
-    if (e.target.closest && e.target.closest(".colazione-checkdot")) {
-      if (Date.now() - lastDelTouch < 450) { e.preventDefault(); e.stopPropagation(); return; }
-      toggleCheck(id);
+    // check: persist immediato
+    if (chkBtn){
       e.preventDefault();
-      e.stopPropagation();
+      const it = findItem(id);
+      const cur = __normBool01(it?.checked) ? 1 : 0;
+      const next = cur ? 0 : 1;
+      persistPatch(id, { checked: next }, { showLoader:false });
       return;
     }
-  }, true);
+  });
+
+  // Prima render (se già caricato)
+  updateProdottiControls_();
 }
+
+
+
 
 
 function setupColazione(){
@@ -7942,7 +7836,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.101) =====
+// ===== CALENDARIO (dDAE_2.102) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -8367,7 +8261,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.101)
+   Lavanderia (dDAE_2.102)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -8763,7 +8657,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.101: renderSpese allineato al backend ---
+// --- FIX dDAE_2.102: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -8859,7 +8753,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.101: delete reale ospiti ---
+// --- FIX dDAE_2.102: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -8894,7 +8788,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.101: mostra nome ospite ---
+// --- FIX dDAE_2.102: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -9148,7 +9042,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.101
+   Build: dDAE_2.102
 ========================= */
 
 state.orepulizia = state.orepulizia || {
