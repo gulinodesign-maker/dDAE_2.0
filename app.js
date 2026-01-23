@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.103";
+const BUILD_VERSION = "dDAE_2.104";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -60,7 +60,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.103)
+// AUTH + SESSION (dDAE_2.104)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -486,7 +486,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.103 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.104 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -1411,6 +1411,7 @@ async function loadImpostazioniPage({ force = false } = {}) {
     if (ts) ts.value = String(getSettingNumber("tassa_soggiorno", (typeof TOURIST_TAX_EUR_PPN !== "undefined" ? TOURIST_TAX_EUR_PPN : 0)) || "");
 
     refreshFloatingLabels();
+    await loadDriveRootToSettingsUI();
   } catch (e) {
     toast(e.message);
   }
@@ -1434,6 +1435,9 @@ async function saveImpostazioniPage() {
   const benzina = __readNumInput("setBenzina");
   const tassa = __readNumInput("setTassa");
 
+  // Salva cartella Drive (per-utente)
+  await saveDriveRootFromSettingsUI();
+
   const payload = {
     operatori: [op1, op2, op3],
     tariffa_oraria: tariffa,
@@ -1445,6 +1449,24 @@ async function saveImpostazioniPage() {
   await ensureSettingsLoaded({ force: true, showLoader: false });
 
   toast("Impostazioni salvate");
+}
+
+async function loadDriveRootToSettingsUI(){
+  try{
+    const data = await api("drive_root", { method: "GET", showLoader: false });
+    const url = String(data?.driveRootFolderUrl || "").trim();
+    const el = document.getElementById("driveRootLink");
+    if (el) el.value = url;
+    try{ refreshFloatingLabels(); }catch(_){}
+  }catch(_){}
+}
+
+async function saveDriveRootFromSettingsUI(){
+  const el = document.getElementById("driveRootLink");
+  if (!el) return;
+  const link = String(el.value || "").trim();
+  if (!link) return; // non sovrascrivere se vuoto
+  await api("drive_root", { method: "POST", body: { driveRootFolderUrl: link }, showLoader: true });
 }
 
 function setupImpostazioni() {
@@ -2554,7 +2576,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.103: fallback visualizzazione Pulizie
+  // dDAE_2.104: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3521,7 +3543,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.103)
+// STATISTICHE (dDAE_2.104)
 // =========================
 
 function computeStatGen(){
@@ -5184,7 +5206,7 @@ function renderRoomsReadOnly(ospite){
   `;
 }
 
-// ===== dDAE_2.103 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.104 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -7846,7 +7868,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.103) =====
+// ===== CALENDARIO (dDAE_2.104) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -8271,7 +8293,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.103)
+   Lavanderia (dDAE_2.104)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -8667,7 +8689,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.103: renderSpese allineato al backend ---
+// --- FIX dDAE_2.104: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -8763,7 +8785,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.103: delete reale ospiti ---
+// --- FIX dDAE_2.104: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -8798,7 +8820,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.103: mostra nome ospite ---
+// --- FIX dDAE_2.104: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -9052,7 +9074,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.103
+   Build: dDAE_2.104
 ========================= */
 
 state.orepulizia = state.orepulizia || {
