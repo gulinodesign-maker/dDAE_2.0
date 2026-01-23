@@ -9,13 +9,6 @@
 
 const API_KEY = "daedalium2026";
 
-// =========================
-// DRIVE (cartelle ospiti)
-// =========================
-// Cartella base su Google Drive dove creare l'albero (Anno/Mese/Giorno-NOME)
-const DRIVE_BASE_FOLDER_ID = "1KKzDig2bw9cA0syAQWgDDXw_f64EN2Yl";
-const DRIVE_MONTHS_IT = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
-
 const SHEETS = {
   COLAZIONE: "colazione",
   PRODOTTI_PULIZIA: "prodotti_pulizia",
@@ -42,7 +35,7 @@ function getUserById_(userId){
     const data = readAll_(sh);
     const rows = data && data.rows ? data.rows : [];
     for (const r of rows){
-      const rid = String(r.id ?? r.ID ?? "").trim();
+      const rid = String(((r.id !== undefined && r.id !== null) ? r.id : (((r.ID !== undefined && r.ID !== null) ? r.ID : "")))).trim();
       if (rid && rid === id) return r;
     }
   }catch(_){ }
@@ -58,7 +51,6 @@ function operatorAllowed_(actionLc, method){
   if (a === "ospiti" || a === "stanze") return m === "GET";
   if (a === "impostazioni") return m === "GET";
   if (a === "ping") return true;
-  if (a === "getalldata") return m === "GET";
   return false;
 }
 
@@ -67,6 +59,14 @@ function operatorAllowed_(actionLc, method){
 ========================= */
 
 function doGet(e) {
+  // Special endpoint to trigger Google OAuth consent screens in a browser.
+  // IMPORTANT: must not be wrapped in try/catch, otherwise Apps Script cannot show the authorization UI.
+  try {
+    if (e && e.parameter && String(e.parameter.action || "").toLowerCase() === "auth_drive") {
+      if (String(e.parameter.apiKey || "") !== API_KEY) return jsonError_("API key non valida");
+      return handleAuthDriveNoCatch_();
+    }
+  } catch (ignored) {}
   return handleRequest_(e, "GET");
 }
 
@@ -93,7 +93,7 @@ function handleRequest_(e, method) {
     // - user_id mandatory for every tenant-aware action (everything except utenti/ping)
     // - anno mandatory for year-scoped sheets
     const actionLc = String(action).toLowerCase();
-    const needsUser = !(actionLc === "utenti" || actionLc === "ping");
+    const needsUser = !(actionLc === "utenti" || actionLc === "ping" || actionLc === "auth_drive");
     const needsAnno = [
       "ospiti",
       "stanze",
@@ -114,7 +114,7 @@ function handleRequest_(e, method) {
 
       const u = getUserById_(actorId);
       if (!u) return jsonError_("Utente non valido");
-      if (String(u.attivo ?? "true").toLowerCase() === "false") return jsonError_("Account disattivato");
+      if (String(((u.attivo !== undefined && u.attivo !== null) ? u.attivo : "true")).toLowerCase() === "false") return jsonError_("Account disattivato");
 
       const ruolo = String(u.ruolo || "user").trim().toLowerCase();
       const tenant = String(u.tenant_id || u.tenantId || "").trim();
@@ -139,7 +139,7 @@ function handleRequest_(e, method) {
       if (!yr) return jsonError_("anno mancante");
     }
 
-    switch (actionLc) {
+    switch (action) {
       case "utenti":
         return handleUtenti_(e, method);
       case "ospiti":
@@ -156,20 +156,20 @@ function handleRequest_(e, method) {
         return handleLavanderia_(e, method);
       case "operatori":
         return handleOperatori_(e, method);
-      case "getalldata":
-        return handleGetAllData_(e);
       case "impostazioni":
         return handleImpostazioni_(e, method);
+      case "drive_root":
+        return handleDriveRoot_(e, method);
       case "report":
         return handleReport_(e);
       case "ping":
         return jsonOk_({ ts: new Date().toISOString() });
+      case "auth_drive":
+        return handleAuthDrive_(e, method);
       case "colazione":
         return handleProdottiList_(e, method, SHEETS.COLAZIONE);
       case "prodotti_pulizia":
         return handleProdottiList_(e, method, SHEETS.PRODOTTI_PULIZIA);
-      case "drive":
-        return handleDrive_(e, method);
       default:
         return jsonError_("Action non valida: " + action);
     }
@@ -179,164 +179,6 @@ function handleRequest_(e, method) {
 }
 
 
-
-/* =========================
-   DRIVE (cartelle ospiti)
-   action = "drive"
-   POST body:
-     - { op:"guest_folder", id:"<ospiteId>" }
-     - { op:"bulk_missing" }
-========================= */
-
-function handleDrive_(e, method){
-  if (method !== "POST") return jsonError_("Metodo non supportato");
-
-  const payload = parseBody_(e) || {};
-  const op = String(pick_(payload.op, payload.operation, payload.cmd, "") || "").trim().toLowerCase();
-
-  if (op === "guest_folder" || op === "guestfolder" || op === "guest"){
-    const guestId = String(pick_(payload.id, payload.ospite_id, payload.ospiteId, "") || "").trim();
-    if (!guestId) return jsonError_("ID ospite mancante");
-
-    const out = ensureGuestDriveFolder_(e, guestId);
-    return jsonOk_(out);
-  }
-
-  if (op === "bulk_missing" || op === "bulkmissing" || op === "bulk"){
-    const out = ensureAllMissingDriveFolders_(e);
-    return jsonOk_(out);
-  }
-
-  return jsonError_("Operazione Drive non valida");
-}
-
-function ensureGuestDriveFolder_(e, guestId){
-  const sh = getSheet_(SHEETS.OSPITI);
-  const { rows } = readAll_(sh);
-  const ctx = getCtx_(e);
-  const scoped = filterByUserAnno_(rows, ctx);
-
-  const g = scoped.find(r => String(r.id || "").trim() === String(guestId).trim());
-  if (!g) throw new Error("Ospite non trovato");
-
-  const existingId = String(g.driveFolderId || "").trim();
-  const existingUrl = String(g.driveFolderUrl || "").trim();
-  if (existingId && existingUrl){
-    return { folderId: existingId, folderUrl: existingUrl, created: false };
-  }
-
-  if (existingId && !existingUrl){
-    const folderUrl = "https://drive.google.com/drive/folders/" + existingId;
-    const nowIso = new Date().toISOString();
-    upsertById_(sh, { id: String(g.id || "").trim(), driveFolderId: existingId, driveFolderUrl: folderUrl, updated_at: nowIso, updatedAt: nowIso }, "id");
-    return { folderId: existingId, folderUrl: folderUrl, created: false };
-  }
-
-  const folder = createOrGetGuestFolder_(g);
-  const folderId = folder.getId();
-  const folderUrl = "https://drive.google.com/drive/folders/" + folderId;
-
-  // salva su foglio ospiti
-  const nowIso = new Date().toISOString();
-  upsertById_(sh, { id: String(g.id || "").trim(), driveFolderId: folderId, driveFolderUrl: folderUrl, updated_at: nowIso, updatedAt: nowIso }, "id");
-
-  return { folderId, folderUrl, created: true };
-}
-
-function ensureAllMissingDriveFolders_(e){
-  const sh = getSheet_(SHEETS.OSPITI);
-  const { rows } = readAll_(sh);
-  const ctx = getCtx_(e);
-  const scoped = filterByUserAnno_(rows, ctx);
-
-  let created = 0;
-  let skipped = 0;
-  const errors = [];
-
-  for (const g of scoped){
-    try{
-      const existingId = String(g.driveFolderId || "").trim();
-      const existingUrl = String(g.driveFolderUrl || "").trim();
-      if (existingId && existingUrl){ skipped++; continue; }
-
-      const folder = createOrGetGuestFolder_(g);
-      const folderId = folder.getId();
-      const folderUrl = "https://drive.google.com/drive/folders/" + folderId;
-
-      const nowIso = new Date().toISOString();
-      upsertById_(sh, { id: String(g.id || "").trim(), driveFolderId: folderId, driveFolderUrl: folderUrl, updated_at: nowIso, updatedAt: nowIso }, "id");
-      created++;
-    }catch(err){
-      errors.push({ id: String(g.id || ""), nome: String(g.nome || ""), error: errToString_(err) });
-    }
-  }
-
-  return { created, skipped, errorsCount: errors.length, errors: errors.slice(0,20) };
-}
-
-function createOrGetGuestFolder_(g){
-  if (!DRIVE_BASE_FOLDER_ID) throw new Error("DRIVE_BASE_FOLDER_ID non impostato");
-
-  const base = DriveApp.getFolderById(DRIVE_BASE_FOLDER_ID);
-
-  const ci = normalizeDateCell_(pick_(g.check_in, g.checkIn, g.checkin, ""));
-  if (!ci) throw new Error("check_in mancante");
-  const d = new Date(ci + "T00:00:00");
-  if (isNaN(d.getTime())) throw new Error("check_in non valido");
-
-  const year = String(d.getFullYear());
-  const monthIndex = d.getMonth(); // 0-11
-  const monthName = DRIVE_MONTHS_IT[monthIndex] || String(monthIndex+1);
-  const day = String(d.getDate()).padStart(2, "0");
-
-  const rawName = String(pick_(g.nome, g.name, "") || "").trim();
-  if (!rawName) throw new Error("nome mancante");
-  const safeName = sanitizeDriveName_(rawName).toUpperCase();
-
-  const guestFolderName = day + "-" + safeName;
-
-  const yearFolder = getOrCreateChildFolderByName_(base, year);
-  const monthFolder = getOrCreateChildFolderByNameVariants_(yearFolder, [monthName, String(monthName||"").toLowerCase()]);
-  const guestFolder = getOrCreateChildFolderByName_(monthFolder, guestFolderName);
-
-  return guestFolder;
-}
-
-function getOrCreateChildFolderByName_(parent, name){
-  name = String(name || "").trim();
-  if (!name) throw new Error("Nome cartella non valido");
-  const it = parent.getFoldersByName(name);
-  if (it.hasNext()) return it.next();
-  return parent.createFolder(name);
-}
-
-
-// Variante: riusa cartelle con nomi equivalenti (es. Maiuscole/minuscole) per evitare duplicati
-function getOrCreateChildFolderByNameVariants_(parent, names){
-  const arr = Array.isArray(names) ? names : [names];
-  for (const nm of arr){
-    const it = parent.getFoldersByName(String(nm));
-    if (it && it.hasNext()) return it.next();
-  }
-  return parent.createFolder(String(arr[0] || "Nuova cartella"));
-}
-
-
-function sanitizeDriveName_(s){
-  s = String(s || "").trim();
-  try{
-    // rimuovi diacritici (accenti)
-    s = s.normalize("NFD").replace(/[\u0300-\u036f]/g, "");
-  }catch(_){}
-
-  // rimuovi caratteri problematici per Drive
-  s = s.replace(/[\\\/\?\%\*\:\|\"<>\u0000-\u001F]/g, " ");
-  s = s.replace(/\s+/g, "_");
-  s = s.replace(/_+/g, "_");
-  s = s.replace(/^_+|_+$/g, "");
-  if (!s) s = "OSPITE";
-  return s;
-}
 
 /* =========================
    LISTE PRODOTTI (colazione / prodotti_pulizia)
@@ -405,7 +247,7 @@ function handleProdottiList_(e, method, sheetName){
         if (toOneOrEmpty_(r.isDeleted)) continue;
         const id = String(r.id || "").trim();
         if (!id) continue;
-        const q = Number(String(r.qty ?? 0).replace(",","."));
+        const q = Number(String(((r.qty !== undefined && r.qty !== null) ? r.qty : 0)).replace(",","."));
         const saved = (!isNaN(q) && q > 0) ? 1 : 0;
         upsertById_(sh, { id:id, user_id: ctx.user_id, anno: ctx.anno, saved: saved, updatedAt: nowIso }, "id");
       }
@@ -607,8 +449,8 @@ function getCtx_(e){
 }
 
 function filterByUserAnno_(rows, ctx){
-  const u = String(ctx?.user_id || "").trim();
-  const a = String(ctx?.anno || "").trim();
+  const u = String(((ctx && ctx.user_id) || "")).trim();
+  const a = String(((ctx && ctx.anno) || "")).trim();
   if (!u && !a) return rows;
   return (Array.isArray(rows) ? rows : []).filter(r => {
     if (u){
@@ -627,55 +469,6 @@ function sha256Hex_(s){
   const bytes = Utilities.computeDigest(Utilities.DigestAlgorithm.SHA_256, String(s || ""), Utilities.Charset.UTF_8);
   return bytes.map(b => (b + 256).toString(16).slice(-2)).join("");
 }
-
-/**
- * Bootstrap batch load: restituisce dataset principali in 1 chiamata
- * Privacy-safe:
- * - ospiti/motivazioni/operatori filtrati per user_id + anno
- * - stanze filtrate sugli ospite_id consentiti
- * - impostazioni filtrate per user_id
- */
-function handleGetAllData_(e){
-  const ctx = getCtx_(e);
-
-  // 1) OSPITI (scopati)
-  const ospitiAll = readAll_(getSheet_(SHEETS.OSPITI)).rows || [];
-  const ospiti = filterByUserAnno_(ospitiAll, ctx) || [];
-
-  // 2) STANZE filtrate per ospite_id consentiti (privacy-safe)
-  const ospiteIds = {};
-  for (const o of ospiti){
-    const id = String(o && (o.id || o.ID) || "").trim();
-    if (id) ospiteIds[id] = true;
-  }
-  const stanzeAll = readAll_(getSheet_(SHEETS.STANZE)).rows || [];
-  const stanze = (stanzeAll || []).filter(s => {
-    const oid = String(s && (s.ospite_id || s.ospiteId) || "").trim();
-    return !!(oid && ospiteIds[oid]);
-  });
-
-  // 3) IMPOSTAZIONI per user_id (privacy-safe)
-  const impAll = readAll_(getSheet_(SHEETS.IMPOSTAZIONI)).rows || [];
-  const impostazioni = (impAll || []).filter(r => {
-    const uid = String(r && (r.user_id || r.userId) || "").trim();
-    return uid === String(ctx.user_id || "").trim();
-  });
-
-  // 4) MOTIVAZIONI / OPERATORI (scopati)
-  const motivazioni = filterByUserAnno_(readAll_(getSheet_(SHEETS.MOTIVAZIONI)).rows || [], ctx);
-  const operatori = filterByUserAnno_(readAll_(getSheet_(SHEETS.OPERATORI)).rows || [], ctx);
-
-  return jsonOk_({
-    ospiti,
-    stanze,
-    impostazioni,
-    motivazioni,
-    operatori,
-    ts: new Date().toISOString()
-  });
-}
-
-
 
 function getSheet_(name) {
   const ss = SpreadsheetApp.getActiveSpreadsheet();
@@ -858,7 +651,7 @@ function toOneOrEmpty_(v) {
   if (v === 1 || v === "1") return 1;
   if (v === 0 || v === "0") return "";
 
-  const s = String(v ?? "").trim().toLowerCase();
+  const s = String(((v !== undefined && v !== null) ? v : "")).trim().toLowerCase();
   if (!s) return "";
   if (s === "true" || s === "on" || s === "yes" || s === "si" || s === "sì") return 1;
   if (s === "false" || s === "off" || s === "no") return "";
@@ -889,12 +682,198 @@ function normalizeDateCell_(v) {
   return s;
 }
 
+
+
+/* =========================
+   DRIVE ROOT (per-user)
+========================= */
+
+function extractDriveFolderId_(s) {
+  s = String(s || "").trim();
+  if (!s) return "";
+  // Accept raw id
+  if (/^[a-zA-Z0-9_-]{10,}$/.test(s) && s.indexOf("http") !== 0) return s;
+
+  // Common patterns
+  // https://drive.google.com/drive/folders/<ID>
+  let m = s.match(/\/folders\/([a-zA-Z0-9_-]+)/);
+  if (m && m[1]) return m[1];
+  // open?id=<ID>
+  m = s.match(/[?&]id=([a-zA-Z0-9_-]+)/);
+  if (m && m[1]) return m[1];
+  // /d/<ID> (fallback)
+  m = s.match(/\/d\/([a-zA-Z0-9_-]+)/);
+  if (m && m[1]) return m[1];
+  return "";
+}
+
+function getUserDriveRootFolderId_() {
+  const up = PropertiesService.getUserProperties();
+  return String(up.getProperty("driveRootFolderId") || "").trim();
+}
+
+function setUserDriveRootFolderId_(folderId) {
+  const up = PropertiesService.getUserProperties();
+  if (!folderId) {
+    up.deleteProperty("driveRootFolderId");
+    return "";
+  }
+  up.setProperty("driveRootFolderId", String(folderId).trim());
+  return String(folderId).trim();
+}
+
+function requireUserDriveRootFolderId_() {
+  const id = getUserDriveRootFolderId_();
+  if (!id) throw new Error("Drive root non impostato. Vai in Impostazioni e salva il link della cartella Drive.");
+  return id;
+}
+
+function getOrCreateChildFolder_(parentFolder, name) {
+  name = String(name || "").trim();
+  if (!name) throw new Error("Nome cartella non valido");
+  const it = parentFolder.getFoldersByName(name);
+  if (it.hasNext()) return it.next();
+  return parentFolder.createFolder(name);
+}
+
+function monthNameIt_(mIndex) {
+  const months = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
+  return months[Math.max(0, Math.min(11, Number(mIndex) || 0))];
+}
+
+function toDateOrToday_(v) {
+  if (Object.prototype.toString.call(v) === "[object Date]" && !isNaN(v.getTime())) return v;
+  if (typeof v === "string" && v.trim()) {
+    const dt = new Date(v);
+    if (!isNaN(dt.getTime())) return dt;
+  }
+  return new Date();
+}
+
+function sanitizeFolderName_(s) {
+  s = String(s || "").trim();
+  if (!s) return "";
+  // remove forbidden chars and collapse spaces
+  s = s.replace(/[\\\/\?\*\:\|"<>\x00-\x1F]/g, " ");
+  s = s.replace(/\s+/g, " ").trim();
+  return s;
+}
+
+function buildOspiteFolderNames_(ospiteObj) {
+  const dt = toDateOrToday_(ospiteObj.check_in);
+  const year = String(dt.getFullYear());
+  const month = monthNameIt_(dt.getMonth());
+  const day = String(dt.getDate()); // no leading zero (example: 12)
+  const nome = sanitizeFolderName_(ospiteObj.nome) || String(ospiteObj.id || "Ospite");
+  const leafBase = `${day}-${nome}`;
+  return { year, month, leafBase };
+}
+
+function ensureOspiteDriveFolder_(ospiteObj) {
+  const rootId = requireUserDriveRootFolderId_();
+  const root = DriveApp.getFolderById(rootId);
+
+  const { year, month, leafBase } = buildOspiteFolderNames_(ospiteObj);
+  const yearFolder = getOrCreateChildFolder_(root, year);
+  const monthFolder = getOrCreateChildFolder_(yearFolder, month);
+
+  // create leaf folder; avoid collisions
+  let leafName = leafBase;
+  let leafFolder = null;
+  const it = monthFolder.getFoldersByName(leafName);
+  if (it.hasNext()) {
+    // If name already exists, don't assume it's for this guest: create a unique one
+    leafName = `${leafBase} (${String(ospiteObj.id || "").trim() || Utilities.getUuid().slice(0,8)})`;
+  }
+  leafFolder = monthFolder.createFolder(leafName);
+
+  return {
+    driveFolderId: leafFolder.getId(),
+    driveFolderUrl: leafFolder.getUrl(),
+    path: `${year}/${month}/${leafName}`
+  };
+}
+
+function tryTrashFolderById_(folderId) {
+  folderId = String(folderId || "").trim();
+  if (!folderId) return { ok: false, reason: "missing_id" };
+  try{
+    const f = DriveApp.getFolderById(folderId);
+    f.setTrashed(true);
+    return { ok: true };
+  }catch(err){
+    return { ok: false, reason: errToString_(err) };
+  }
+}
+
+
+function handleAuthDrive_(e, method) {
+  // Backward-compatible handler (kept for safety). Prefer doGet special-case.
+  if (method !== "GET") return jsonError_("Metodo non supportato per auth_drive: " + method);
+  try {
+    return handleAuthDriveNoCatch_();
+  } catch (err) {
+    return jsonError_("Autorizzazione Drive necessaria");
+  }
+}
+
+function handleAuthDriveNoCatch_() {
+  // Touch a Drive service to force authorization prompt if needed.
+  // If authorization is missing, Apps Script will show an "Authorization required" screen in the browser.
+  const name = DriveApp.getRootFolder().getName();
+  return jsonOk_({ authorized: true, rootName: name, ts: new Date().toISOString() });
+}
+
+function handleDriveRoot_(e, method) {
+  // Requires user_id auth already validated in handleRequest_
+  if (method === "GET") {
+    const id = getUserDriveRootFolderId_();
+    if (!id) return jsonOk_({ driveRootFolderId: "", driveRootFolderUrl: "" });
+    try{
+      const f = DriveApp.getFolderById(id);
+      return jsonOk_({ driveRootFolderId: id, driveRootFolderUrl: f.getUrl(), driveRootFolderName: f.getName() });
+    }catch(err){
+      // Stored id is invalid or not accessible; clear it
+      setUserDriveRootFolderId_("");
+      return jsonOk_({ driveRootFolderId: "", driveRootFolderUrl: "", invalid: true });
+    }
+  }
+
+  if (method === "POST" || method === "PUT") {
+    const payload = parseBody_(e) || {};
+    const link = String(payload.driveRootFolderUrl || payload.url || payload.link || payload.folderUrl || payload.folder || "").trim();
+    const id = extractDriveFolderId_(link);
+    if (!id) return jsonError_("Link cartella Drive non valido");
+
+    // Validate folder access
+    try{
+      const f = DriveApp.getFolderById(id);
+      setUserDriveRootFolderId_(id);
+      return jsonOk_({ driveRootFolderId: id, driveRootFolderUrl: f.getUrl(), driveRootFolderName: f.getName() });
+    }catch(err){
+      return jsonError_("Impossibile accedere alla cartella Drive indicata (permessi mancanti o link errato)");
+    }
+  }
+
+  if (method === "DELETE") {
+    setUserDriveRootFolderId_("");
+    return jsonOk_({ cleared: true });
+  }
+
+  return jsonError_("Metodo non supportato per drive_root: " + method);
+}
+
 /* =========================
    OSPITI
 ========================= */
 
 function handleOspiti_(e, method) {
   const sh = getSheet_(SHEETS.OSPITI);
+
+  // Ensure Drive columns exist (present in foglio ospiti ma rendiamo la funzione robusta)
+  try{
+    ensureHeaders_(sh, ["driveFolderId", "driveFolderUrl"]);
+  }catch(_){}
 
   if (method === "GET") {
     const { rows } = readAll_(sh);
@@ -909,40 +888,65 @@ function handleOspiti_(e, method) {
     const results = [];
     for (const item of items) {
       const obj = normalizeOspite_(item);
+
+      // If drive folder is missing, create it in the current user's Drive (Web App executes as user)
+      const hasFolder = String(obj.driveFolderId || "").trim();
+      if (!hasFolder) {
+        const created = ensureOspiteDriveFolder_(obj);
+        obj.driveFolderId = created.driveFolderId;
+        obj.driveFolderUrl = created.driveFolderUrl;
+        obj._driveFolderPath = created.path;
+        obj._driveFolderCreated = true;
+      } else {
+        // Fill url if missing
+        if (!String(obj.driveFolderUrl || "").trim()) {
+          try{
+            const f = DriveApp.getFolderById(String(obj.driveFolderId).trim());
+            obj.driveFolderUrl = f.getUrl();
+          }catch(_){}
+        }
+        obj._driveFolderCreated = false;
+      }
+
       results.push(upsertById_(sh, obj, "id"));
     }
     return jsonOk_({ saved: results.length, results: results });
   }
 
-  
-if (method === "DELETE") {
-  const id = String(e.parameter.id || "").trim();
-  if (!id) return jsonError_("Parametro id mancante (DELETE ospiti)");
+  if (method === "DELETE") {
+    const id = String(e.parameter.id || "").trim();
+    if (!id) return jsonError_("Parametro id mancante (DELETE ospiti)");
 
-  // Se esiste una cartella Drive associata, cestinala prima (bloccante)
-  try{
-    const { rows } = readAll_(sh);
-    const ctx = getCtx_(e);
-    const scopedRows = filterByUserAnno_(rows, ctx);
-    const g = scopedRows.find(r => String(r.id || "").trim() === id);
-    const fid = String(g && (g.driveFolderId || g.drivefolderid || "") || "").trim();
-    if (fid){
-      DriveApp.getFolderById(fid).setTrashed(true);
-    }
-  }catch(err){
-    return jsonError_("Impossibile eliminare la cartella Drive: " + errToString_(err));
+    // Read row before deletion to know drive folder id
+    let driveFolderId = "";
+    try{
+      const data = sh.getDataRange().getValues();
+      const headers = (data[0] || []).map(h => String(h).trim());
+      const idCol = headers.indexOf("id");
+      const dfCol = headers.indexOf("driveFolderId");
+      if (idCol >= 0 && dfCol >= 0) {
+        for (let r = 1; r < data.length; r++) {
+          if (String(data[r][idCol]).trim() === id) {
+            driveFolderId = String(data[r][dfCol] || "").trim();
+            break;
+          }
+        }
+      }
+    }catch(_){}
+
+    // Try to trash folder (best effort)
+    const folderRes = tryTrashFolderById_(driveFolderId);
+
+    const deleted = deleteById_(sh, id, "id");
+
+    // elimina anche le stanze collegate
+    const shSt = getSheet_(SHEETS.STANZE);
+    const deletedRooms = deleteWhere_(shSt, "ospite_id", id);
+
+    return jsonOk_({ deleted: deleted, deletedRooms: deletedRooms, id: id, driveFolderTrashed: folderRes.ok, driveFolderId: driveFolderId, driveFolderError: folderRes.ok ? "" : (folderRes.reason || "") });
   }
 
-  const deleted = deleteById_(sh, id, "id");
-
-  // elimina anche le stanze collegate
-  const shSt = getSheet_(SHEETS.STANZE);
-  const deletedRooms = deleteWhere_(shSt, "ospite_id", id);
-
-  return jsonOk_({ deleted: deleted, deletedRooms: deletedRooms, id: id });
-}
-
-return jsonError_("Metodo non supportato per ospiti: " + method);
+  return jsonError_("Metodo non supportato per ospiti: " + method);
 }
 
 function normalizeOspite_(d) {
@@ -984,6 +988,11 @@ function normalizeOspite_(d) {
   if (typeof stanzeField === "object" && stanzeField !== null) stanzeField = JSON.stringify(stanzeField);
   stanzeField = String(stanzeField || "");
 
+
+
+// Drive folder linkage (optional; filled by backend when missing)
+const driveFolderId = String(pick_(d.driveFolderId, d.drive_folder_id, d.driveFolderID, d.drivefolderid, d.drive_folderId, d.driveFolderId, "")).trim();
+const driveFolderUrl = String(pick_(d.driveFolderUrl, d.drive_folder_url, d.driveFolderURL, d.drivefolderurl, d.drive_folderUrl, d.driveFolderUrl, "")).trim();
   const createdAt = String(pick_(d.created_at, d.createdAt, nowIso));
   const user_id = String(pick_(d.user_id, d.userId, ""));
   const anno = String(pick_(d.anno, d.year, ""));
@@ -1018,6 +1027,10 @@ function normalizeOspite_(d) {
     istat_registrato: istatRegistrato,
 
     stanze: stanzeField,
+
+
+    driveFolderId: driveFolderId,
+    driveFolderUrl: driveFolderUrl,
 
     created_at: createdAt,
     updated_at: nowIso,
