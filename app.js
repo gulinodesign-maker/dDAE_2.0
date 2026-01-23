@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.099";
+const BUILD_VERSION = "dDAE_2.097";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -61,7 +61,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.099)
+// AUTH + SESSION (dDAE_2.097)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -487,7 +487,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.099 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.097 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -578,38 +578,18 @@ const loadingState = {
   hideGraceMs: 260,   // unisce richieste sequenziali (evita molte comparse)
 };
 
-
-// ===== Sync LED (read/write) =====
-const __syncState = { reads: 0, writes: 0 };
-function __syncLedUpdate(){
-  const el = document.getElementById("syncLed");
-  if (!el) return;
-  const w = __syncState.writes|0;
-  const r = __syncState.reads|0;
-  const mode = (w>0) ? "write" : (r>0 ? "read" : "off");
-  el.setAttribute("data-sync", mode);
-}
-function __syncLedBegin(method){
-  const m = String(method||"GET").toUpperCase();
-  if (m === "GET") __syncState.reads += 1;
-  else __syncState.writes += 1;
-  __syncLedUpdate();
-}
-function __syncLedEnd(method){
-  const m = String(method||"GET").toUpperCase();
-  if (m === "GET") __syncState.reads = Math.max(0, (__syncState.reads|0) - 1);
-  else __syncState.writes = Math.max(0, (__syncState.writes|0) - 1);
-  __syncLedUpdate();
-}
-
 function showLoading(){
-  // Loader overlay disabilitato: usiamo LED sync in topbar
-  try{ const ov = document.getElementById("loadingOverlay"); if (ov) ov.hidden = true; }catch(_){}
-  loadingState.isVisible = false;
+  const ov = document.getElementById("loadingOverlay");
+  if (!ov) return;
+  ov.hidden = false;
+  loadingState.isVisible = true;
+  loadingState.shownAt = performance.now();
 }
 
 function hideLoading(){
-  try{ const ov = document.getElementById("loadingOverlay"); if (ov) ov.hidden = true; }catch(_){}
+  const ov = document.getElementById("loadingOverlay");
+  if (!ov) return;
+  ov.hidden = true;
   loadingState.isVisible = false;
 }
 
@@ -1150,10 +1130,6 @@ async function api(action, { method="GET", params={}, body=null, showLoader=true
   }
   const { timeoutMs, retries } = __apiProfile(action, realMethod, body);
 
-  // Sync LED: verde=lettura, rosso=scrittura
-  try{ __syncLedBegin(realMethod); }catch(_){}
-
-
   const baseFetchOpts = {
     method: realMethod,
     cache: "no-store",
@@ -1244,8 +1220,7 @@ try {
 
 if (!json.ok) throw new Error(json.error || "API error");
 return json.data;
-  } finally { try{ __syncLedEnd(realMethod); }catch(_){}
-  if (showLoader) endRequest(); }
+  } finally { if (showLoader) endRequest(); }
 }
 
 
@@ -2009,54 +1984,6 @@ function invalidateApiCache(prefix){
   try{ __lsClearAll(); }catch(_){ }
 }
 
-
-// ===== HOME: refresh totale dati in background (non blocca UI) =====
-let __homeRefreshInFlight = false;
-let __homeRefreshLastAt = 0;
-function refreshAllDataInBackground(){
-  try{
-    if (!state || !state.session || !state.session.user_id) return;
-    const now = Date.now();
-    // evita loop/trigger ravvicinati
-    if (__homeRefreshInFlight) return;
-    if (now - __homeRefreshLastAt < 1500) return;
-    __homeRefreshLastAt = now;
-    __homeRefreshInFlight = true;
-
-    // Avvio async non bloccante
-    setTimeout(() => {
-      (async () => {
-        try{
-          // Svuota cache dati (in-memory + localStorage cache)
-          try{ invalidateApiCache(); }catch(_){}
-
-          // Caricamenti principali (tutti senza loader) — ognuno protetto
-          try{ await ensureSettingsLoaded({ force:true, showLoader:false }); }catch(_){}
-          try{ await loadMotivazioni(); }catch(_){}
-          try{ await load({ showLoader:false }); }catch(_){}
-
-          try{ await ensurePeriodData({ showLoader:false, force:true }); }catch(_){}
-
-          try{ await loadOspiti({ from:"", to:"", force:true }); }catch(_){}
-          try{ await loadColazione({ force:true, showLoader:false }); }catch(_){}
-          try{ await loadProdotti({ force:true, showLoader:false }); }catch(_){}
-
-          try{ if (typeof loadPulizieForDay === "function") await loadPulizieForDay({ clearFirst:false }); }catch(_){}
-          try{ if (typeof loadOperatoriForDay === "function") await loadOperatoriForDay({ clearFirst:false }); }catch(_){}
-          try{ await loadLavanderia(); }catch(_){}
-
-          // Check ricevute (solo acconto+saldo)
-          try{ checkReceiptsOnStartup(); }catch(_){}
-        }catch(_){}
-        finally{
-          __homeRefreshInFlight = false;
-          try{ __syncLedUpdate(); }catch(_){}
-        }
-      })();
-    }, 0);
-  }catch(_){ __homeRefreshInFlight = false; }
-}
-
 // ===== LocalStorage cache (perceived speed on iOS) =====
 const __lsPrefix = "ddae_cache_v1:";
 function __lsClearAll(){
@@ -2341,10 +2268,6 @@ state.page = page;
     if (hb2) hb2.hidden = isHome;
     if (hs2) hs2.hidden = (!isHome) || isOp;
     if (leds2) leds2.hidden = (page !== "home") || isOp;
-
-    // HOME: refresh totale dati in background (non blocca UI)
-    try{ if (isHome) refreshAllDataInBackground(); }catch(_){}
-
     const ir = document.getElementById("btnIrapTop");
     if (ir) ir.hidden = (page !== "statazienda");
 
@@ -2545,7 +2468,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.099: fallback visualizzazione Pulizie
+  // dDAE_2.097: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3512,7 +3435,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.099)
+// STATISTICHE (dDAE_2.097)
 // =========================
 
 function computeStatGen(){
@@ -5175,7 +5098,7 @@ function renderRoomsReadOnly(ospite){
   `;
 }
 
-// ===== dDAE_2.099 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.097 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -7932,7 +7855,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.099) =====
+// ===== CALENDARIO (dDAE_2.097) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -8357,7 +8280,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.099)
+   Lavanderia (dDAE_2.097)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -8753,7 +8676,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.099: renderSpese allineato al backend ---
+// --- FIX dDAE_2.097: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -8849,7 +8772,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.099: delete reale ospiti ---
+// --- FIX dDAE_2.097: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -8884,7 +8807,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.099: mostra nome ospite ---
+// --- FIX dDAE_2.097: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -9138,7 +9061,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.099
+   Build: dDAE_2.097
 ========================= */
 
 state.orepulizia = state.orepulizia || {
