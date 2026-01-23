@@ -8,12 +8,12 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="Cache-Control"/>
 <meta content="no-cache" http-equiv="Pragma"/>
 <meta content="0" http-equiv="Expires"/>
-<link href="./styles.css?v=dDAE_2.101" rel="stylesheet"/>
-<link href="./manifest.json?v=dDAE_2.101" rel="manifest"/>
-<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.101" rel="apple-touch-icon" sizes="180x180"/>
-<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.101" rel="apple-touch-icon-precomposed" sizes="180x180"/>
-<link href="./assets/icons/favicon-32.png?v=dDAE_2.101" rel="icon" sizes="32x32" type="image/png"/>
-<link href="./assets/icons/favicon-16.png?v=dDAE_2.101" rel="icon" sizes="16x16" type="image/png"/>
+<link href="./styles.css?v=dDAE_2.103" rel="stylesheet"/>
+<link href="./manifest.json?v=dDAE_2.103" rel="manifest"/>
+<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.103" rel="apple-touch-icon" sizes="180x180"/>
+<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.103" rel="apple-touch-icon-precomposed" sizes="180x180"/>
+<link href="./assets/icons/favicon-32.png?v=dDAE_2.103" rel="icon" sizes="32x32" type="image/png"/>
+<link href="./assets/icons/favicon-16.png?v=dDAE_2.103" rel="icon" sizes="16x16" type="image/png"/>
 <meta content="#ffffff" name="theme-color"/>
 <meta content="yes" name="apple-mobile-web-app-capable"/>
 <meta content="Daedalium PMS" name="apple-mobile-web-app-title"/>
@@ -23,8 +23,13 @@
 <header class="topbar">
 <div class="brand">
 <div class="brand-left">
-<img alt="Daedalium logo" class="logo" src="./assets/logo.jpg?v=dDAE_2.101"/>
-<div id="syncLed" class="sync-led" data-sync="off" aria-label="Sync" role="status"></div>
+<img alt="Daedalium logo" class="logo" src="./assets/logo.jpg?v=dDAE_2.103"/>
+<div class="top-led-grid" id="topLedGrid" aria-label="Stato" role="status">
+  <span aria-label="Spesa colazione" class="top-led top-led-blue" id="prodLedColazione"></span>
+  <span aria-label="Spesa prodotti" class="top-led top-led-orange" id="prodLedPulizia"></span>
+  <span aria-label="Lettura database" class="top-led top-led-green" id="dbLedRead"></span>
+  <span aria-label="Scrittura database" class="top-led top-led-red" id="dbLedWrite"></span>
+</div>
 <h1>Daedalium PMS</h1>
 </div>
 <div class="brand-right">
@@ -145,11 +150,6 @@
 
 
 <!-- HOME: Impostazioni (solo in HOME) -->
-<div aria-label="Indicatori prodotti" class="top-leds" hidden="" id="prodTopLeds">
-<span aria-label="Colazione" class="top-led top-led-blue" id="prodLedColazione"></span>
-<span aria-label="Pulizia" class="top-led top-led-orange" id="prodLedPulizia"></span>
-<button aria-label="Ricevute" class="icon-btn icon-btn-whiteorange" hidden="" id="homeReceiptsTop" type="button"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24"><path d="M6 2h12v20l-3-2-3 2-3-2-3 2V2z"></path><path d="M8 6h8"></path><path d="M8 10h8"></path><path d="M8 14h6"></path></svg><span class="badge-dot" hidden="" id="homeReceiptsDot"></span></button>
-</div>
 <button aria-label="Impostazioni" class="icon-btn icon-btn-whiteorange" hidden="" id="homeSettingsTop" type="button"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24"><path d="M12 14.5a2.5 2.5 0 1 0 0-5 2.5 2.5 0 0 0 0 5Z"></path><path d="M12 2v2"></path><path d="M12 20v2"></path><path d="M4.93 4.93l1.41 1.41"></path><path d="M17.66 17.66l1.41 1.41"></path><path d="M2 12h2"></path><path d="M20 12h2"></path><path d="M4.93 19.07l1.41-1.41"></path><path d="M17.66 6.34l1.41-1.41"></path></svg></button>
 <button aria-label="Logout" class="icon-btn icon-btn-whiteorange" hidden="" id="opLogoutTop" type="button"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24"><path d="M10 17l1 1a2 2 0 0 0 2 0l1-1"></path><path d="M12 3v10"></path><path d="M7 8a6 6 0 1 0 10 0"></path></svg></button>
 <button aria-label="IRAP" class="icon-btn icon-btn-whiteblue" hidden="" id="btnIrapTop" type="button">
@@ -171,7 +171,7 @@
 <div class="auth-page">
 <div class="auth-card">
 <div class="auth-logo-wrap">
-<img alt="Daedalium" class="auth-logo" src="./assets/logo.jpg?v=dDAE_2.101"/>
+<img alt="Daedalium" class="auth-logo" src="./assets/logo.jpg?v=dDAE_2.103"/>
 </div>
 <!-- MENU (4 pulsanti) -->
 <div class="auth-menu" id="authMenu">
@@ -326,7 +326,7 @@
 <path d="M4 12h.01"></path>
 <path d="M4 18h.01"></path>
 </svg></div><div class="home-main-label">Spesa</div></button>
-</div><div class="build" id="buildText">dDAE_2.101</div></div></section>
+</div><div class="build" id="buildText">dDAE_2.103</div></div></section>
 <!-- PRODOTTI -->
 <section class="page" hidden="" id="page-prodotti">
 <div class="prodotti-page">
@@ -1189,8 +1189,8 @@
 </div>
 </div>
 </div>
-<script defer="" src="./config.js?v=dDAE_2.101"></script>
-<script defer="" src="./app.js?v=dDAE_2.101"></script>
+<script defer="" src="./config.js?v=dDAE_2.103"></script>
+<script defer="" src="./app.js?v=dDAE_2.103"></script>
 <!-- TAX REPORT MODAL -->
 <div aria-hidden="true" class="modal" hidden="" id="taxReportModal">
 <div aria-labelledby="taxReportTitle" aria-modal="true" class="modal-card tax-report-card" role="dialog">

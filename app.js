@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.102";
+const BUILD_VERSION = "dDAE_2.103";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -23,8 +23,7 @@ function applyRoleMode(){
       "goTassaSoggiorno",
       "goStatistiche",
       "homeSettingsTop",
-      "prodTopLeds",
-      // icone/shortcuts ospiti duplicati (se presenti)
+            // icone/shortcuts ospiti duplicati (se presenti)
       "goOspiti",
     ];
     hideIds.forEach((id)=>{
@@ -61,7 +60,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.102)
+// AUTH + SESSION (dDAE_2.103)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -487,7 +486,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.102 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.103 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -581,14 +580,25 @@ const loadingState = {
 
 // ===== Sync LED (read/write) =====
 const __syncState = { reads: 0, writes: 0 };
+
 function __syncLedUpdate(){
-  const el = document.getElementById("syncLed");
-  if (!el) return;
+  const elRead = document.getElementById("dbLedRead");
+  const elWrite = document.getElementById("dbLedWrite");
+
   const w = __syncState.writes|0;
   const r = __syncState.reads|0;
-  const mode = (w>0) ? "write" : (r>0 ? "read" : "off");
-  el.setAttribute("data-sync", mode);
+
+  if (elRead) elRead.classList.toggle("is-on", r > 0);
+  if (elWrite) elWrite.classList.toggle("is-on", w > 0);
+
+  // Compat (se esiste ancora in vecchi markup)
+  const legacy = document.getElementById("syncLed");
+  if (legacy){
+    const mode = (w>0) ? "write" : (r>0 ? "read" : "off");
+    legacy.setAttribute("data-sync", mode);
+  }
 }
+
 function __syncLedBegin(method){
   const m = String(method||"GET").toUpperCase();
   if (m === "GET") __syncState.reads += 1;
@@ -2544,7 +2554,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.102: fallback visualizzazione Pulizie
+  // dDAE_2.103: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3511,7 +3521,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.102)
+// STATISTICHE (dDAE_2.103)
 // =========================
 
 function computeStatGen(){
@@ -5174,7 +5184,7 @@ function renderRoomsReadOnly(ospite){
   `;
 }
 
-// ===== dDAE_2.102 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.103 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -7836,7 +7846,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.102) =====
+// ===== CALENDARIO (dDAE_2.103) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -8261,7 +8271,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.102)
+   Lavanderia (dDAE_2.103)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -8657,7 +8667,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.102: renderSpese allineato al backend ---
+// --- FIX dDAE_2.103: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -8753,7 +8763,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.102: delete reale ospiti ---
+// --- FIX dDAE_2.103: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -8788,7 +8798,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.102: mostra nome ospite ---
+// --- FIX dDAE_2.103: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -9042,7 +9052,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.102
+   Build: dDAE_2.103
 ========================= */
 
 state.orepulizia = state.orepulizia || {
