@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.106";
+const BUILD_VERSION = "dDAE_2.107";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -60,7 +60,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.106)
+// AUTH + SESSION (dDAE_2.107)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -486,7 +486,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.106 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.107 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -1454,11 +1454,23 @@ async function saveImpostazioniPage() {
 async function loadDriveRootToSettingsUI(){
   try{
     const data = await api("drive_root", { method: "GET", showLoader: false });
-    const url = String(data?.driveRootFolderUrl || "").trim();
+    const url = (data && (data.driveRootFolderUrl || data.driveRootFolderURL || "")) ? String(data.driveRootFolderUrl || data.driveRootFolderURL || "").trim() : "";
     const el = document.getElementById("driveRootLink");
     if (el) el.value = url;
     try{ refreshFloatingLabels(); }catch(_){}
-  }catch(_){}
+  }catch(err){
+    const msg = String(err && err.message ? err.message : err || "");
+    if (msg.indexOf("Action non valida: drive_root") >= 0) {
+      alert(
+        "Backend non aggiornato: la Web App Apps Script sta ancora eseguendo una versione vecchia che non supporta drive_root.\n\n" +
+        "Soluzione:\n" +
+        "1) Apri Apps Script\n" +
+        "2) Sostituisci il file Code.gs con quello incluso nello ZIP di questa build\n" +
+        "3) Deploy → Manage deployments → Edit → New version → Deploy\n" +
+        "4) Se cambia l'URL, aggiorna API_BASE_URL in config.js\n"
+      );
+    }
+  }
 }
 
 async function saveDriveRootFromSettingsUI(){
@@ -1466,7 +1478,23 @@ async function saveDriveRootFromSettingsUI(){
   if (!el) return;
   const link = String(el.value || "").trim();
   if (!link) return; // non sovrascrivere se vuoto
-  await api("drive_root", { method: "POST", body: { driveRootFolderUrl: link }, showLoader: true });
+  try{
+    await api("drive_root", { method: "POST", body: { driveRootFolderUrl: link }, showLoader: true });
+  }catch(err){
+    const msg = String(err && err.message ? err.message : err || "");
+    if (msg.indexOf("Action non valida: drive_root") >= 0) {
+      alert(
+        "Backend non aggiornato: la Web App Apps Script sta ancora eseguendo una versione vecchia che non supporta drive_root.\n\n" +
+        "Soluzione:\n" +
+        "1) Apri Apps Script\n" +
+        "2) Sostituisci il file Code.gs con quello incluso nello ZIP di questa build\n" +
+        "3) Deploy → Manage deployments → Edit → New version → Deploy\n" +
+        "4) Se cambia l'URL, aggiorna API_BASE_URL in config.js\n"
+      );
+      throw err;
+    }
+    throw err;
+  }
 }
 
 function setupImpostazioni() {
@@ -2576,7 +2604,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.106: fallback visualizzazione Pulizie
+  // dDAE_2.107: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3543,7 +3571,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.106)
+// STATISTICHE (dDAE_2.107)
 // =========================
 
 function computeStatGen(){
@@ -5206,7 +5234,7 @@ function renderRoomsReadOnly(ospite){
   `;
 }
 
-// ===== dDAE_2.106 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.107 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -7868,7 +7896,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.106) =====
+// ===== CALENDARIO (dDAE_2.107) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -8293,7 +8321,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.106)
+   Lavanderia (dDAE_2.107)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -8689,7 +8717,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.106: renderSpese allineato al backend ---
+// --- FIX dDAE_2.107: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -8785,7 +8813,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.106: delete reale ospiti ---
+// --- FIX dDAE_2.107: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -8820,7 +8848,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.106: mostra nome ospite ---
+// --- FIX dDAE_2.107: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -9074,7 +9102,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.106
+   Build: dDAE_2.107
 ========================= */
 
 state.orepulizia = state.orepulizia || {
