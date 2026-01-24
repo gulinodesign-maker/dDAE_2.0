@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.103";
+const BUILD_VERSION = "dDAE_2.104";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -60,7 +60,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.103)
+// AUTH + SESSION (dDAE_2.104)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -486,7 +486,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.103 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.104 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2352,7 +2352,7 @@ state.page = page;
     if (leds2) leds2.hidden = (page !== "home") || isOp;
 
     // HOME: refresh totale dati in background (non blocca UI)
-    try{ if (isHome) refreshAllDataInBackground(); }catch(_){}
+    try{ if (isHome){ try{ updateProdottiHomeBlink(); }catch(_){ } refreshAllDataInBackground(); } }catch(_){}
 
     const ir = document.getElementById("btnIrapTop");
     if (ir) ir.hidden = (page !== "statazienda");
@@ -2554,7 +2554,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.103: fallback visualizzazione Pulizie
+  // dDAE_2.104: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3521,7 +3521,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.103)
+// STATISTICHE (dDAE_2.104)
 // =========================
 
 function computeStatGen(){
@@ -5184,7 +5184,7 @@ function renderRoomsReadOnly(ospite){
   `;
 }
 
-// ===== dDAE_2.103 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.104 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -6325,13 +6325,12 @@ function __colazioneAny(){
 
 function updateProdottiHomeBlink(){
   const btn = document.getElementById("goProdotti");
-  if (!btn) return;
   const any = (
     Array.isArray(state.colazione?.items) && state.colazione.items.some(i=>!__normBool01(i.isDeleted))
   ) || (
     Array.isArray(state.prodotti_pulizia?.items) && state.prodotti_pulizia.items.some(i=>!__normBool01(i.isDeleted))
   );
-  btn.classList.toggle("colazione-attn", !!any);
+  if (btn) btn.classList.toggle("colazione-attn", !!any);
 
   // Topbar LED: acceso quando esiste almeno un prodotto "salvato" (pallino rosso)
   // nella relativa lista.
@@ -7135,7 +7134,14 @@ async function init(){
   try{ applyRoleMode(); }catch(_){ }
   setupCalendario();
   setupImpostazioni();
-  setupProdotti();
+setupProdotti();
+// Avvio: prima cosa dopo il bootstrap UI (utente autenticato) è controllare entrambe le liste spesa
+try{
+  if (state.session && state.session.user_id){
+    setTimeout(() => { try{ loadSpesaAll({ force:true, showLoader:false }); }catch(_){ } }, 0);
+  }
+}catch(_){ }
+
   // setupColazione legacy (non più usata)
   try{ setupColazione(); }catch(_){}
 
@@ -7846,7 +7852,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.103) =====
+// ===== CALENDARIO (dDAE_2.104) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -8271,7 +8277,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.103)
+   Lavanderia (dDAE_2.104)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -8667,7 +8673,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.103: renderSpese allineato al backend ---
+// --- FIX dDAE_2.104: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -8763,7 +8769,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.103: delete reale ospiti ---
+// --- FIX dDAE_2.104: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -8798,7 +8804,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.103: mostra nome ospite ---
+// --- FIX dDAE_2.104: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -9052,7 +9058,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.103
+   Build: dDAE_2.104
 ========================= */
 
 state.orepulizia = state.orepulizia || {
