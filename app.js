@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.107";
+const BUILD_VERSION = "dDAE_2.108";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -60,7 +60,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.107)
+// AUTH + SESSION (dDAE_2.108)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -486,7 +486,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.107 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.108 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2554,7 +2554,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.107: fallback visualizzazione Pulizie
+  // dDAE_2.108: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3521,7 +3521,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.107)
+// STATISTICHE (dDAE_2.108)
 // =========================
 
 function computeStatGen(){
@@ -5184,7 +5184,7 @@ function renderRoomsReadOnly(ospite){
   `;
 }
 
-// ===== dDAE_2.107 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.108 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -6267,6 +6267,8 @@ function renderGuestCards(){
 
     const led = guestLedStatus(first);
 
+    const marriageOn = !!(first?.matrimonio);
+
     const arrivoText = formatLongDateIT(first.check_in || first.checkIn || "") || "—";
 
     card.tabIndex = 0;
@@ -6283,6 +6285,7 @@ function renderGuestCards(){
           </div>
         </div>
         <div class="guest-meta-right" aria-label="Stato">
+          ${marriageOn ? `<span class="marriage-dot" aria-label="Matrimonio">M</span>` : ``}
           <span class="guest-led ${led.cls}" aria-label="${led.label}" title="${led.label}"></span>
         </div>
       </div>
@@ -7866,7 +7869,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.107) =====
+// ===== CALENDARIO (dDAE_2.108) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -8291,7 +8294,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.107)
+   Lavanderia (dDAE_2.108)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -8687,7 +8690,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.107: renderSpese allineato al backend ---
+// --- FIX dDAE_2.108: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -8783,7 +8786,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.107: delete reale ospiti ---
+// --- FIX dDAE_2.108: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -8818,7 +8821,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.107: mostra nome ospite ---
+// --- FIX dDAE_2.108: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -9072,7 +9075,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.107
+   Build: dDAE_2.108
 ========================= */
 
 state.orepulizia = state.orepulizia || {
