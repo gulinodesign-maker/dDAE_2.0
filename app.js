@@ -7634,8 +7634,8 @@ try{
       longFired = false;
     };
 
-    const onLong = () => { el.classList.remove("is-saved"); writeHourDot(el, 0); };
-    const onTap = () => { el.classList.remove("is-saved"); writeHourDot(el, readHourDot(el) + 1); };
+    const onLong = () => { el.classList.remove("is-saved"); writeHourDot(el, 0); try{ scheduleHoursAutosave(); }catch(_){ } };
+    const onTap = () => { el.classList.remove("is-saved"); writeHourDot(el, readHourDot(el) + 1); try{ scheduleHoursAutosave(); }catch(_){ } };
 
     el.addEventListener("touchstart", (e) => {
       lastTouchAt = Date.now();
@@ -7879,6 +7879,133 @@ const buildPuliziePayload = () => {
     return { data, rows };
   };
 
+  // Autosave (debounce 1s) — Pulizie (biancheria) + Ore operatori
+  let __laundryTimer = null;
+  let __laundryLastChangeAt = 0;
+  let __laundryInFlight = false;
+
+  let __hoursTimer = null;
+  let __hoursLastChangeAt = 0;
+  let __hoursInFlight = false;
+
+  const scheduleLaundryAutosave = () => {
+    __laundryLastChangeAt = Date.now();
+    if (__laundryTimer) { try{ clearTimeout(__laundryTimer); }catch(_){ } __laundryTimer = null; }
+    __laundryTimer = setTimeout(() => { doLaundryAutosave_(); }, 1000);
+  };
+
+  const scheduleHoursAutosave = () => {
+    __hoursLastChangeAt = Date.now();
+    if (__hoursTimer) { try{ clearTimeout(__hoursTimer); }catch(_){ } __hoursTimer = null; }
+    __hoursTimer = setTimeout(() => { doHoursAutosave_(); }, 1000);
+  };
+
+  const doLaundryAutosave_ = async () => {
+    if (__laundryInFlight) return;
+    __laundryInFlight = true;
+    const startedAt = Date.now();
+    try{
+      const payload = buildPuliziePayload();
+      await api("pulizie", { method:"POST", body: payload, showLoader:false });
+      try{ await loadPulizieForDay({ clearFirst:false }); }catch(_){ }
+    }catch(err){
+      toast(String(err && err.message || "Errore salvataggio biancheria"));
+    }finally{
+      __laundryInFlight = false;
+      const last = __laundryLastChangeAt;
+      if (last > startedAt){
+        const wait = Math.max(0, 1000 - (Date.now() - last));
+        if (__laundryTimer) { try{ clearTimeout(__laundryTimer); }catch(_){ } __laundryTimer = null; }
+        __laundryTimer = setTimeout(() => { doLaundryAutosave_(); }, wait);
+      }
+    }
+  };
+
+  const doHoursAutosave_ = async () => {
+    if (__hoursInFlight) return;
+    __hoursInFlight = true;
+    const startedAt = Date.now();
+    try{
+      const isOpSession = !!(state && state.session && isOperatoreSession(state.session));
+
+      const parseRows = (res) => {
+        const rows = Array.isArray(res) ? res
+          : (res && Array.isArray(res.rows) ? res.rows
+          : (res && Array.isArray(res.data) ? res.data
+          : (res && res.data && Array.isArray(res.data.data) ? res.data.data
+          : [])));
+        return Array.isArray(rows) ? rows : [];
+      };
+
+      const buildMergedForOperatore = async () => {
+        const date = getCleanDate();
+        const names = getOperatorNamesFromSettings();
+        const hasAnyName = names.some(n => String(n || '').trim());
+        if (!hasAnyName) throw new Error("Imposta i nomi operatori in Impostazioni");
+
+        const rawU = String(state.session._op_local || state.session.username || state.session.user || state.session.nome || state.session.name || state.session.email || '').trim();
+        if (!rawU) throw new Error('Operatore non valido');
+        const normU = rawU.toLowerCase();
+        const activeName = (names||[]).find(n => String(n||'').trim().toLowerCase() === normU) || rawU;
+
+        let existing = [];
+        try{
+          const res = await api('operatori', { method:'GET', params:{ data: date }, showLoader:false });
+          existing = parseRows(res);
+        }catch(_){ existing = []; }
+
+        const map = new Map();
+        const _max = (a,b)=> (a>b?a:b);
+        existing.forEach(r=>{
+          const op = String(r?.operatore || r?.nome || '').trim().toLowerCase();
+          const ore = parseInt(String(r?.ore ?? 0), 10);
+          if (op) map.set(op, (ore!=ore)?0: _max(0, ore));
+        });
+
+        const idxActive = (names||[]).findIndex(n => String(n||'').trim().toLowerCase() === String(activeName||'').trim().toLowerCase());
+
+        const rows = [];
+        (names||[]).forEach((nm, idx)=>{
+          const name = String(nm||'').trim();
+          if (!name) return;
+
+          let hours = 0;
+          if (idx === idxActive && idxActive >= 0){
+            const el = opEls[idxActive];
+            hours = el ? readHourDot(el.hours) : 0;
+          } else {
+            hours = map.get(name.toLowerCase()) || 0;
+          }
+
+          if (hours > 0){
+            rows.push({ data: date, operatore: name, ore: hours, benzina_euro: OP_BENZINA_EUR });
+          }
+        });
+
+        return { touched: true, payload: { data: date, operatori: rows, replaceDay: true } };
+      };
+
+      const out = isOpSession ? await buildMergedForOperatore() : buildOperatoriPayload();
+      const { touched, payload: opPayload } = out || {};
+      if (!touched) return;
+
+      await api("operatori", { method:"POST", body: opPayload, showLoader:false });
+      try{ await loadOperatoriForDay({ clearFirst:false }); }catch(_){ }
+    }catch(err){
+      toast(String(err && err.message || "Errore salvataggio ore lavoro"));
+    }finally{
+      __hoursInFlight = false;
+      const last = __hoursLastChangeAt;
+      if (last > startedAt){
+        const wait = Math.max(0, 1000 - (Date.now() - last));
+        if (__hoursTimer) { try{ clearTimeout(__hoursTimer); }catch(_){ } __hoursTimer = null; }
+        __hoursTimer = setTimeout(() => { doHoursAutosave_(); }, wait);
+      }
+    }
+  };
+
+
+
   // Tap incrementa, long press (0.5s) azzera
   let pressTimer = null;
   let pressTarget = null;
@@ -7898,12 +8025,14 @@ const buildPuliziePayload = () => {
       longFired = true;
       slot.classList.remove("is-saved");
       writeCell(slot, 0);
+      try{ scheduleLaundryAutosave(); }catch(_){ }
     }, 500);
   };
 
   const tapSlot = (slot) => {
     slot.classList.remove("is-saved");
     writeCell(slot, readCell(slot) + 1);
+    try{ scheduleLaundryAutosave(); }catch(_){ }
   };
 
   if (cleanGrid){
@@ -7971,6 +8100,22 @@ const buildPuliziePayload = () => {
       e.stopPropagation();
     }, true);
   }
+
+  // Reset biancheria (azzera tutta la griglia) — salva automaticamente (debounce 1s)
+  const cleanResetLaundry = document.getElementById("cleanResetLaundry");
+  if (cleanResetLaundry){
+    bindFastTap(cleanResetLaundry, () => {
+      try{
+        document.querySelectorAll(".clean-grid .cell.slot").forEach(el => {
+          try{ el.textContent = ""; }catch(_){ }
+          try{ el.classList.remove("is-saved"); }catch(_){ }
+        });
+        try{ scheduleLaundryAutosave(); }catch(_){ }
+      }catch(_){}
+    });
+  }
+
+
 
   // Salva biancheria (foglio "pulizie")
 if (cleanSaveLaundry){
