@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.140";
+const BUILD_VERSION = "dDAE_2.141";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -60,7 +60,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.140)
+// AUTH + SESSION (dDAE_2.141)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -511,7 +511,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.140 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.141 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2278,7 +2278,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.140 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.141 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2738,7 +2738,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.140: fallback visualizzazione Pulizie
+  // dDAE_2.141: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3705,7 +3705,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.140)
+// STATISTICHE (dDAE_2.141)
 // =========================
 
 function computeStatGen(){
@@ -5391,7 +5391,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.140 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.141 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -5843,7 +5843,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.140: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.141: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -7142,6 +7142,70 @@ function setupProdotti(){
     }
   };
 
+
+  // --- Autosave: immediato (Spesa: qty -> save + commit lista) ---
+  let __spesaSaving = false;
+  let __spesaPending = false;
+
+  function scheduleSpesaSave(){
+    try{ saveSpesaDraftNow(); }catch(_){}
+  }
+
+  async function saveSpesaDraftNow(){
+    try{
+      if (__spesaSaving){ __spesaPending = true; return; }
+      __spesaSaving = true;
+
+      const action = __prodAction_();
+      const draft = __prodDraftBucket_();
+      const dirty = __prodDraftDirtyBucket_();
+      const ids = Object.keys(dirty || {});
+      if (!ids.length){
+        updateProdottiHomeBlink();
+        return;
+      }
+
+      const bucket = __prodStateBucket_();
+      const items = bucket.items || [];
+
+      const qtyById = {};
+      for (const id of ids){
+        const qn = parseInt(String(draft[id] ?? 0), 10);
+        const qty = isNaN(qn) ? 0 : Math.max(0, qn);
+        qtyById[id] = qty;
+
+        const it = items.find(x => String(x.id||"") === String(id));
+        if (it){
+          it.qty = qty;
+          __spesaNormalizeItem_(it);
+          it.updatedAt = new Date().toISOString();
+        }
+      }
+
+      // Backend: persist + commit lista
+ persist + commit lista
+      await Promise.all(ids.map((id) => (
+        api(action, { method:"PUT", body:{ id:String(id), qty: qtyById[id], saved: 0 }, showLoader:false })
+      )));
+      await api(action, { method:"POST", body:{ op:"save" }, showLoader:false });
+
+      // Ricarica entrambe per coerenza multi-dispositivo (LED Home)
+      await loadSpesaAll({ force:true, showLoader:false });
+      __prodDraftClear_();
+      try{ renderProdotti(); }catch(_){}
+      updateProdottiHomeBlink();
+    }catch(e){
+      try{ toast(e.message || "Errore"); }catch(_){}
+    }finally{
+      __spesaSaving = false;
+      if (__spesaPending){
+        __spesaPending = false;
+        try{ saveSpesaDraftNow(); }catch(_){}
+      }
+    }
+  }
+
+
   // Event delegation: qty / check
   list.addEventListener("click", (e) => {
     const t = e.target;
@@ -7164,6 +7228,7 @@ function setupProdotti(){
       const next = (base >= 9) ? 0 : (base + 1);
       __prodDraftSetQty_(id, next);
       renderProdotti();
+      scheduleSpesaSave();
       return;
     }
 
@@ -8209,7 +8274,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.140) =====
+// ===== CALENDARIO (dDAE_2.141) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -8664,7 +8729,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.140)
+   Lavanderia (dDAE_2.141)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -9060,7 +9125,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.140: renderSpese allineato al backend ---
+// --- FIX dDAE_2.141: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -9156,7 +9221,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.140: delete reale ospiti ---
+// --- FIX dDAE_2.141: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -9191,7 +9256,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.140: mostra nome ospite ---
+// --- FIX dDAE_2.141: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -9445,7 +9510,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.140
+   Build: dDAE_2.141
 ========================= */
 
 state.orepulizia = state.orepulizia || {
