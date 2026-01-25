@@ -41,7 +41,7 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.111");
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.112");
   background-repeat: no-repeat;
   background-position: center;
   background-size: cover;
@@ -61,7 +61,7 @@ body{
   border-bottom: 0;
 }
 
-/* dDAE_2.111 — Linea sotto la topbar (sfumata colori app) */
+/* dDAE_2.112 — Linea sotto la topbar (sfumata colori app) */
 .topbar::after{
   content:"";
   position: absolute;
@@ -116,7 +116,7 @@ body{
   box-shadow: inset 0 0 0 1px rgba(255,255,255,0.25);
 }
 
-/* dDAE_2.111 — Griglia 2x2 LED (Spesa + DB) tra logo e titolo */
+/* dDAE_2.112 — Griglia 2x2 LED (Spesa + DB) tra logo e titolo */
 .top-led-grid{
   display: grid;
   grid-template-columns: repeat(2, 10px);
@@ -160,9 +160,9 @@ body{
 }
 
 
-/* dDAE_2.111 — TOP TOOLS OSPITI: pulsanti affiancati (fix iPhone) */
+/* dDAE_2.112 — TOP TOOLS OSPITI: pulsanti affiancati (fix iPhone) */
 
-/* dDAE_2.111 — TOP TOOLS: mai a capo, mai in colonna */
+/* dDAE_2.112 — TOP TOOLS: mai a capo, mai in colonna */
 div[id$="TopTools"]{
   display:flex;
   align-items:center;
@@ -266,7 +266,7 @@ div[id$="TopTools"][hidden]{ display:none !important; }
 .icon-btn.icon-btn-green .ui-ico{ stroke: #ffffff; }
 
 
-/* dDAE_2.111 — Ore pulizia: back button bianco piatto con icona arancione (fix iOS) */
+/* dDAE_2.112 — Ore pulizia: back button bianco piatto con icona arancione (fix iOS) */
 .icon-btn.icon-btn-whiteblue{
   background:#ffffff;
   border: 1px solid rgba(15,23,42,0.10);
@@ -900,7 +900,7 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.111");
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.112");
   background-repeat: no-repeat;
   background-position: center;
   background-size: cover;
@@ -2020,7 +2020,7 @@ body::before{
 #page-home #goTassaSoggiorno .home-main-glyph{ color: rgba(201,119,43,0.92); }
 #page-home #goPulizie .home-main-glyph{ color: rgba(15,23,42,0.92); }
 #page-home #goGuadagni .home-main-glyph{ color: rgba(176,92,18,0.92); }
-/* dDAE_2.111 - Ospiti: solo consultazione (azioni nascoste per ora) */
+/* dDAE_2.112 - Ospiti: solo consultazione (azioni nascoste per ora) */
 body[data-page="ospiti"] .guest-card .actions {
   display: flex !important;
 }
@@ -2171,10 +2171,10 @@ body[data-page="ospiti"] .guest-card .actions {
 }
 
 
-/* dDAE_2.111 — Ospiti: azioni stile Apple (pallini verde/giallo/rosso) */
+/* dDAE_2.112 — Ospiti: azioni stile Apple (pallini verde/giallo/rosso) */
 
 /* =========================
-   dDAE_2.111 — Auth + Anno pill
+   dDAE_2.112 — Auth + Anno pill
 ========================= */
 
 .year-pill{
@@ -2367,7 +2367,7 @@ body[data-page="ospiti"] .guest-card .actions {
 }
 
 
-/* dDAE_2.111 — Ospiti: stanze come pallini azzurri */
+/* dDAE_2.112 — Ospiti: stanze come pallini azzurri */
 
 .rooms-dots{
   display:flex;
@@ -2407,12 +2407,14 @@ body[data-page="ospiti"] .guest-card .actions {
 
 
 
-/* dDAE_2.111 — Ospiti: pallini letti accanto alla stanza (stack per stanza) */
+/* dDAE_2.112 — Ospiti: pallini letti accanto alla stanza (stack per stanza) */
 
 .rooms-stack{
   display:flex;
-  flex-direction:column;
-  gap:10px;
+  flex-direction: row;
+  flex-wrap: wrap;
+  align-items: flex-start;
+  gap: 14px;
 }
 
 .rooms-readonly-wrap{
@@ -2511,14 +2513,15 @@ body[data-page="ospiti"] .guest-card .actions {
 
 .room-row{
   display:flex;
-  align-items:center;
-  gap:10px;
+  align-items:flex-start;
+  gap:8px;
 }
 .bed-dots{
   display:flex;
-  align-items:center;
-  gap:6px;
-  flex-wrap:wrap;
+  flex-direction: column;
+  align-items:flex-start;
+  gap:4px;
+  flex-wrap: nowrap;
   min-height: 18px;
 }
 .bed-dot{
@@ -2543,7 +2546,7 @@ body[data-page="ospiti"] .guest-card .actions {
 
 
 
-/* dDAE_2.111 — Matrimonio: pallino verde 'M' nella riga stanze */
+/* dDAE_2.112 — Matrimonio: pallino verde 'M' nella riga stanze */
 
 #page-ospite .room-dot-marriage{
   margin-left: 6px; /* resta nella stessa riga (nowrap) */
@@ -2558,7 +2561,7 @@ body[data-page="ospiti"] .guest-card .actions {
 }
 
 
-/* dDAE_2.111 — Acconto: pallini C/E come stanze */
+/* dDAE_2.112 — Acconto: pallini C/E come stanze */
 
 #page-ospite .pay-dots{
   display:grid;
@@ -2586,7 +2589,7 @@ body[data-page="ospiti"] .guest-card .actions {
   -webkit-tap-highlight-color: transparent;
 }
 
-/* dDAE_2.111 — allineamento "pallini" Contanti/Elettronico (iOS/Safari) */
+/* dDAE_2.112 — allineamento "pallini" Contanti/Elettronico (iOS/Safari) */
 #page-ospite .pay-dots{
   place-items: center;
 }
@@ -2596,9 +2599,9 @@ body[data-page="ospiti"] .guest-card .actions {
 
 
 
-/* dDAE_2.111 — Pay dots: bianchi quando non selezionati + più distanziati */
+/* dDAE_2.112 — Pay dots: bianchi quando non selezionati + più distanziati */
 
-/* dDAE_2.111 — Pay dots: niente riflesso/ombra e allineamento verticale */
+/* dDAE_2.112 — Pay dots: niente riflesso/ombra e allineamento verticale */
 
 #page-ospite .pay-dot,
 #page-ospite .pay-dot.selected{
@@ -2606,7 +2609,7 @@ body[data-page="ospiti"] .guest-card .actions {
 }
 
 
-/* dDAE_2.111 — Colori pallini pagamento (bianchi se off) + niente ombre */
+/* dDAE_2.112 — Colori pallini pagamento (bianchi se off) + niente ombre */
 
 #page-ospite .pay-dot,
 #page-ospite .pay-dot.selected{
@@ -2633,7 +2636,7 @@ body[data-page="ospiti"] .guest-card .actions {
 }
 
 
-/* dDAE_2.111 — iOS: evita accavallamento label/value su date/number */
+/* dDAE_2.112 — iOS: evita accavallamento label/value su date/number */
 
 .field.float input[type="date"],
 .field.float input[type="number"],
@@ -2651,16 +2654,20 @@ body[data-page="ospiti"] .guest-card .actions {
 
 
 
-/* dDAE_2.111 — Fix definitivo allineamento pallini pagamento */
+/* dDAE_2.112 — Fix definitivo allineamento pallini pagamento */
+
+#page-ospite{
+  --paycol: 156px;
+}
 
 #page-ospite .field.two-col.payment-row{
   display: grid;
-  grid-template-columns: minmax(0,1fr) 140px;
+  grid-template-columns: minmax(0,1fr) var(--paycol) !important;
   gap: 12px;
   align-items: center;
 }
 #page-ospite .field.two-col.payment-row .subfield.paywrap{
-  width: 140px;
+  width: var(--paycol);
   padding: 0 !important;
   margin: 0 !important;
   display:flex;
@@ -2668,12 +2675,17 @@ body[data-page="ospiti"] .guest-card .actions {
   justify-content:center;
 }
 
-/* dDAE_2.111 — Booking row: Importo booking + pill tassa (allineata ai tag pagamento) */
+#page-ospite .field.two-col.payment-row .subfield.paywrap .pay-pill,
+#page-ospite .field.two-col.booking-row .subfield.paywrap .pay-pill{
+  width: 100% !important;
+}
+
+/* dDAE_2.112 — Booking row: Importo booking + pill tassa (allineata ai tag pagamento) */
 #page-ospite .field.two-col.booking-row{
-  grid-template-columns: minmax(0,1fr) 170px !important;
+  grid-template-columns: minmax(0,1fr) var(--paycol) !important;
 }
 #page-ospite .field.two-col.booking-row .subfield.paywrap{
-  width: 170px !important;
+  width: var(--paycol) !important;
 }
 #page-ospite .pay-pill.pay-pill-text{
   justify-content: center;
@@ -2692,7 +2704,7 @@ body[data-page="ospiti"] .guest-card .actions {
 }
 
 
-/* dDAE_2.111 — Override anti-vincoli: nessun offset fisso su C/E */
+/* dDAE_2.112 — Override anti-vincoli: nessun offset fisso su C/E */
 
 #page-ospite #depositType,
 #page-ospite #saldoType{
@@ -2718,7 +2730,7 @@ body[data-page="ospiti"] .guest-card .actions {
 }
 
 
-/* dDAE_2.111 — Eliminazione totale label tipo saldo + paywrap pulito */
+/* dDAE_2.112 — Eliminazione totale label tipo saldo + paywrap pulito */
 
 #page-ospite .subfield.paywrap::before,
 #page-ospite .subfield.paywrap::after{
@@ -2727,7 +2739,7 @@ body[data-page="ospiti"] .guest-card .actions {
 }
 
 
-/* dDAE_2.111 — mini led accanto ai prezzi (Acconto/Saldo) */
+/* dDAE_2.112 — mini led accanto ai prezzi (Acconto/Saldo) */
 .guest-led.mini-led{
   width: 10px;
   height: 10px;
@@ -2742,14 +2754,14 @@ body[data-page="ospiti"] .guest-card .actions {
 
 
 /* ===== CALENDARIO ===== */
-/* dDAE_2.111 — Calendario: margini orizzontali 5px (compensa padding .wrap) */
+/* dDAE_2.112 — Calendario: margini orizzontali 5px (compensa padding .wrap) */
 #page-calendario .content.calendar-page{
   margin-left: -9px; /* 14px (wrap) - 9px = 5px */
   margin-right: -9px;
 }
 
 
-/* dDAE_2.111 — Calendario: grafica più simile a Pulizie (solo UI, nessuna logica) */
+/* dDAE_2.112 — Calendario: grafica più simile a Pulizie (solo UI, nessuna logica) */
 #page-calendario .cal-nav-btn{
   background: rgba(255,255,255,0.92);
   border: 1px solid rgba(15,23,42,0.14);
@@ -2925,7 +2937,7 @@ body[data-page="ospiti"] .guest-card .actions {
 .cal-nav-btn:active{ transform: scale(.98); }
 
 /* Pulsante sync (verde) all'estrema destra */
-/* dDAE_2.111: calendario leggibile + colori pastello */
+/* dDAE_2.112: calendario leggibile + colori pastello */
 .cal-nav-btn-sync{
   position:absolute;
   right:5px;
@@ -3158,7 +3170,7 @@ body[data-page="ospiti"] .guest-card .actions {
   background-image: none;
 border-color: rgba(255,255,255,.16);
 }
-/* ===== dDAE_2.111 FIX: HOME grid clickable (no flex override) ===== */
+/* ===== dDAE_2.112 FIX: HOME grid clickable (no flex override) ===== */
 #page-home .home-grid{
   display: grid !important;
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -3168,7 +3180,7 @@ border-color: rgba(255,255,255,.16);
   width: min(460px, 94vw) !important;
   padding: 14px !important;
 }
-/* === dDAE_2.111 FIX: Home grid reale (icone non sovrapposte / tappabili) === */
+/* === dDAE_2.112 FIX: Home grid reale (icone non sovrapposte / tappabili) === */
 #page-home .home-grid{
   display: grid !important;
   grid-template-columns: repeat(2, minmax(0, 1fr)) !important;
@@ -3186,7 +3198,7 @@ border-color: rgba(255,255,255,.16);
 }
 
 
-/* ===== OSPITI: filtri in griglia 2x2 (dDAE_2.111) ===== */
+/* ===== OSPITI: filtri in griglia 2x2 (dDAE_2.112) ===== */
 .guest-filter-grid{
   display:flex;
   flex-direction: column;
@@ -3296,7 +3308,7 @@ border-color: rgba(255,255,255,.16);
 }
 
 
-/* dDAE_2.111 — Ospiti: pulsante + in testata */
+/* dDAE_2.112 — Ospiti: pulsante + in testata */
 .btn-add-guest{
   width: 40px;
   height: 40px;
@@ -3320,7 +3332,7 @@ border-color: rgba(255,255,255,.16);
 }
 
 
-/* dDAE_2.111 — Pagamenti: pillola con 3 pallini (Contanti / Elettronico + Ricevuta) */
+/* dDAE_2.112 — Pagamenti: pillola con 3 pallini (Contanti / Elettronico + Ricevuta) */
 #page-ospite .field.two-col.payment-row{
   grid-template-columns: minmax(0,1fr) 170px !important;
 }
@@ -3378,7 +3390,7 @@ border-color: rgba(255,255,255,.16);
 }
 
 
-/* dDAE_2.111 — Pillola registrazioni PS/ISTAT (pallini sotto Contanti/Ricevuta) */
+/* dDAE_2.112 — Pillola registrazioni PS/ISTAT (pallini sotto Contanti/Ricevuta) */
 #page-ospite .pay-gap{
   opacity: 0;
   pointer-events: none;
@@ -3399,7 +3411,7 @@ border-color: rgba(255,255,255,.16);
 }
 
 
-/* dDAE_2.111 — Ospiti: riga cliccabile + LED a destra, arrivo a destra del nome */
+/* dDAE_2.112 — Ospiti: riga cliccabile + LED a destra, arrivo a destra del nome */
 #page-ospiti .guest-card{
   cursor: pointer;
   -webkit-tap-highlight-color: transparent;
@@ -3451,7 +3463,7 @@ border-color: rgba(255,255,255,.16);
   margin-top: 2px;
 }
 
-/* dDAE_2.111 — Multi prenotazioni per stesso nome (scheda unica con blocchi multipli) */
+/* dDAE_2.112 — Multi prenotazioni per stesso nome (scheda unica con blocchi multipli) */
 #page-ospiti .guest-bookings{
   margin-top: 10px;
   display: flex;
@@ -3532,7 +3544,7 @@ body.perf-lite .guest-booking-block{
   white-space: nowrap;
 }
 
-/* dDAE_2.111 — iPhone: evita taglio dei tab/pillole sulla destra */
+/* dDAE_2.112 — iPhone: evita taglio dei tab/pillole sulla destra */
 @media (max-width: 430px){
   #page-ospite .field.two-col.payment-row{
     grid-template-columns: minmax(0,1fr) !important;
@@ -3654,7 +3666,7 @@ body.perf-lite .guest-booking-block{
 .guest-form-card.is-view #roomsPicker{ display:none !important; }
 .guest-form-card.is-view #roomsReadOnly{ display:block !important; }
 
-/* dDAE_2.111 — In sola lettura: nascondi righe Adulti/Bambini e Check-in/Check-out (ridondanti rispetto al riquadro stanze) */
+/* dDAE_2.112 — In sola lettura: nascondi righe Adulti/Bambini e Check-in/Check-out (ridondanti rispetto al riquadro stanze) */
 .guest-form-card.is-view #guestPeopleRow,
 .guest-form-card.is-view #guestDatesRow{
   display:none !important;
@@ -3716,7 +3728,7 @@ body.perf-lite *::after{
 }
 
 
-/* ===== dDAE_2.111 FIX: bordi neri (last-day / empty-selected) sopra has-booking ===== */
+/* ===== dDAE_2.112 FIX: bordi neri (last-day / empty-selected) sopra has-booking ===== */
 .cal-cell.last-day,
 .cal-cell.has-booking.last-day{
   border-color: rgba(0,0,0,.95) !important;
@@ -3732,7 +3744,7 @@ body.perf-lite *::after{
 }
 
 
-/* dDAE_2.111: riga spesa compatta (importo · data · motivazione) */
+/* dDAE_2.112: riga spesa compatta (importo · data · motivazione) */
 .spesa-line{
   display:flex;
   align-items:baseline;
@@ -3837,7 +3849,7 @@ body.perf-lite *::after{
 }
 
 
-/* dDAE_2.111 — Pulizie: raggruppa contenuto sotto topbar e spostalo giù di 30px */
+/* dDAE_2.112 — Pulizie: raggruppa contenuto sotto topbar e spostalo giù di 30px */
 #page-pulizie .clean-mainGroup{
   margin-top: 30px;
 }
@@ -4117,7 +4129,7 @@ grid-template-rows: 34px repeat(7, 54px);
 
 
 /* =========================
-   Lavanderia (dDAE_2.111)
+   Lavanderia (dDAE_2.112)
 ========================= */
 #page-lavanderia .bd{ padding-bottom: 18px; }
 .laundry-sub{ margin: 2px 0 14px 0; }
@@ -4323,7 +4335,7 @@ grid-template-rows: 34px repeat(7, 54px);
 .laundry-del .x{ font-weight: 950; font-size: 16px; line-height: 1; }
 
 
-/* dDAE_2.111 — delete: stato busy + spinner (evita doppi tap) */
+/* dDAE_2.112 — delete: stato busy + spinner (evita doppi tap) */
 .laundry-del.busy{
   opacity: .70;
 }
@@ -4408,7 +4420,7 @@ grid-template-rows: 34px repeat(7, 54px);
 }
 
 
-/* ===== Tassa di soggiorno (dDAE_2.111) ===== */
+/* ===== Tassa di soggiorno (dDAE_2.112) ===== */
 .home-main-label.small{ font-size: 14px; line-height: 1.05; text-align:center; }
 
 .tax-hd{ display:flex; align-items:center; justify-content:center; gap:12px; }
@@ -4448,7 +4460,7 @@ grid-template-rows: 34px repeat(7, 54px);
 }
 
 
-/* dDAE_2.111 - iOS fix: su PWA Safari alcuni button perdono il colore testo */
+/* dDAE_2.112 - iOS fix: su PWA Safari alcuni button perdono il colore testo */
 .btn.tax-calc,
 .btn.tax-report,
 .btn.ghost.tax-back{
@@ -4578,10 +4590,10 @@ grid-template-rows: 34px repeat(7, 54px);
 
 /* =========================
    Ore pulizia (calendario ore operatori)
-   Build: dDAE_2.111
+   Build: dDAE_2.112
 ========================= */
  (calendario ore operatori)
-   Build: dDAE_2.111
+   Build: dDAE_2.112
 ========================= */
 
 .opcal-wrap{
@@ -4828,7 +4840,7 @@ grid-template-rows: 34px repeat(7, 54px);
   max-height: 44vh;
   overflow: auto;
 }
-/* dDAE_2.111: icone calendario più leggibili (evita bianco su bianco) */
+/* dDAE_2.112: icone calendario più leggibili (evita bianco su bianco) */
 #page-calendario .cal-nav-btn .ui-ico{ stroke: rgba(15,23,42,0.72); }
 #page-calendario .cal-nav-btn-sync{ background: rgba(186, 255, 201, .70); border-color: rgba(15,23,42,0.10); }
 #page-calendario .cal-nav-btn-sync .ui-ico{ stroke: rgba(9, 83, 25, .92); }
@@ -4842,13 +4854,13 @@ grid-template-rows: 34px repeat(7, 54px);
 #page-calendario .calendar-page .cal-body{ margin-top: 28px; }
 
 
-/* dDAE_2.111: Ore Pulizia - shift up 30px */
+/* dDAE_2.112: Ore Pulizia - shift up 30px */
 #page-orepulizia .opcal-wrap{
   padding: calc(12px + var(--safe-top) - 30px) 19px 26px;
 }
 
 
-/* dDAE_2.111 — Stanze occupate: rosso pieno (tinta unita) */
+/* dDAE_2.112 — Stanze occupate: rosso pieno (tinta unita) */
 #page-ospite .room-dot.occupied{
   background: #ff0000 !important;
   background-image: none !important;
@@ -4863,7 +4875,7 @@ grid-template-rows: 34px repeat(7, 54px);
 }
 
 
-/* dDAE_2.111 — iOS: più spazio sotto alle date (testo non attaccato al bordo) */
+/* dDAE_2.112 — iOS: più spazio sotto alle date (testo non attaccato al bordo) */
 #page-ospite input[type="date"]{
   padding-bottom: 18px !important;
   line-height: 1.2;
@@ -4872,7 +4884,7 @@ grid-template-rows: 34px repeat(7, 54px);
 
 /* =========================
    Topbar tools (Pulizie) — white buttons with colored icons (iOS-safe)
-   Build: dDAE_2.111
+   Build: dDAE_2.112
 ========================= */
 #pulizieTopTools{
   display:flex;
@@ -4927,7 +4939,7 @@ grid-template-rows: 34px repeat(7, 54px);
 .btn.tax-calc-whiteorange:active{ transform: translateY(1px); }
 
 
-/* --- Lavanderia: layout griglia + card senza vetro (dDAE_2.111) --- */
+/* --- Lavanderia: layout griglia + card senza vetro (dDAE_2.112) --- */
 #page-lavanderia .card--plain{
   background: transparent !important;
   backdrop-filter: none !important;
@@ -4973,7 +4985,7 @@ grid-template-rows: 34px repeat(7, 54px);
 .laundry-tile[data-key="TPI"]{ --tile-bg: rgba(230,232,236,0.40); }
 
 
-/* --- Lavanderia: fix layout tasto report (dDAE_2.111) --- */
+/* --- Lavanderia: fix layout tasto report (dDAE_2.112) --- */
 #page-lavanderia .laundry-gen-wrap{
   width: 100%;
   display: flex;
@@ -4991,7 +5003,7 @@ grid-template-rows: 34px repeat(7, 54px);
 
 
 
-/* dDAE_2.111 — Lavanderia: titolo centrale grande + period tab centrale + bottone full-width */
+/* dDAE_2.112 — Lavanderia: titolo centrale grande + period tab centrale + bottone full-width */
 #page-lavanderia .card .hd{
   justify-content: center;
   padding-top: 10px;
@@ -5008,7 +5020,7 @@ grid-template-rows: 34px repeat(7, 54px);
   letter-spacing: 0.2px;
 }
 
-/* dDAE_2.111 — Lavanderia: header come le altre pagine (fix titolo + spazio sopra) */
+/* dDAE_2.112 — Lavanderia: header come le altre pagine (fix titolo + spazio sopra) */
 #page-lavanderia .card .hd{
   justify-content: space-between;
   padding: 12px 14px;
@@ -5054,7 +5066,7 @@ grid-template-rows: 34px repeat(7, 54px);
 
 
 
-/* dDAE_2.111 — Ospiti: layout flat + trasparenze 20% */
+/* dDAE_2.112 — Ospiti: layout flat + trasparenze 20% */
 #page-ospiti .guest-cards-card{
   background: transparent !important;
   border: none !important;
@@ -5089,7 +5101,7 @@ grid-template-rows: 34px repeat(7, 54px);
 
 
 
-/* ===== dDAE_2.111 UI fixes ===== */
+/* ===== dDAE_2.112 UI fixes ===== */
 
 /* OSPITI – tasti riordino (Oggi / Ordina per / Freccia):
    sfondo azzurro 20% opacità, testo nero bold e centrato */
@@ -5146,7 +5158,7 @@ grid-template-rows: 34px repeat(7, 54px);
 }
 
 
-/* dDAE_2.111 — Pagine senza vetro (Tassa/Impostazioni) */
+/* dDAE_2.112 — Pagine senza vetro (Tassa/Impostazioni) */
 #page-tassa .card,
 #page-impostazioni .card{
   background: transparent !important;
@@ -5171,7 +5183,7 @@ grid-template-rows: 34px repeat(7, 54px);
 }
 
 
-/* dDAE_2.111 — Pagine senza vetro (Tassa / Impostazioni) */
+/* dDAE_2.112 — Pagine senza vetro (Tassa / Impostazioni) */
 #page-tassa .card,
 #page-impostazioni .card{
   background: transparent !important;
@@ -5195,7 +5207,7 @@ grid-template-rows: 34px repeat(7, 54px);
   padding-right: 0 !important;
 }
 
-/* dDAE_2.111 — Impostazioni: titolo a sinistra + underline full-width (nero, sottile) */
+/* dDAE_2.112 — Impostazioni: titolo a sinistra + underline full-width (nero, sottile) */
 #page-impostazioni .card .hd{
   justify-content: flex-start !important;
 }
@@ -5222,7 +5234,7 @@ grid-template-rows: 34px repeat(7, 54px);
 }
 
 
-/* --- Inserisci: card senza vetro (dDAE_2.111) --- */
+/* --- Inserisci: card senza vetro (dDAE_2.112) --- */
 #page-inserisci .card--plain{
   background: transparent !important;
   backdrop-filter: none !important;
@@ -5240,7 +5252,7 @@ grid-template-rows: 34px repeat(7, 54px);
   padding-right: 0;
 }
 
-/* dDAE_2.111 — OSPITE: pulsante azione tinta unita (no gradient)
+/* dDAE_2.112 — OSPITE: pulsante azione tinta unita (no gradient)
    - Crea (Inserisci): arancione 40%
    - Salva modifiche: azzurro 40%
 */
@@ -5255,7 +5267,7 @@ grid-template-rows: 34px repeat(7, 54px);
   color: rgba(15,23,42,0.92) !important;
 }
 
-/* dDAE_2.111 — Lavanderia UI fixes */
+/* dDAE_2.112 — Lavanderia UI fixes */
 #page-lavanderia #btnLaundryGenerate{
   background-color: rgba(155,92,32,0.40) !important; /* arancione tinta unita 40% */
   background-image: none !important;
@@ -5272,7 +5284,7 @@ grid-template-rows: 34px repeat(7, 54px);
 }
 
 
-/* dDAE_2.111 Lavanderia */
+/* dDAE_2.112 Lavanderia */
 #page-lavanderia #btnLaundryGenerate{
   background-color: rgba(155,92,32,0.40) !important;
   background-image: none !important;
@@ -5290,7 +5302,7 @@ grid-template-rows: 34px repeat(7, 54px);
 }
 
 /* ============================
-   dDAE_2.111 — FIX UI mirati (richiesta utente)
+   dDAE_2.112 — FIX UI mirati (richiesta utente)
    - Spese > Inserisci spesa: senza vetro sotto (elementi sullo sfondo)
    - Pulsante Salva: arancione 40% opacita
    - Popup tipologia letti: Annulla/Conferma identici, centrati; rosso/verde 40%
@@ -5343,7 +5355,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 }
 
 /* =========================
-   dDAE_2.111 — HOME: Year pill sopra le icone (>=30px)
+   dDAE_2.112 — HOME: Year pill sopra le icone (>=30px)
 ========================= */
 #page-home .home-page{
   display:flex;
@@ -5471,7 +5483,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 }
 
 /* =========================
- * STATISTICHE (dDAE_2.111)
+ * STATISTICHE (dDAE_2.112)
  * - elementi appoggiati allo sfondo
  * - schede tinta unita 20% (se usate)
  * - tasti tinta unita 40%
@@ -5790,7 +5802,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 }
 
 
-/* dDAE_2.111 — iPhone: evita taglio pillole/tabs a destra nella scheda ospite */
+/* dDAE_2.112 — iPhone: evita taglio pillole/tabs a destra nella scheda ospite */
 @media (max-width: 430px){
   #page-ospite .field.two-col.payment-row{
     grid-template-columns: minmax(0,1fr) !important;
@@ -5821,7 +5833,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 #calGrid.is-loading{opacity:.6;transition:opacity .12s ease;}
 
 
-/* dDAE_2.111 — HOME: sposta pill+icone più in basso (evita overlap topbar) */
+/* dDAE_2.112 — HOME: sposta pill+icone più in basso (evita overlap topbar) */
 #page-home .year-pill{ margin-top: 10px; }
 #page-home .home-page{ padding-top: 6px; }
 
@@ -6306,7 +6318,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 .sync-led[data-sync="off"]{ background: rgba(255,255,255,0.18); }
 
 
-/* dDAE_2.111 — Pallino notti (azzurro) nella scheda ospite in sola lettura */
+/* dDAE_2.112 — Pallino notti (azzurro) nella scheda ospite in sola lettura */
 .guest-booking-right{
   display:flex;
   align-items:center;
@@ -6329,7 +6341,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   border: 1px solid rgba(15,23,42,0.08);
 }
 
-/* dDAE_2.111 — Tassa di soggiorno accanto alla prima stanza */
+/* dDAE_2.112 — Tassa di soggiorno accanto alla prima stanza */
 .room-tax-amount{
   margin-left: 8px;
   font-size: 12px;
@@ -6338,7 +6350,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   white-space: nowrap;
 }
 
-/* dDAE_2.111 — Totale tasse di soggiorno accanto a Importo booking */
+/* dDAE_2.112 — Totale tasse di soggiorno accanto a Importo booking */
 #page-ospite .guest-tax-total{
   position: absolute;
   right: 12px;
