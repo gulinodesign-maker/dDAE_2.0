@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.131";
+const BUILD_VERSION = "dDAE_2.132";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -60,7 +60,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.131)
+// AUTH + SESSION (dDAE_2.132)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -511,7 +511,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.131 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.132 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2278,7 +2278,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.131 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.132 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2738,7 +2738,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.131: fallback visualizzazione Pulizie
+  // dDAE_2.132: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3705,7 +3705,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.131)
+// STATISTICHE (dDAE_2.132)
 // =========================
 
 function computeStatGen(){
@@ -5391,7 +5391,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.131 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.132 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -5843,7 +5843,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.131: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.132: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -8162,7 +8162,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.131) =====
+// ===== CALENDARIO (dDAE_2.132) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -8401,31 +8401,7 @@ function renderCalendario(){
       }
       if (info) {
         cell.classList.add("has-booking");
-        try{
-          const ringDefs = [];
-          const step = 4; // doppio spessore
-          let total = 0;
-
-          // Ultima notte: bordo rosso (anello più esterno)
-          if (info.lastDay){
-            total += step;
-            ringDefs.push({ t: total, c: "rgba(255,59,48,0.95)" });
-          }
-          if (info.mOn){ total += step; ringDefs.push({ t: total, c: "rgba(50,173,230,0.95)" }); }
-          if (info.gOn){ total += step; ringDefs.push({ t: total, c: "rgba(255,204,0,0.95)" }); }
-          if (info.cOn){ total += step; ringDefs.push({ t: total, c: "rgba(52,199,89,0.95)" }); }
-
-          if (ringDefs.length){
-            // inset: concentrici verso l'interno, senza invadere le celle attorno
-            const shadows = ringDefs
-              .slice()
-              .sort((a,b)=>b.t-a.t)
-              .map(r => `inset 0 0 0 ${r.t}px ${r.c}`);
-            cell.style.boxShadow = shadows.join(", ");
-          } else {
-            cell.style.boxShadow = "";
-          }
-        }catch(_){ }
+        try{ cell.style.boxShadow = ""; }catch(_){ }
         if (info.lastDay) cell.classList.add("last-day");
 
         const inner = document.createElement("div");
@@ -8445,6 +8421,20 @@ function renderCalendario(){
           dots.appendChild(s);
         }
         inner.appendChild(dots);
+
+        const mcg = document.createElement("div");
+        mcg.className = "cal-mcgbar";
+        const segs = [
+          { on: !!info.mOn, cls: "mcg-m" },
+          { on: !!info.cOn, cls: "mcg-c" },
+          { on: !!info.gOn, cls: "mcg-g" },
+        ];
+        for (const seg of segs){
+          const s = document.createElement("span");
+          s.className = `mcg-seg ${seg.cls}${seg.on ? " on" : ""}`;
+          mcg.appendChild(s);
+        }
+        inner.appendChild(mcg);
 
         cell.appendChild(inner);
 
@@ -8616,7 +8606,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.131)
+   Lavanderia (dDAE_2.132)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -9012,7 +9002,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.131: renderSpese allineato al backend ---
+// --- FIX dDAE_2.132: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -9108,7 +9098,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.131: delete reale ospiti ---
+// --- FIX dDAE_2.132: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -9143,7 +9133,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.131: mostra nome ospite ---
+// --- FIX dDAE_2.132: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -9397,7 +9387,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.131
+   Build: dDAE_2.132
 ========================= */
 
 state.orepulizia = state.orepulizia || {
