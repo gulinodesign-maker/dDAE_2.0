@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.133";
+const BUILD_VERSION = "dDAE_2.134";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -60,7 +60,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.133)
+// AUTH + SESSION (dDAE_2.134)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -511,7 +511,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.133 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.134 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2278,7 +2278,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.133 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.134 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2738,7 +2738,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.133: fallback visualizzazione Pulizie
+  // dDAE_2.134: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3705,7 +3705,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.133)
+// STATISTICHE (dDAE_2.134)
 // =========================
 
 function computeStatGen(){
@@ -5391,7 +5391,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.133 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.134 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -5843,7 +5843,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.133: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.134: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -7540,6 +7540,132 @@ try{
   const btnLaundryFromPulizie = document.getElementById("topLaundryBtn");
   const btnOrePuliziaFromPulizie = document.getElementById("topWorkBtn");
 
+  const cleanResetLaundry = document.getElementById("cleanResetLaundry");
+
+  // --- Autosave (debounce 1s): Pulizie (biancheria) + Ore operatori ---
+  let __laundrySaveT = null;
+  let __hoursSaveT = null;
+  let __savingLaundry = false;
+  let __pendingLaundry = false;
+  let __savingHours = false;
+  let __pendingHours = false;
+
+  function scheduleLaundrySave(){
+    try{
+      if (__laundrySaveT) clearTimeout(__laundrySaveT);
+      __laundrySaveT = setTimeout(() => { try{ saveLaundryNow(); }catch(_){ } }, 1000);
+    }catch(_){}
+  }
+
+  function scheduleHoursSave(){
+    try{
+      if (__hoursSaveT) clearTimeout(__hoursSaveT);
+      __hoursSaveT = setTimeout(() => { try{ saveHoursNow(); }catch(_){ } }, 1000);
+    }catch(_){}
+  }
+
+  async function saveLaundryNow(){
+    try{
+      if (__savingLaundry){ __pendingLaundry = true; return; }
+      __savingLaundry = true;
+      const payload = buildPuliziePayload();
+      await api("pulizie", { method:"POST", body: payload });
+      // ricarica dal DB senza svuotare (così resta visibile subito)
+      try{ await loadPulizieForDay({ clearFirst:false }); }catch(_){ }
+    }catch(err){
+      try{ toast(String(err && err.message || "Errore salvataggio biancheria")); }catch(_){}
+    }finally{
+      __savingLaundry = false;
+      if (__pendingLaundry){
+        __pendingLaundry = false;
+        try{ saveLaundryNow(); }catch(_){}
+      }
+    }
+  }
+
+  async function saveHoursNow(){
+    try{
+      if (__savingHours){ __pendingHours = true; return; }
+      __savingHours = true;
+
+      const isOpSession = !!(state && state.session && isOperatoreSession(state.session));
+
+      const parseRows = (res) => {
+        const rows = Array.isArray(res) ? res
+          : (res && Array.isArray(res.rows) ? res.rows
+          : (res && Array.isArray(res.data) ? res.data
+          : (res && res.data && Array.isArray(res.data.data) ? res.data.data
+          : [])));
+        return Array.isArray(rows) ? rows : [];
+      };
+
+      const buildMergedForOperatore = async () => {
+        const date = getCleanDate();
+        const names = getOperatorNamesFromSettings();
+        const hasAnyName = names.some(n => String(n || '').trim());
+        if (!hasAnyName) throw new Error("Imposta i nomi operatori in Impostazioni");
+
+        const rawU = String(state.session._op_local || state.session.username || state.session.user || state.session.nome || state.session.name || state.session.email || '').trim();
+        if (!rawU) throw new Error('Operatore non valido');
+        const normU = rawU.toLowerCase();
+        const activeName = (names||[]).find(n => String(n||'').trim().toLowerCase() === normU) || rawU;
+
+        // carica ore esistenti del giorno (per preservare gli altri)
+        let existing = [];
+        try{
+          const res = await api('operatori', { method:'GET', params:{ data: date }, showLoader:false });
+          existing = parseRows(res);
+        }catch(_){ existing = []; }
+
+        const map = new Map();
+        const _max = (a,b)=> (a>b?a:b);
+        existing.forEach(r=>{
+          const op = String(r?.operatore || r?.nome || '').trim().toLowerCase();
+          const ore = parseInt(String(r?.ore ?? 0), 10);
+          if (op) map.set(op, (ore!=ore)?0: _max(0, ore));
+        });
+
+        const idxActive = (names||[]).findIndex(n => String(n||'').trim().toLowerCase() === String(activeName||'').trim().toLowerCase());
+
+        const rows = [];
+        (names||[]).forEach((nm, idx)=>{
+          const name = String(nm||'').trim();
+          if (!name) return;
+
+          let hours = 0;
+          if (idx === idxActive && idxActive >= 0){
+            const el = opEls[idxActive];
+            hours = el ? readHourDot(el.hours) : 0;
+          } else {
+            hours = map.get(name.toLowerCase()) || 0;
+          }
+
+          if (hours > 0){
+            rows.push({ data: date, operatore: name, ore: hours, benzina_euro: OP_BENZINA_EUR });
+          }
+        });
+
+        return { touched: true, payload: { data: date, operatori: rows, replaceDay: true } };
+      };
+
+      const out = isOpSession ? await buildMergedForOperatore() : buildOperatoriPayload();
+      const { touched, payload: opPayload } = out || {};
+      if (!touched) return;
+
+      await api("operatori", { method:"POST", body: opPayload });
+      try{ await loadOperatoriForDay({ clearFirst:false }); }catch(_){ }
+    }catch(err){
+      try{ toast(String(err && err.message || "Errore salvataggio ore lavoro")); }catch(_){}
+    }finally{
+      __savingHours = false;
+      if (__pendingHours){
+        __pendingHours = false;
+        try{ saveHoursNow(); }catch(_){}
+      }
+    }
+  }
+
+
   // --- Pulizie: popup descrizioni intestazioni (MAT/SIN/...) ---
   const cleanHeaderModal = document.getElementById("cleanHeaderModal");
   const cleanHeaderText = document.getElementById("cleanHeaderText");
@@ -7634,8 +7760,8 @@ try{
       longFired = false;
     };
 
-    const onLong = () => { el.classList.remove("is-saved"); writeHourDot(el, 0); try{ scheduleHoursAutosave(); }catch(_){ } };
-    const onTap = () => { el.classList.remove("is-saved"); writeHourDot(el, readHourDot(el) + 1); try{ scheduleHoursAutosave(); }catch(_){ } };
+    const onLong = () => { el.classList.remove("is-saved"); writeHourDot(el, 0); scheduleHoursSave(); };
+    const onTap = () => { el.classList.remove("is-saved"); writeHourDot(el, readHourDot(el) + 1); scheduleHoursSave(); };
 
     el.addEventListener("touchstart", (e) => {
       lastTouchAt = Date.now();
@@ -7879,133 +8005,6 @@ const buildPuliziePayload = () => {
     return { data, rows };
   };
 
-  // Autosave (debounce 1s) — Pulizie (biancheria) + Ore operatori
-  let __laundryTimer = null;
-  let __laundryLastChangeAt = 0;
-  let __laundryInFlight = false;
-
-  let __hoursTimer = null;
-  let __hoursLastChangeAt = 0;
-  let __hoursInFlight = false;
-
-  const scheduleLaundryAutosave = () => {
-    __laundryLastChangeAt = Date.now();
-    if (__laundryTimer) { try{ clearTimeout(__laundryTimer); }catch(_){ } __laundryTimer = null; }
-    __laundryTimer = setTimeout(() => { doLaundryAutosave_(); }, 1000);
-  };
-
-  const scheduleHoursAutosave = () => {
-    __hoursLastChangeAt = Date.now();
-    if (__hoursTimer) { try{ clearTimeout(__hoursTimer); }catch(_){ } __hoursTimer = null; }
-    __hoursTimer = setTimeout(() => { doHoursAutosave_(); }, 1000);
-  };
-
-  const doLaundryAutosave_ = async () => {
-    if (__laundryInFlight) return;
-    __laundryInFlight = true;
-    const startedAt = Date.now();
-    try{
-      const payload = buildPuliziePayload();
-      await api("pulizie", { method:"POST", body: payload, showLoader:false });
-      try{ await loadPulizieForDay({ clearFirst:false }); }catch(_){ }
-    }catch(err){
-      toast(String(err && err.message || "Errore salvataggio biancheria"));
-    }finally{
-      __laundryInFlight = false;
-      const last = __laundryLastChangeAt;
-      if (last > startedAt){
-        const wait = Math.max(0, 1000 - (Date.now() - last));
-        if (__laundryTimer) { try{ clearTimeout(__laundryTimer); }catch(_){ } __laundryTimer = null; }
-        __laundryTimer = setTimeout(() => { doLaundryAutosave_(); }, wait);
-      }
-    }
-  };
-
-  const doHoursAutosave_ = async () => {
-    if (__hoursInFlight) return;
-    __hoursInFlight = true;
-    const startedAt = Date.now();
-    try{
-      const isOpSession = !!(state && state.session && isOperatoreSession(state.session));
-
-      const parseRows = (res) => {
-        const rows = Array.isArray(res) ? res
-          : (res && Array.isArray(res.rows) ? res.rows
-          : (res && Array.isArray(res.data) ? res.data
-          : (res && res.data && Array.isArray(res.data.data) ? res.data.data
-          : [])));
-        return Array.isArray(rows) ? rows : [];
-      };
-
-      const buildMergedForOperatore = async () => {
-        const date = getCleanDate();
-        const names = getOperatorNamesFromSettings();
-        const hasAnyName = names.some(n => String(n || '').trim());
-        if (!hasAnyName) throw new Error("Imposta i nomi operatori in Impostazioni");
-
-        const rawU = String(state.session._op_local || state.session.username || state.session.user || state.session.nome || state.session.name || state.session.email || '').trim();
-        if (!rawU) throw new Error('Operatore non valido');
-        const normU = rawU.toLowerCase();
-        const activeName = (names||[]).find(n => String(n||'').trim().toLowerCase() === normU) || rawU;
-
-        let existing = [];
-        try{
-          const res = await api('operatori', { method:'GET', params:{ data: date }, showLoader:false });
-          existing = parseRows(res);
-        }catch(_){ existing = []; }
-
-        const map = new Map();
-        const _max = (a,b)=> (a>b?a:b);
-        existing.forEach(r=>{
-          const op = String(r?.operatore || r?.nome || '').trim().toLowerCase();
-          const ore = parseInt(String(r?.ore ?? 0), 10);
-          if (op) map.set(op, (ore!=ore)?0: _max(0, ore));
-        });
-
-        const idxActive = (names||[]).findIndex(n => String(n||'').trim().toLowerCase() === String(activeName||'').trim().toLowerCase());
-
-        const rows = [];
-        (names||[]).forEach((nm, idx)=>{
-          const name = String(nm||'').trim();
-          if (!name) return;
-
-          let hours = 0;
-          if (idx === idxActive && idxActive >= 0){
-            const el = opEls[idxActive];
-            hours = el ? readHourDot(el.hours) : 0;
-          } else {
-            hours = map.get(name.toLowerCase()) || 0;
-          }
-
-          if (hours > 0){
-            rows.push({ data: date, operatore: name, ore: hours, benzina_euro: OP_BENZINA_EUR });
-          }
-        });
-
-        return { touched: true, payload: { data: date, operatori: rows, replaceDay: true } };
-      };
-
-      const out = isOpSession ? await buildMergedForOperatore() : buildOperatoriPayload();
-      const { touched, payload: opPayload } = out || {};
-      if (!touched) return;
-
-      await api("operatori", { method:"POST", body: opPayload, showLoader:false });
-      try{ await loadOperatoriForDay({ clearFirst:false }); }catch(_){ }
-    }catch(err){
-      toast(String(err && err.message || "Errore salvataggio ore lavoro"));
-    }finally{
-      __hoursInFlight = false;
-      const last = __hoursLastChangeAt;
-      if (last > startedAt){
-        const wait = Math.max(0, 1000 - (Date.now() - last));
-        if (__hoursTimer) { try{ clearTimeout(__hoursTimer); }catch(_){ } __hoursTimer = null; }
-        __hoursTimer = setTimeout(() => { doHoursAutosave_(); }, wait);
-      }
-    }
-  };
-
-
-
   // Tap incrementa, long press (0.5s) azzera
   let pressTimer = null;
   let pressTarget = null;
@@ -8025,14 +8024,14 @@ const buildPuliziePayload = () => {
       longFired = true;
       slot.classList.remove("is-saved");
       writeCell(slot, 0);
-      try{ scheduleLaundryAutosave(); }catch(_){ }
+      scheduleLaundrySave();
     }, 500);
   };
 
   const tapSlot = (slot) => {
     slot.classList.remove("is-saved");
     writeCell(slot, readCell(slot) + 1);
-    try{ scheduleLaundryAutosave(); }catch(_){ }
+    scheduleLaundrySave();
   };
 
   if (cleanGrid){
@@ -8101,134 +8100,37 @@ const buildPuliziePayload = () => {
     }, true);
   }
 
-  // Reset biancheria (azzera tutta la griglia) — salva automaticamente (debounce 1s)
-  const cleanResetLaundry = document.getElementById("cleanResetLaundry");
-  if (cleanResetLaundry){
-    bindFastTap(cleanResetLaundry, () => {
-      try{
-        document.querySelectorAll(".clean-grid .cell.slot").forEach(el => {
-          try{ el.textContent = ""; }catch(_){ }
-          try{ el.classList.remove("is-saved"); }catch(_){ }
-        });
-        try{ scheduleLaundryAutosave(); }catch(_){ }
-      }catch(_){}
-    });
-  }
-
-
-
   // Salva biancheria (foglio "pulizie")
 if (cleanSaveLaundry){
-  cleanSaveLaundry.addEventListener("click", async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    try{
-      const payload = buildPuliziePayload();
-      await api("pulizie", { method:"POST", body: payload });
-
-      // ricarica dal DB senza svuotare (così resta visibile subito)
-      try{ await loadPulizieForDay({ clearFirst:false }); }catch(_){ }
-
-      toast("Biancheria salvata", "blue");
-    }catch(err){
-      toast(String(err && err.message || "Errore salvataggio biancheria"));
-    }
+  cleanSaveLaundry.addEventListener("click", (e) => {
+    try{ e.preventDefault(); e.stopPropagation(); }catch(_){ }
+    try{ saveLaundryNow(); }catch(_){ }
   }, true);
 }
 
-// Salva ore lavoro (foglio "operatori") — REPLACE per data (sovrascrive report del giorno)
-// Nota: in sessione OPERATORE preserviamo le ore degli altri operatori con merge-safe.
+// Salva ore lavoro (foglio "operatori")
 if (cleanSaveHours){
-  cleanSaveHours.addEventListener("click", async (e) => {
-    e.preventDefault();
-    e.stopPropagation();
-    try{
-      const isOpSession = !!(state && state.session && isOperatoreSession(state.session));
-
-      const parseRows = (res) => {
-        const rows = Array.isArray(res) ? res
-          : (res && Array.isArray(res.rows) ? res.rows
-          : (res && Array.isArray(res.data) ? res.data
-          : (res && res.data && Array.isArray(res.data.data) ? res.data.data
-          : [])));
-        return Array.isArray(rows) ? rows : [];
-      };
-
-      const buildMergedForOperatore = async () => {
-        const date = getCleanDate();
-        const names = getOperatorNamesFromSettings();
-        const hasAnyName = names.some(n => String(n || '').trim());
-        if (!hasAnyName) throw new Error("Imposta i nomi operatori in Impostazioni");
-
-        const rawU = String(state.session._op_local || state.session.username || state.session.user || state.session.nome || state.session.name || state.session.email || '').trim();
-        if (!rawU) throw new Error('Operatore non valido');
-        const normU = rawU.toLowerCase();
-        const activeName = (names||[]).find(n => String(n||'').trim().toLowerCase() === normU) || rawU;
-
-        // carica ore esistenti del giorno (per preservare gli altri)
-        let existing = [];
-        try{
-          const res = await api('operatori', { method:'GET', params:{ data: date }, showLoader:false });
-          existing = parseRows(res);
-        }catch(_){ existing = []; }
-
-        const map = new Map();
-        // helper
-        const _max = (a,b)=> (a>b?a:b);
-        existing.forEach(r=>{
-          const op = String(r?.operatore || r?.nome || '').trim().toLowerCase();
-          const ore = parseInt(String(r?.ore ?? 0), 10);
-          if (op) map.set(op, (ore!=ore)?0: _max(0, ore));
-        });
-
-        // trova index dell'operatore attivo
-        const idxActive = (names||[]).findIndex(n => String(n||'').trim().toLowerCase() === String(activeName||'').trim().toLowerCase());
-
-        const rows = [];
-        (names||[]).forEach((nm, idx)=>{
-          const name = String(nm||'').trim();
-          if (!name) return;
-
-          let hours = 0;
-          if (idx === idxActive && idxActive >= 0){
-            const el = opEls[idxActive];
-            hours = el ? readHourDot(el.hours) : 0;
-          } else {
-            hours = map.get(name.toLowerCase()) || 0;
-          }
-
-          // inviamo solo ore > 0 (il backend ignora le 0)
-          if (hours > 0){
-            rows.push({ data: date, operatore: name, ore: hours, benzina_euro: OP_BENZINA_EUR });
-          }
-        });
-
-        return { touched: true, payload: { data: date, operatori: rows, replaceDay: true } };
-      };
-
-      const out = isOpSession ? await buildMergedForOperatore() : buildOperatoriPayload();
-      const { touched, payload: opPayload } = out || {};
-
-      if (!touched){
-        toast("Nessun operatore configurato");
-        return;
-      }
-
-      const res = await api("operatori", { method:"POST", body: opPayload });
-      const saved = (res && typeof res.saved === "number") ? res.saved : 0;
-      const deleted = (res && typeof res.deleted === "number") ? res.deleted : null;
-
-      // Ricarica dal DB per confermare UI allineata
-      try{ await loadOperatoriForDay({ clearFirst:false }); }catch(_){ }
-
-      const msg = (deleted != null)
-        ? `Ore lavoro salvate (${saved}) — sostituiti ${deleted} record`
-        : `Ore lavoro salvate (${saved})`;
-      toast(msg, "orange");
-    }catch(err){
-      toast(String(err && err.message || "Errore salvataggio ore lavoro"));
-    }
+  cleanSaveHours.addEventListener("click", (e) => {
+    try{ e.preventDefault(); e.stopPropagation(); }catch(_){ }
+    try{ saveHoursNow(); }catch(_){ }
   }, true);
+}
+
+// Reset SOLO biancheria
+if (cleanResetLaundry){
+  bindFastTap(cleanResetLaundry, async () => {
+    try{
+      // azzera tutte le celle biancheria (griglia pulizie)
+      document.querySelectorAll(".clean-grid .cell.slot").forEach(el => {
+        try{ el.classList.remove("is-saved"); }catch(_){ }
+        try{ writeCell(el, 0); }catch(_){ }
+      });
+      // salva immediatamente
+      await saveLaundryNow();
+    }catch(err){
+      try{ toast(String(err && err.message || "Errore reset biancheria")); }catch(_){ }
+    }
+  });
 }
 
 
@@ -8307,7 +8209,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.133) =====
+// ===== CALENDARIO (dDAE_2.134) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -8762,7 +8664,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.133)
+   Lavanderia (dDAE_2.134)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -9158,7 +9060,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.133: renderSpese allineato al backend ---
+// --- FIX dDAE_2.134: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -9254,7 +9156,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.133: delete reale ospiti ---
+// --- FIX dDAE_2.134: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -9289,7 +9191,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.133: mostra nome ospite ---
+// --- FIX dDAE_2.134: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -9543,7 +9445,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.133
+   Build: dDAE_2.134
 ========================= */
 
 state.orepulizia = state.orepulizia || {
