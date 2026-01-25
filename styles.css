@@ -1909,8 +1909,15 @@ body::before{
   position: relative;
   border-bottom-color: rgba(15,23,42,0.14);
 }
-
-
+.topbar::after{
+  content:"";
+  position:absolute;
+  left:0; right:0; bottom:-1px;
+  height: 4px;
+  background: linear-gradient(90deg, var(--p1), var(--p3), var(--p5), var(--p7), var(--p8));
+  opacity: 1;
+  pointer-events:none;
+}
 .topbar h1{
   color: rgba(11,15,22,0.98);
 }
@@ -4553,7 +4560,7 @@ grid-template-rows: 34px repeat(7, 54px);
   margin-top: 14px;
   display: flex;
   flex-direction: column;
-  gap: 6px;
+  gap: 14px;
   min-width: 0;
 }
 .clean-op-row{
@@ -6573,26 +6580,18 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 }
 
 
+
+
+/* Pulizie: reset (tinta unita arancione, testo bianco bold) */
+#cleanResetLaundry{
+  background: #ff7a00;
+  border-color: rgba(255,122,0,0.85);
+  color: #ffffff;
+  font-weight: 900;
+  box-shadow: none;
+  backdrop-filter: none;
+}
+#cleanResetLaundry:active{ transform: translateY(1px); }
 /* Pulizie: reset biancheria (centrato sotto griglia) */
-.clean-reset-wrap{display:flex;justify-content:center;align-items:center;margin:12px 0 10px;}
+.clean-reset-wrap{display:flex;justify-content:center;align-items:center;margin:42px 0 10px;}
 .clean-reset-btn{min-width:220px;}
-
-
-/* dDAE_2.138 — Reset Pulizie: tinta unita arancione + testo blu bold */
-#cleanResetLaundry,
-.clean-reset-btn{
-  background: var(--p8) !important;
-  color: var(--p1) !important;
-  font-weight: 800 !important;
-  border: 0 !important;
-  box-shadow: none !important;
-}
-#cleanResetLaundry:hover,
-#cleanResetLaundry:active,
-#cleanResetLaundry:focus-visible,
-.clean-reset-btn:hover,
-.clean-reset-btn:active,
-.clean-reset-btn:focus-visible{
-  background: var(--p8) !important;
-  color: var(--p1) !important;
-}
