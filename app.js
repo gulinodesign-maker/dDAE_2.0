@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.110";
+const BUILD_VERSION = "dDAE_2.111";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -60,7 +60,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.110)
+// AUTH + SESSION (dDAE_2.111)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -486,7 +486,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.110 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.111 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -976,26 +976,16 @@ function calcTouristTax(ospite, nights){
 function buildNightsDotHTML(nights){
   const n = Math.max(0, parseInt(nights, 10) || 0);
   if (!n) return ``;
-  return `<span class="guest-nights-dot" aria-label="Notti">${n}</span>`;
-}
-
-function injectTaxIntoRoomsHTML(roomsHTML, taxTotal){
-  try{
-    const val = Number(taxTotal || 0);
-    if (!isFinite(val) || val <= 0) return roomsHTML;
-    const badge = `<span class="room-tax-amount" aria-label="Tassa di soggiorno">${formatEUR(val)}</span>`;
-    return String(roomsHTML).replace(/(<span class="room-dot-badge[^"]*"[^>]*>\d+<\/span>)/, `$1${badge}`);
-  }catch(_){
-    return roomsHTML;
-  }
+  return `<span class="nights-dot" aria-label="Notti">${n}</span>`;
 }
 
 function updateGuestTaxTotalPill(){
   try{
     const el = document.getElementById("guestTaxTotal");
     if (!el) return;
+    const valEl = document.getElementById("guestTaxTotalVal");
 
-    const list = Array.isArray(state.guestGroupBookings) && state.guestGroupBookings.length
+    const list = (Array.isArray(state.guestGroupBookings) && state.guestGroupBookings.length)
       ? state.guestGroupBookings
       : (state.guestViewItem ? [state.guestViewItem] : []);
 
@@ -1008,13 +998,15 @@ function updateGuestTaxTotalPill(){
     }
 
     if (!isFinite(sum) || sum <= 0){
-      el.textContent = "";
+      if (valEl) valEl.textContent = "€0,00";
       el.hidden = true;
       return;
     }
 
     el.hidden = false;
-    el.textContent = `Tasse ${formatEUR(sum)}`;
+    const txt = formatEUR(sum);
+    if (valEl) valEl.textContent = txt;
+    else el.textContent = txt;
   }catch(_){}
 }
 
@@ -2599,7 +2591,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.110: fallback visualizzazione Pulizie
+  // dDAE_2.111: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3566,7 +3558,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.110)
+// STATISTICHE (dDAE_2.111)
 // =========================
 
 function computeStatGen(){
@@ -5201,7 +5193,6 @@ function renderRoomsReadOnly(ospite){
   try{
     if (nights != null){
       const tt = calcTouristTax(ospite, nights);
-      stackHTML = injectTaxIntoRoomsHTML(stackHTML, tt?.total);
     }
   }catch(_){ }
 
@@ -5234,7 +5225,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.110 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.111 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -5254,7 +5245,6 @@ function buildGuestBookingBlockHTML(ospite, { mode="view", showSelect=false, act
   try{
     if (modeL === "view" && nights != null){
       const tt = calcTouristTax(ospite, nights);
-      roomsHTML = injectTaxIntoRoomsHTML(roomsHTML, tt?.total);
     }
   }catch(_){ }
 
@@ -7924,7 +7914,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.110) =====
+// ===== CALENDARIO (dDAE_2.111) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -8349,7 +8339,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.110)
+   Lavanderia (dDAE_2.111)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -8745,7 +8735,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.110: renderSpese allineato al backend ---
+// --- FIX dDAE_2.111: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -8841,7 +8831,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.110: delete reale ospiti ---
+// --- FIX dDAE_2.111: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -8876,7 +8866,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.110: mostra nome ospite ---
+// --- FIX dDAE_2.111: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -9130,7 +9120,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.110
+   Build: dDAE_2.111
 ========================= */
 
 state.orepulizia = state.orepulizia || {
