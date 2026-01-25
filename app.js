@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.109";
+const BUILD_VERSION = "dDAE_2.110";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -60,7 +60,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.109)
+// AUTH + SESSION (dDAE_2.110)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -486,7 +486,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.109 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.110 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -971,6 +971,51 @@ function calcTouristTax(ospite, nights){
 
   const total = adults * taxableDays * r;
   return { total, adults, taxableDays, rate: r };
+}
+
+function buildNightsDotHTML(nights){
+  const n = Math.max(0, parseInt(nights, 10) || 0);
+  if (!n) return ``;
+  return `<span class="guest-nights-dot" aria-label="Notti">${n}</span>`;
+}
+
+function injectTaxIntoRoomsHTML(roomsHTML, taxTotal){
+  try{
+    const val = Number(taxTotal || 0);
+    if (!isFinite(val) || val <= 0) return roomsHTML;
+    const badge = `<span class="room-tax-amount" aria-label="Tassa di soggiorno">${formatEUR(val)}</span>`;
+    return String(roomsHTML).replace(/(<span class="room-dot-badge[^"]*"[^>]*>\d+<\/span>)/, `$1${badge}`);
+  }catch(_){
+    return roomsHTML;
+  }
+}
+
+function updateGuestTaxTotalPill(){
+  try{
+    const el = document.getElementById("guestTaxTotal");
+    if (!el) return;
+
+    const list = Array.isArray(state.guestGroupBookings) && state.guestGroupBookings.length
+      ? state.guestGroupBookings
+      : (state.guestViewItem ? [state.guestViewItem] : []);
+
+    let sum = 0;
+    for (const g of (list || [])){
+      const nights = calcStayNights(g);
+      if (nights == null) continue;
+      const tt = calcTouristTax(g, nights);
+      sum += Number(tt?.total || 0) || 0;
+    }
+
+    if (!isFinite(sum) || sum <= 0){
+      el.textContent = "";
+      el.hidden = true;
+      return;
+    }
+
+    el.hidden = false;
+    el.textContent = `Tasse ${formatEUR(sum)}`;
+  }catch(_){}
 }
 
 
@@ -2554,7 +2599,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.109: fallback visualizzazione Pulizie
+  // dDAE_2.110: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3521,7 +3566,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.109)
+// STATISTICHE (dDAE_2.110)
 // =========================
 
 function computeStatGen(){
@@ -5145,27 +5190,30 @@ function renderRoomsReadOnly(ospite){
       .sort((a,b)=>a-b);
   }
 
-  const stackHTML = buildRoomsStackHTML(guestId, roomsArr);
+  let stackHTML = buildRoomsStackHTML(guestId, roomsArr);
 
   const ci = formatLongDateIT(ospite?.check_in ?? ospite?.checkIn ?? "") || "—";
   const co = formatLongDateIT(ospite?.check_out ?? ospite?.checkOut ?? "") || "—";
 
+  const nights = calcStayNights(ospite);
+
+  // Tassa di soggiorno: mostra il totale accanto al pallino della prima stanza
+  try{
+    if (nights != null){
+      const tt = calcTouristTax(ospite, nights);
+      stackHTML = injectTaxIntoRoomsHTML(stackHTML, tt?.total);
+    }
+  }catch(_){ }
+
   // Range date sempre visibile (pill bianca)
   const datesHTML = `<div class="guest-booking-dates-pill">${ci} → ${co}</div>`;
 
-  // Matrimonio: pallino verde con "M" bianca, in alto a destra (allineato alla pill date)
+  // Matrimonio + pallino notti (azzurro) a destra della pill data
   const marriageOn = !!(ospite?.matrimonio);
-  const topRightHTML = marriageOn ? `<span class="marriage-dot" aria-label="Matrimonio">M</span>` : ``;
+  const marriageHTML = marriageOn ? `<span class="marriage-dot" aria-label="Matrimonio">M</span>` : ``;
+  const nightsHTML = buildNightsDotHTML(nights);
 
-  // Notti + tassa: solo testo (no pillola)
-  const nights = calcStayNights(ospite);
-  let stayTextHTML = ``;
-  if (nights != null){
-    const tt = calcTouristTax(ospite, nights);
-    const nightsLabel = (nights === 1) ? `1 notte` : `${nights} notti`;
-    const taxLabel = `Tassa ${formatEUR(tt.total)}`;
-    stayTextHTML = `<div class="guest-booking-staytext" aria-label="Pernottamenti e tassa di soggiorno">${nightsLabel} • ${taxLabel}</div>`;
-  }
+  const topRightHTML = (marriageHTML || nightsHTML) ? `<div class="guest-booking-right">${marriageHTML}${nightsHTML}</div>` : ``;
 
   // Coerenza UI: usa lo stesso riquadro smussato delle prenotazioni multiple
   ro.innerHTML = `
@@ -5175,16 +5223,18 @@ function renderRoomsReadOnly(ospite){
           ${datesHTML}
           ${topRightHTML}
         </div>
-        ${stayTextHTML}
       </div>
       <div class="guest-booking-rooms guest-booking-ro">
         <div class="rooms-readonly-wrap">${stackHTML}</div>
       </div>
     </div>
   `;
+
+  try{ updateGuestTaxTotalPill(); }catch(_){ }
 }
 
-// ===== dDAE_2.109 — Multi prenotazioni per stesso nome =====
+
+// ===== dDAE_2.110 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -5192,20 +5242,23 @@ function normalizeGuestNameKey(name){
 function buildGuestBookingBlockHTML(ospite, { mode="view", showSelect=false, activeId="" } = {}){
   const gid = guestIdOf(ospite);
   const roomsArr = _parseRoomsArr(ospite?.stanze);
-  const roomsHTML = buildRoomsStackHTML(gid, roomsArr);
+  let roomsHTML = buildRoomsStackHTML(gid, roomsArr);
 
   const ci = formatLongDateIT(ospite?.check_in ?? ospite?.checkIn ?? "") || "—";
   const co = formatLongDateIT(ospite?.check_out ?? ospite?.checkOut ?? "") || "—";
 
-  // Notti + tassa: solo testo (no pillola)
+  const modeL = String(mode || "view").toLowerCase();
   const nights = calcStayNights(ospite);
-  let stayTextHTML = "";
-  if (nights != null){
-    const tt = calcTouristTax(ospite, nights);
-    const nightsLabel = (nights === 1) ? `1 notte` : `${nights} notti`;
-    const taxLabel = `Tassa ${formatEUR(tt.total)}`;
-    stayTextHTML = `<div class="guest-booking-staytext" aria-label="Pernottamenti e tassa di soggiorno">${nightsLabel} • ${taxLabel}</div>`;
-  }
+
+  // In sola lettura: inserisci tassa accanto alla prima stanza
+  try{
+    if (modeL === "view" && nights != null){
+      const tt = calcTouristTax(ospite, nights);
+      roomsHTML = injectTaxIntoRoomsHTML(roomsHTML, tt?.total);
+    }
+  }catch(_){ }
+
+  const nightsHTML = (modeL === "view") ? buildNightsDotHTML(nights) : ``;
 
   const marriageOn = !!(ospite?.matrimonio);
 
@@ -5230,8 +5283,10 @@ function buildGuestBookingBlockHTML(ospite, { mode="view", showSelect=false, act
       </div>`
     : ``;
 
-  // Top right: azioni (in edit) altrimenti pallino matrimonio (in view)
-  const topRightHTML = actionsHTML || (marriageOn ? `<span class="marriage-dot" aria-label="Matrimonio">M</span>` : ``);
+  // Top right: in edit mostra azioni; in view mostra matrimonio + notti
+  const marriageHTML = (modeL === "view" && marriageOn) ? `<span class="marriage-dot" aria-label="Matrimonio">M</span>` : ``;
+  const viewRight = (marriageHTML || nightsHTML) ? `<div class="guest-booking-right">${marriageHTML}${nightsHTML}</div>` : ``;
+  const topRightHTML = actionsHTML || viewRight;
 
   return `<div class="guest-booking-block ${isActive ? "is-active" : ""}" data-booking-id="${gid}">
     <div class="guest-booking-top">
@@ -5239,11 +5294,11 @@ function buildGuestBookingBlockHTML(ospite, { mode="view", showSelect=false, act
         <div class="guest-booking-dates-pill">${ci} → ${co}</div>
         ${topRightHTML}
       </div>
-      ${stayTextHTML || ``}
     </div>
     <div class="guest-booking-rooms">${roomsHTML}</div>
   </div>`;
 }
+
 
 function clearGuestMulti(){
   const el = document.getElementById("guestMulti");
@@ -7869,7 +7924,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.109) =====
+// ===== CALENDARIO (dDAE_2.110) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -8294,7 +8349,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.109)
+   Lavanderia (dDAE_2.110)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -8690,7 +8745,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.109: renderSpese allineato al backend ---
+// --- FIX dDAE_2.110: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -8786,7 +8841,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.109: delete reale ospiti ---
+// --- FIX dDAE_2.110: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -8821,7 +8876,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.109: mostra nome ospite ---
+// --- FIX dDAE_2.110: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -9075,7 +9130,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.109
+   Build: dDAE_2.110
 ========================= */
 
 state.orepulizia = state.orepulizia || {
