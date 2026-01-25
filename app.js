@@ -8401,8 +8401,33 @@ function renderCalendario(){
       }
       if (info) {
         cell.classList.add("has-booking");
-        try{ cell.style.boxShadow = ""; }catch(_){ }
-        if (info.lastDay) cell.classList.add("last-day");
+if (info.lastDay) cell.classList.add("last-day");
+        // Flags m/c/g negli angoli (flat)
+        try{
+          const flags = document.createElement("div");
+          flags.className = "cal-flags";
+
+          if (info.mOn){
+            const f = document.createElement("span");
+            f.className = "cal-flag cal-flag-m";
+            f.textContent = "m";
+            flags.appendChild(f);
+          }
+          if (info.cOn){
+            const f = document.createElement("span");
+            f.className = "cal-flag cal-flag-c";
+            f.textContent = "c";
+            flags.appendChild(f);
+          }
+          if (info.gOn){
+            const f = document.createElement("span");
+            f.className = "cal-flag cal-flag-g";
+            f.textContent = "g";
+            flags.appendChild(f);
+          }
+
+          if (flags.childNodes.length) cell.appendChild(flags);
+        }catch(_){ }
 
         const inner = document.createElement("div");
         inner.className = "cal-cell-inner";
@@ -8421,20 +8446,6 @@ function renderCalendario(){
           dots.appendChild(s);
         }
         inner.appendChild(dots);
-
-        const mcg = document.createElement("div");
-        mcg.className = "cal-mcgbar";
-        const segs = [
-          { on: !!info.mOn, cls: "mcg-m" },
-          { on: !!info.cOn, cls: "mcg-c" },
-          { on: !!info.gOn, cls: "mcg-g" },
-        ];
-        for (const seg of segs){
-          const s = document.createElement("span");
-          s.className = `mcg-seg ${seg.cls}${seg.on ? " on" : ""}`;
-          mcg.appendChild(s);
-        }
-        inner.appendChild(mcg);
 
         cell.appendChild(inner);
 
