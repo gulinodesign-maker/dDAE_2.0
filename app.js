@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.125";
+const BUILD_VERSION = "dDAE_2.126";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -60,7 +60,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.125)
+// AUTH + SESSION (dDAE_2.126)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -499,7 +499,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.125 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.126 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2225,7 +2225,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.125 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.126 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2685,7 +2685,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.125: fallback visualizzazione Pulizie
+  // dDAE_2.126: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3652,7 +3652,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.125)
+// STATISTICHE (dDAE_2.126)
 // =========================
 
 function computeStatGen(){
@@ -5331,7 +5331,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.125 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.126 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -5546,7 +5546,7 @@ function enterGuestViewMode(ospite){
 }
 
 
-async function saveGuest(){
+async function saveGuest(opts = {}){
   const name = (document.getElementById("guestName")?.value || "").trim();
   const adults = parseInt(document.getElementById("guestAdults")?.value || "0", 10) || 0;
   const kidsU10 = parseInt(document.getElementById("guestKidsU10")?.value || "0", 10) || 0;
@@ -5608,25 +5608,33 @@ if (!name) return toast("Inserisci il nome");
   }
 // CREATE vs UPDATE (backend GAS: POST=create, PUT=update)
   const method = isEdit ? "PUT" : "POST";
-  const res = await api("ospiti", { method, body: payload });
 
-  // stanze: backend gestisce POST e sovrascrive (deleteWhere + append)
+  // Snapshot PRIMA di qualsiasi navigazione (showPage("ospiti") fa enterGuestCreateMode e può pulire lo stato)
   const ospiteId = payload.id;
-  const stanze = buildArrayFromState();
+  const stanzeSnap = buildArrayFromState();
+  const snapOrig = isEdit ? (state.stanzeSnapshotOriginal || "") : "";
 
   let shouldSave = true;
   if (isEdit){
     try {
-      const snapNow = JSON.stringify(stanze);
-      const snapOrig = state.stanzeSnapshotOriginal || "";
+      const snapNow = JSON.stringify(stanzeSnap);
       shouldSave = (snapNow !== snapOrig);
     } catch (_) {
       shouldSave = true;
     }
   }
 
+  const instantGoList = !!(opts && opts.instantGoList);
+  if (instantGoList){
+    // Naviga SUBITO alla guest list
+    try { showPage("ospiti"); } catch (_) {}
+  }
+
+  const res = await api("ospiti", { method, body: payload });
+
+  // stanze: backend gestisce POST e sovrascrive (deleteWhere + append)
   if (shouldSave){
-    try { await api("stanze", { method:"POST", body: { ospite_id: ospiteId, stanze } }); } catch (_) {}
+    try { await api("stanze", { method:"POST", body: { ospite_id: ospiteId, stanze: stanzeSnap } }); } catch (_) {}
   }
 
   // Invalida cache in-memory (ospiti/stanze) e forza refresh Calendario.
@@ -5635,6 +5643,15 @@ if (!name) return toast("Inserisci il nome");
   try{ invalidateApiCache("stanze|"); }catch(_){ }
   try{ if (state.calendar){ state.calendar.ready = false; state.calendar.rangeKey = ""; } }catch(_){ }
 
+  if (instantGoList){
+    // Sei già in lista: aggiorna appena possibile senza bloccare la UI
+    try{
+      loadOspiti({ ...(state.period || {}), force:true }).catch(e => toast(e.message));
+    }catch(_){ }
+    toast(isEdit ? "Modifiche salvate" : "Ospite creato");
+    return;
+  }
+
   await loadOspiti({ ...(state.period || {}), force:true });
   toast(isEdit ? "Modifiche salvate" : "Ospite creato");
 
@@ -5642,6 +5659,7 @@ if (!name) return toast("Inserisci il nome");
   try { enterGuestCreateMode(); } catch (_) {}
   showPage("ospiti");
 }
+
 
 function setupOspite(){
   try{ bindGuestTapCounters(); }catch(_){ }
@@ -6291,8 +6309,15 @@ function setupOspite(){
 
 
   const btnCreate = document.getElementById("createGuestCard");
-  btnCreate?.addEventListener("click", async () => {
-    try { await saveGuest(); } catch (e) { toast(e.message || "Errore"); }
+  btnCreate?.addEventListener("click", () => {
+    try {
+      // Richiesta: al tap su Salva/Crea, vai SUBITO alla guest list.
+      // saveGuest gestisce la navigazione immediata e prosegue il salvataggio in background.
+      Promise.resolve(saveGuest({ instantGoList: true }))
+        .catch((e) => { try { toast(e?.message || "Errore"); } catch (_) {} });
+    } catch (e) {
+      try { toast(e?.message || "Errore"); } catch (_) {}
+    }
   });
 
   // Default: check-in oggi (solo UI)
@@ -8039,7 +8064,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.125) =====
+// ===== CALENDARIO (dDAE_2.126) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -8467,7 +8492,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.125)
+   Lavanderia (dDAE_2.126)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -8863,7 +8888,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.125: renderSpese allineato al backend ---
+// --- FIX dDAE_2.126: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -8959,7 +8984,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.125: delete reale ospiti ---
+// --- FIX dDAE_2.126: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -8994,7 +9019,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.125: mostra nome ospite ---
+// --- FIX dDAE_2.126: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -9248,7 +9273,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.125
+   Build: dDAE_2.126
 ========================= */
 
 state.orepulizia = state.orepulizia || {
