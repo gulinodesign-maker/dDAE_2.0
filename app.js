@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.122";
+const BUILD_VERSION = "dDAE_2.123";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -60,7 +60,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.122)
+// AUTH + SESSION (dDAE_2.123)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -499,7 +499,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.122 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.123 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2224,6 +2224,79 @@ function bindFastTap(el, fn){
   }
 }
 
+
+/* dDAE_2.123 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+function bindGuestTapCounters(){
+  const ids = ["guestAdults","guestKidsU10"];
+  const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
+  const setVal = (el, v)=>{
+    try{
+      const vv = Math.max(0, parseInt(String(v||"0"),10)||0);
+      el.value = String(vv);
+      try{ el.dispatchEvent(new Event("input", { bubbles:true })); }catch(_){
+        try{ const ev=document.createEvent("Event"); ev.initEvent("input", true, true); el.dispatchEvent(ev); }catch(_){}
+      }
+      try{ el.dispatchEvent(new Event("change", { bubbles:true })); }catch(_){
+        try{ const ev2=document.createEvent("Event"); ev2.initEvent("change", true, true); el.dispatchEvent(ev2); }catch(_){}
+      }
+      fireRecalc();
+    }catch(_){}
+  };
+
+  ids.forEach((id)=>{
+    const el = document.getElementById(id);
+    if (!el) return;
+    if (el.__tapCounterBound) return;
+    el.__tapCounterBound = true;
+
+    try{ el.setAttribute("readonly","readonly"); }catch(_){}
+    try{ el.setAttribute("inputmode","none"); }catch(_){}
+    try{ el.classList.add("tap-counter"); }catch(_){}
+
+    let t = null;
+    let longFired = false;
+    const clearT = ()=>{ if (t){ clearTimeout(t); t=null; } };
+
+    const onDown = (e)=>{
+      longFired = false;
+      clearT();
+      try{ e.preventDefault(); }catch(_){}
+      try{ e.stopPropagation(); }catch(_){}
+      t = setTimeout(()=>{
+        longFired = true;
+        setVal(el, 0);
+      }, 500);
+    };
+    const onUp = (e)=>{
+      clearT();
+      try{ e.preventDefault(); }catch(_){}
+      try{ e.stopPropagation(); }catch(_){}
+      if (longFired){ longFired=false; return; }
+      const cur = parseInt(el.value || "0", 10) || 0;
+      setVal(el, cur + 1);
+    };
+    const onCancel = ()=>{ clearT(); };
+
+    const usePointer = (typeof window !== "undefined") && ("PointerEvent" in window);
+    if (usePointer){
+      try{ el.addEventListener("pointerdown", onDown, { passive:false }); }catch(_){ el.addEventListener("pointerdown", onDown); }
+      try{ el.addEventListener("pointerup", onUp, { passive:false }); }catch(_){ el.addEventListener("pointerup", onUp); }
+      try{ el.addEventListener("pointercancel", onCancel, { passive:true }); }catch(_){ el.addEventListener("pointercancel", onCancel); }
+    } else {
+      try{ el.addEventListener("touchstart", onDown, { passive:false }); }catch(_){ el.addEventListener("touchstart", onDown); }
+      try{ el.addEventListener("touchend", onUp, { passive:false }); }catch(_){ el.addEventListener("touchend", onUp); }
+      try{ el.addEventListener("touchcancel", onCancel, { passive:true }); }catch(_){ el.addEventListener("touchcancel", onCancel); }
+      try{ el.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation(); onUp(e); }, { passive:false }); }catch(_){ el.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation(); onUp(e); }); }
+    }
+
+    // Evita doppio incremento (click dopo pointerup)
+    try{ el.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation(); }, { passive:false }); }catch(_){ el.addEventListener("click", (e)=>{ e.preventDefault(); e.stopPropagation(); }); }
+    try{ el.addEventListener("contextmenu", (e)=>{ e.preventDefault(); }); }catch(_){}
+    try{ el.addEventListener("focus", ()=>{ try{ el.blur(); }catch(_){ } }); }catch(_){}
+  });
+}
+
+
 let launcherDelegationBound = false;
 let homeDelegationBound = false;
 function bindHomeDelegation(){
@@ -2612,7 +2685,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.122: fallback visualizzazione Pulizie
+  // dDAE_2.123: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3579,7 +3652,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.122)
+// STATISTICHE (dDAE_2.123)
 // =========================
 
 function computeStatGen(){
@@ -5258,7 +5331,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.122 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.123 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -5571,6 +5644,8 @@ if (!name) return toast("Inserisci il nome");
 }
 
 function setupOspite(){
+  try{ bindGuestTapCounters(); }catch(_){ }
+
   const hb = document.getElementById("hamburgerBtnOspite");
   if (hb) hb.addEventListener("click", () => { hideLauncher(); showPage("home"); });
 
@@ -7964,7 +8039,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.122) =====
+// ===== CALENDARIO (dDAE_2.123) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -8392,7 +8467,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.122)
+   Lavanderia (dDAE_2.123)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -8788,7 +8863,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.122: renderSpese allineato al backend ---
+// --- FIX dDAE_2.123: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -8884,7 +8959,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.122: delete reale ospiti ---
+// --- FIX dDAE_2.123: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -8919,7 +8994,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.122: mostra nome ospite ---
+// --- FIX dDAE_2.123: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -9173,7 +9248,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.122
+   Build: dDAE_2.123
 ========================= */
 
 state.orepulizia = state.orepulizia || {
