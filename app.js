@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.129";
+const BUILD_VERSION = "dDAE_2.130";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -60,7 +60,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.129)
+// AUTH + SESSION (dDAE_2.130)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -336,7 +336,7 @@ function __captureUiState(){
       saldoReceipt: !!state.guestSaldoReceipt,
       marriage: !!state.guestMarriage,
       group: !!state.guestGroup,
-      colC: !!state.guestColC,
+      colc: !!state.guestColC,
       rooms: Array.from(state.guestRooms || []),
       lettiPerStanza: state.lettiPerStanza || {},
       form: {
@@ -387,7 +387,7 @@ function __applyUiState(restore){
       state.guestSaldoReceipt = !!restore.guest.saldoReceipt;
       state.guestMarriage = !!restore.guest.marriage;
       state.guestGroup = !!(restore.guest.group);
-      state.guestColC = !!(restore.guest.colC);
+      state.guestColC = !!(restore.guest.colc);
 
       // stanze selezionate
       try {
@@ -423,7 +423,6 @@ function __applyUiState(restore){
       try { setPayReceipt("saldoType", state.guestSaldoReceipt); } catch (_) {}
       try { setMarriage(state.guestMarriage);
     setGroup(state.guestGroup);
-    setColC(state.guestColC);
     setColC(state.guestColC); } catch (_) {}
       try { setGroup(state.guestGroup); } catch (_) {}
     }
@@ -453,6 +452,7 @@ function setGroup(on){
   btn.classList.toggle("selected", state.guestGroup);
   btn.setAttribute("aria-pressed", state.guestGroup ? "true" : "false");
 }
+
 
 function setColC(on){
   state.guestColC = !!on;
@@ -511,7 +511,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.129 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.130 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2238,7 +2238,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.129 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.130 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2698,7 +2698,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.129: fallback visualizzazione Pulizie
+  // dDAE_2.130: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3665,7 +3665,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.129)
+// STATISTICHE (dDAE_2.130)
 // =========================
 
 function computeStatGen(){
@@ -4985,6 +4985,8 @@ function enterGuestCreateMode(){
   if (ci) ci.value = todayISO();
 
   setMarriage(false);
+  setGroup(false);
+  setColC(false);
   state.guestRooms = state.guestRooms || new Set();
   state.guestRooms.clear();
   state.lettiPerStanza = {};
@@ -5039,7 +5041,7 @@ function enterGuestEditMode(ospite){
     state.bedsDirty = false;
     state.stanzeSnapshotOriginal = "";
     document.querySelectorAll("#roomsPicker .room-dot").forEach(btn => {
-      if (btn.id === "roomMarriage" || btn.id === "roomGroup" || btn.id === "roomColC") return;
+      if (btn.id === "roomMarriage" || btn.id === "roomGroup") return;
       btn.classList.remove("selected");
       btn.setAttribute("aria-pressed", "false");
     });
@@ -5065,12 +5067,12 @@ function enterGuestEditMode(ospite){
   document.getElementById("guestDeposit").value = ospite.acconto_importo ?? ospite.deposit ?? 0;
   document.getElementById("guestSaldo").value = ospite.saldo_pagato ?? ospite.saldoPagato ?? ospite.saldo ?? 0;
 
-  // matrimonio / G / C
+  // matrimonio / G
   state.guestMarriage = !!(ospite.matrimonio);
   setMarriage(state.guestMarriage);
   state.guestGroup = !!(truthy(ospite.g ?? ospite.flag_g ?? ospite.gruppo_g ?? ospite.group ?? ospite.G ?? ospite.g_flag));
   setGroup(state.guestGroup);
-  state.guestColC = !!(truthy(ospite.col_c ?? ospite.colC ?? ospite.flag_c ?? ospite.c ?? ospite.C ?? ospite.c_flag ?? ospite.colc));
+  state.guestColC = !!(truthy(ospite.col_c ?? ospite.colC ?? ospite.c ?? ospite.C ?? ospite.flag_c ?? ospite.flagC ?? ospite.colc ?? ospite.c_flag));
   setColC(state.guestColC);
 refreshFloatingLabels();
   try { updateGuestRemaining(); } catch (_) {}
@@ -5321,7 +5323,7 @@ function renderRoomsReadOnly(ospite){
   // Matrimonio + pallino notti (azzurro) a destra della pill data
   const marriageOn = !!(ospite?.matrimonio);
   const gOn = truthy(ospite?.g ?? ospite?.flag_g ?? ospite?.gruppo_g ?? ospite?.group ?? ospite?.g_flag);
-  const cOn = truthy(ospite?.col_c ?? ospite?.colC ?? ospite?.flag_c ?? ospite?.c ?? ospite?.C ?? ospite?.c_flag ?? ospite?.colc);
+  const cOn = truthy(ospite?.col_c ?? ospite?.colC ?? ospite?.c ?? ospite?.C ?? ospite?.flag_c ?? ospite?.flagC ?? ospite?.colc ?? ospite?.c_flag);
   const marriageHTML = marriageOn ? `<span class="marriage-dot" aria-label="Matrimonio">M</span>` : ``;
   const gHTML = gOn ? `<span class="g-dot" aria-label="G">G</span>` : ``;
   const cHTML = cOn ? `<span class="c-dot" aria-label="C">C</span>` : ``;
@@ -5348,7 +5350,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.129 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.130 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -5398,12 +5400,12 @@ function buildGuestBookingBlockHTML(ospite, { mode="view", showSelect=false, act
 
   // Top right: in edit mostra azioni; in view mostra matrimonio + notti
   const gOn = truthy(ospite?.g ?? ospite?.flag_g ?? ospite?.gruppo_g ?? ospite?.group ?? ospite?.g_flag);
-  const cOn = truthy(ospite?.col_c ?? ospite?.colC ?? ospite?.flag_c ?? ospite?.c ?? ospite?.C ?? ospite?.c_flag ?? ospite?.colc);
+  const cOn = truthy(ospite?.col_c ?? ospite?.colC ?? ospite?.c ?? ospite?.C ?? ospite?.flag_c ?? ospite?.flagC ?? ospite?.colc ?? ospite?.c_flag);
   const marriageHTML = (modeL === "view" && marriageOn) ? `<span class="marriage-dot" aria-label="Matrimonio">M</span>` : ``;
   const gHTML = (modeL === "view" && gOn) ? `<span class="g-dot" aria-label="G">G</span>` : ``;
   const cHTML = (modeL === "view" && cOn) ? `<span class="c-dot" aria-label="C">C</span>` : ``;
   const viewRight = (marriageHTML || gHTML || cHTML || nightsHTML) ? `<div class="guest-booking-right">${marriageHTML}${gHTML}${cHTML}${nightsHTML}</div>` : ``;
-  const topRightHTML = actionsHTML || viewRight;
+const topRightHTML = actionsHTML || viewRight;
 
   return `<div class="guest-booking-block ${isActive ? "is-active" : ""}" data-booking-id="${gid}">
     <div class="guest-booking-top">
@@ -5601,6 +5603,8 @@ if (!name) return toast("Inserisci il nome");
     saldo_ricevutain: !!state.guestSaldoReceipt,
     matrimonio,
     g: g ? "1" : "",
+    col_c: (state.guestColC ? "1" : ""),
+    c: (state.guestColC ? "1" : ""),
     ps_registrato: state.guestPSRegistered ? "1" : "",
     istat_registrato: state.guestISTATRegistered ? "1" : "",
     stanze: JSON.stringify(rooms)
@@ -5798,7 +5802,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.129: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.130: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -6074,7 +6078,7 @@ function setupOspite(){
 
     roomsWrap?.querySelectorAll(".room-dot").forEach(btn => {
       // Il pallino "M" non è una stanza numerata
-      if (btn.id === "roomMarriage" || btn.id === "roomGroup" || btn.id === "roomColC") return;
+      if (btn.id === "roomMarriage" || btn.id === "roomGroup") return;
 
       const n = parseInt(btn.getAttribute("data-room"), 10);
       const on = state.guestRooms.has(n);
@@ -6092,7 +6096,6 @@ function setupOspite(){
     // matrimonio dot (rimane gestibile come flag)
     setMarriage(state.guestMarriage);
     setGroup(state.guestGroup);
-    setColC(state.guestColC);
   }
 
   // Espone le funzioni (scope setupOspite) per poterle richiamare da enterGuestEditMode
@@ -6194,8 +6197,6 @@ function setupOspite(){
   function __room_handleShortTap(b){
     // Matrimonio: flag separato
     if (b.id === 'roomMarriage') { setMarriage(!state.guestMarriage); return; }
-    if (b.id === 'roomGroup') { setGroup(!state.guestGroup); return; }
-    if (b.id === 'roomColC') { setColC(!state.guestColC); return; }
     if (!__room_canInteract(b)) return;
 
     const n = parseInt(b.getAttribute('data-room'), 10);
@@ -6213,7 +6214,7 @@ function setupOspite(){
 
   function __room_handleLongPress(b){
     // Matrimonio: nessun long-press
-    if (b.id === 'roomMarriage' || b.id === 'roomGroup' || b.id === 'roomColC') return;
+    if (b.id === 'roomMarriage' || b.id === 'roomGroup') return;
     if (!__room_canInteract(b)) return;
 
     const n = parseInt(b.getAttribute('data-room'), 10);
@@ -6536,7 +6537,7 @@ function renderGuestCards(){
         <div class="guest-meta-right" aria-label="Stato">
           ${marriageOn ? `<span class="marriage-dot" aria-label="Matrimonio">M</span>` : ``}
           ${(truthy(first?.g ?? first?.flag_g ?? first?.gruppo_g ?? first?.group ?? first?.g_flag) ? `<span class="g-dot" aria-label="G">G</span>` : ``)}
-          ${(truthy(first?.col_c ?? first?.colC ?? first?.flag_c ?? first?.c ?? first?.C ?? first?.c_flag ?? first?.colc) ? `<span class="c-dot" aria-label="C">C</span>` : ``)}
+          ${(truthy(first?.col_c ?? first?.colC ?? first?.c ?? first?.C ?? first?.flag_c ?? first?.flagC ?? first?.colc ?? first?.c_flag) ? `<span class="c-dot" aria-label="C">C</span>` : ``)}
           <span class="guest-led ${led.cls}" aria-label="${led.label}" title="${led.label}"></span>
         </div>
       </div>
@@ -8120,7 +8121,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.129) =====
+// ===== CALENDARIO (dDAE_2.130) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -8359,9 +8360,14 @@ function renderCalendario(){
       }
       if (info) {
         cell.classList.add("has-booking");
-        if (info.gOn) cell.classList.add("g-outline");
-        if (info.cOn) cell.classList.add("c-outline");
-        if (info.mOn) cell.classList.add("m-outline");
+        try{
+          const rings = [];
+          let spread = 2;
+          if (info.mOn){ rings.push(`0 0 0 ${spread}px rgba(50,173,230,0.95)`); spread += 2; }
+          if (info.gOn){ rings.push(`0 0 0 ${spread}px rgba(255,204,0,0.95)`); spread += 2; }
+          if (info.cOn){ rings.push(`0 0 0 ${spread}px rgba(52,199,89,0.95)`); spread += 2; }
+          if (rings.length){ cell.style.boxShadow = rings.join(", "); }
+        }catch(_){ }
         if (info.lastDay) cell.classList.add("last-day");
 
         const inner = document.createElement("div");
@@ -8448,7 +8454,9 @@ function buildWeekOccupancy(weekStart){
 
     const initials = initialsFromName(g.nome || g.name || "");
 
+    const mOn = !!(g.matrimonio);
     const gOn = truthy(g.g ?? g.flag_g ?? g.gruppo_g ?? g.group ?? g.g_flag);
+    const cOn = truthy(g.col_c ?? g.colC ?? g.c ?? g.C ?? g.flag_c ?? g.flagC ?? g.colc ?? g.c_flag);
 
     for (let d = new Date(ci); d < co; d = addDays(d, 1)) {
       if (d < weekStart || d >= weekEnd) continue;
@@ -8457,9 +8465,7 @@ function buildWeekOccupancy(weekStart){
 
       for (const r of roomsArr) {
         const dots = dotsForGuestRoom(guestId, r);
-        const mOn = !!(g?.matrimonio);
-        const cOn = truthy(g?.col_c ?? g?.colC ?? g?.flag_c ?? g?.c ?? g?.C ?? g?.c_flag ?? g?.colc);
-        map.set(`${dIso}:${r}`, { guestId, initials, dots, lastDay: isLast, gOn, mOn, cOn });
+        map.set(`${dIso}:${r}`, { guestId, initials, dots, lastDay: isLast, mOn, gOn, cOn });
       }
     }
   }
@@ -8552,7 +8558,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.129)
+   Lavanderia (dDAE_2.130)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -8948,7 +8954,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.129: renderSpese allineato al backend ---
+// --- FIX dDAE_2.130: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -9044,7 +9050,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.129: delete reale ospiti ---
+// --- FIX dDAE_2.130: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -9079,7 +9085,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.129: mostra nome ospite ---
+// --- FIX dDAE_2.130: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -9333,7 +9339,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.129
+   Build: dDAE_2.130
 ========================= */
 
 state.orepulizia = state.orepulizia || {
@@ -9605,3 +9611,4 @@ async function initOrePuliziaPage(){
 
   __renderOrePuliziaCalendar_();
 }
+
