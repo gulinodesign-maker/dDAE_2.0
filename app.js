@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.127";
+const BUILD_VERSION = "dDAE_2.128";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -60,7 +60,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.127)
+// AUTH + SESSION (dDAE_2.128)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -336,6 +336,7 @@ function __captureUiState(){
       saldoReceipt: !!state.guestSaldoReceipt,
       marriage: !!state.guestMarriage,
       group: !!state.guestGroup,
+      colC: !!state.guestColC,
       rooms: Array.from(state.guestRooms || []),
       lettiPerStanza: state.lettiPerStanza || {},
       form: {
@@ -386,6 +387,7 @@ function __applyUiState(restore){
       state.guestSaldoReceipt = !!restore.guest.saldoReceipt;
       state.guestMarriage = !!restore.guest.marriage;
       state.guestGroup = !!(restore.guest.group);
+      state.guestColC = !!(restore.guest.colC);
 
       // stanze selezionate
       try {
@@ -420,8 +422,11 @@ function __applyUiState(restore){
       try { setPayReceipt("depositType", state.guestDepositReceipt); } catch (_) {}
       try { setPayReceipt("saldoType", state.guestSaldoReceipt); } catch (_) {}
       try { setMarriage(state.guestMarriage);
-    setGroup(state.guestGroup); } catch (_) {}
+    setGroup(state.guestGroup);
+    setColC(state.guestColC);
+    } catch (_) {}
       try { setGroup(state.guestGroup); } catch (_) {}
+      try { setColC(state.guestColC); } catch (_) {}
     }
 
   } catch (_) {}
@@ -448,6 +453,15 @@ function setGroup(on){
   if (!btn) return;
   btn.classList.toggle("selected", state.guestGroup);
   btn.setAttribute("aria-pressed", state.guestGroup ? "true" : "false");
+}
+
+
+function setColC(on){
+  state.guestColC = !!on;
+  const btn = document.getElementById("roomColC");
+  if (!btn) return;
+  btn.classList.toggle("selected", state.guestColC);
+  btn.setAttribute("aria-pressed", state.guestColC ? "true" : "false");
 }
 
 
@@ -499,7 +513,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.127 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.128 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -545,6 +559,7 @@ const state = {
   stanzeSnapshotOriginal: "",
 guestMarriage: false,
   guestGroup: false,
+  guestColC: false,
   guestSaldoType: "contante",
   guestPSRegistered: false,
   guestISTATRegistered: false,
@@ -2225,7 +2240,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.127 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.128 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2685,7 +2700,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.127: fallback visualizzazione Pulizie
+  // dDAE_2.128: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3652,7 +3667,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.127)
+// STATISTICHE (dDAE_2.128)
 // =========================
 
 function computeStatGen(){
@@ -4972,6 +4987,8 @@ function enterGuestCreateMode(){
   if (ci) ci.value = todayISO();
 
   setMarriage(false);
+  setGroup(false);
+  setColC(false);
   state.guestRooms = state.guestRooms || new Set();
   state.guestRooms.clear();
   state.lettiPerStanza = {};
@@ -5052,11 +5069,15 @@ function enterGuestEditMode(ospite){
   document.getElementById("guestDeposit").value = ospite.acconto_importo ?? ospite.deposit ?? 0;
   document.getElementById("guestSaldo").value = ospite.saldo_pagato ?? ospite.saldoPagato ?? ospite.saldo ?? 0;
 
-  // matrimonio / G
-  state.guestMarriage = !!(ospite.matrimonio);
+  // matrimonio / G / C
+  state.guestMarriage = truthy(ospite.matrimonio ?? ospite.wedding ?? ospite.m ?? ospite.M);
   setMarriage(state.guestMarriage);
-  state.guestGroup = !!(truthy(ospite.g ?? ospite.flag_g ?? ospite.gruppo_g ?? ospite.group ?? ospite.G ?? ospite.g_flag));
+
+  state.guestGroup = truthy(ospite.g ?? ospite.flag_g ?? ospite.gruppo_g ?? ospite.group ?? ospite.G ?? ospite.g_flag);
   setGroup(state.guestGroup);
+
+  state.guestColC = truthy(ospite.col_c ?? ospite.colC ?? ospite.c ?? ospite.C ?? ospite.flag_c ?? ospite.flagC ?? ospite.colc);
+  setColC(state.guestColC);
 refreshFloatingLabels();
   try { updateGuestRemaining(); } catch (_) {}
 
@@ -5304,13 +5325,15 @@ function renderRoomsReadOnly(ospite){
   const datesHTML = `<div class="guest-booking-dates-pill">${ci} → ${co}</div>`;
 
   // Matrimonio + pallino notti (azzurro) a destra della pill data
-  const marriageOn = !!(ospite?.matrimonio);
-  const gOn = truthy(ospite?.g ?? ospite?.flag_g ?? ospite?.gruppo_g ?? ospite?.group ?? ospite?.g_flag);
+  const marriageOn = truthy(ospite?.matrimonio ?? ospite?.wedding ?? ospite?.m ?? ospite?.M);
+  const gOn = truthy(ospite?.g ?? ospite?.flag_g ?? ospite?.gruppo_g ?? ospite?.group ?? ospite?.G ?? ospite?.g_flag);
+  const cOn = truthy(ospite?.col_c ?? ospite?.colC ?? ospite?.c ?? ospite?.C ?? ospite?.flag_c ?? ospite?.flagC ?? ospite?.colc);
   const marriageHTML = marriageOn ? `<span class="marriage-dot" aria-label="Matrimonio">M</span>` : ``;
   const gHTML = gOn ? `<span class="g-dot" aria-label="G">G</span>` : ``;
+  const cHTML = cOn ? `<span class="c-dot" aria-label="C">C</span>` : ``;
   const nightsHTML = buildNightsDotHTML(nights);
 
-  const topRightHTML = (marriageHTML || gHTML || nightsHTML) ? `<div class="guest-booking-right">${marriageHTML}${gHTML}${nightsHTML}</div>` : ``;
+  const topRightHTML = (marriageHTML || gHTML || cHTML || nightsHTML) ? `<div class="guest-booking-right">${marriageHTML}${gHTML}${cHTML}${nightsHTML}</div>` : ``;
 
   // Coerenza UI: usa lo stesso riquadro smussato delle prenotazioni multiple
   ro.innerHTML = `
@@ -5331,7 +5354,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.127 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.128 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -5356,7 +5379,9 @@ function buildGuestBookingBlockHTML(ospite, { mode="view", showSelect=false, act
 
   const nightsHTML = (modeL === "view") ? buildNightsDotHTML(nights) : ``;
 
-  const marriageOn = !!(ospite?.matrimonio);
+  const marriageOn = truthy(ospite?.matrimonio ?? ospite?.wedding ?? ospite?.m ?? ospite?.M);
+  const gOn = truthy(ospite?.g ?? ospite?.flag_g ?? ospite?.gruppo_g ?? ospite?.group ?? ospite?.G ?? ospite?.g_flag);
+  const cOn = truthy(ospite?.col_c ?? ospite?.colC ?? ospite?.c ?? ospite?.C ?? ospite?.flag_c ?? ospite?.flagC ?? ospite?.colc);
 
   const isActive = (activeId && gid && String(activeId) === String(gid));
   const actionsHTML = (showSelect && gid)
@@ -5379,11 +5404,11 @@ function buildGuestBookingBlockHTML(ospite, { mode="view", showSelect=false, act
       </div>`
     : ``;
 
-  // Top right: in edit mostra azioni; in view mostra matrimonio + notti
-  const gOn = truthy(ospite?.g ?? ospite?.flag_g ?? ospite?.gruppo_g ?? ospite?.group ?? ospite?.g_flag);
+  // Top right: in edit mostra azioni; in view mostra M/G/C + notti
   const marriageHTML = (modeL === "view" && marriageOn) ? `<span class="marriage-dot" aria-label="Matrimonio">M</span>` : ``;
   const gHTML = (modeL === "view" && gOn) ? `<span class="g-dot" aria-label="G">G</span>` : ``;
-  const viewRight = (marriageHTML || gHTML || nightsHTML) ? `<div class="guest-booking-right">${marriageHTML}${gHTML}${nightsHTML}</div>` : ``;
+  const cHTML = (modeL === "view" && cOn) ? `<span class="c-dot" aria-label="C">C</span>` : ``;
+  const viewRight = (marriageHTML || gHTML || cHTML || nightsHTML) ? `<div class="guest-booking-right">${marriageHTML}${gHTML}${cHTML}${nightsHTML}</div>` : ``;
   const topRightHTML = actionsHTML || viewRight;
 
   return `<div class="guest-booking-block ${isActive ? "is-active" : ""}" data-booking-id="${gid}">
@@ -5564,6 +5589,7 @@ async function saveGuest(opts = {}){
   const depositType = state.guestDepositType || "contante";
   const matrimonio = !!(state.guestMarriage);
   const g = !!(state.guestGroup);
+  const c = !!(state.guestColC);
 if (!name) return toast("Inserisci il nome");
   const payload = {
     nome: name,
@@ -5580,8 +5606,10 @@ if (!name) return toast("Inserisci il nome");
     acconto_ricevuta: !!state.guestDepositReceipt,
     saldo_ricevuta: !!state.guestSaldoReceipt,
     saldo_ricevutain: !!state.guestSaldoReceipt,
-    matrimonio,
+    matrimonio: matrimonio ? "1" : "",
     g: g ? "1" : "",
+    col_c: c ? "1" : "",
+    c: c ? "1" : "",
     ps_registrato: state.guestPSRegistered ? "1" : "",
     istat_registrato: state.guestISTATRegistered ? "1" : "",
     stanze: JSON.stringify(rooms)
@@ -5779,7 +5807,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.127: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.128: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -5900,6 +5928,7 @@ function setupOspite(){
         const kidsNow = parseInt(document.getElementById("guestKidsU10")?.value || "0", 10) || 0;
         const marriageNow = !!(state.guestMarriage);
         const groupNow = !!(state.guestGroup);
+        const colCNow = !!(state.guestColC);
 
         const depTypeNow = state.guestDepositType || "contante";
         const saldoTypeNow = state.guestSaldoType || "contante";
@@ -5958,6 +5987,8 @@ function setupOspite(){
     if (mBtn) mBtn.addEventListener("click", (ev)=>{ try{ ev.preventDefault(); }catch(_){} try{ ev.stopPropagation(); }catch(_){} setMarriage(!state.guestMarriage); });
     const gBtn = document.getElementById("roomGroup");
     if (gBtn) gBtn.addEventListener("click", (ev)=>{ try{ ev.preventDefault(); }catch(_){} try{ ev.stopPropagation(); }catch(_){} setGroup(!state.guestGroup); });
+    const cBtn = document.getElementById("roomColC");
+    if (cBtn) cBtn.addEventListener("click", (ev)=>{ try{ ev.preventDefault(); }catch(_){} try{ ev.stopPropagation(); }catch(_){} setColC(!state.guestColC); });
   }catch(_){}
 
   const roomsOut = null; // removed UI string output
@@ -6492,7 +6523,7 @@ function renderGuestCards(){
 
     const led = guestLedStatus(first);
 
-    const marriageOn = !!(first?.matrimonio);
+    const marriageOn = truthy(first?.matrimonio ?? first?.wedding ?? first?.m ?? first?.M);
 
     const arrivoText = formatLongDateIT(first.check_in || first.checkIn || "") || "—";
 
@@ -6511,7 +6542,8 @@ function renderGuestCards(){
         </div>
         <div class="guest-meta-right" aria-label="Stato">
           ${marriageOn ? `<span class="marriage-dot" aria-label="Matrimonio">M</span>` : ``}
-          ${(truthy(first?.g ?? first?.flag_g ?? first?.gruppo_g ?? first?.group ?? first?.g_flag) ? `<span class="g-dot" aria-label="G">G</span>` : ``)}
+          ${(truthy(first?.g ?? first?.flag_g ?? first?.gruppo_g ?? first?.group ?? first?.G ?? first?.g_flag) ? `<span class="g-dot" aria-label="G">G</span>` : ``)}
+          ${(truthy(first?.col_c ?? first?.colC ?? first?.c ?? first?.C ?? first?.flag_c ?? first?.flagC ?? first?.colc) ? `<span class="c-dot" aria-label="C">C</span>` : ``)}
           <span class="guest-led ${led.cls}" aria-label="${led.label}" title="${led.label}"></span>
         </div>
       </div>
@@ -8095,7 +8127,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.127) =====
+// ===== CALENDARIO (dDAE_2.128) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -8242,6 +8274,17 @@ async function ensureCalendarData({ force = false, showLoader = false } = {}) {
 }
 
 
+
+function buildCalOutlineShadow(mOn, gOn, cOn){
+  const ring = 4; // px, coerente con vecchio bordo G
+  let n = 0;
+  const parts = [];
+  if (mOn){ n++; parts.push(`0 0 0 ${ring*n}px rgba(50,173,230,0.95)`); }
+  if (gOn){ n++; parts.push(`0 0 0 ${ring*n}px #ffcc00`); }
+  if (cOn){ n++; parts.push(`0 0 0 ${ring*n}px rgba(52,199,89,0.95)`); }
+  return parts.join(", ");
+}
+
 function renderCalendario(){
   const grid = document.getElementById("calGrid");
   try{ if (grid) grid.classList.toggle("is-loading", !!(state.calendar && state.calendar.loading)); }catch(_){ }
@@ -8337,6 +8380,12 @@ function renderCalendario(){
         if (info.gOn) cell.classList.add("g-outline");
         if (info.lastDay) cell.classList.add("last-day");
 
+        try{
+          const shadow = buildCalOutlineShadow(!!info.mOn, !!info.gOn, !!info.cOn);
+          if (shadow) cell.style.setProperty("--cal-outline", shadow);
+          else cell.style.removeProperty("--cal-outline");
+        }catch(_){ }
+
         const inner = document.createElement("div");
         inner.className = "cal-cell-inner";
 
@@ -8421,7 +8470,9 @@ function buildWeekOccupancy(weekStart){
 
     const initials = initialsFromName(g.nome || g.name || "");
 
-    const gOn = truthy(g.g ?? g.flag_g ?? g.gruppo_g ?? g.group ?? g.g_flag);
+    const mOn = truthy(g.matrimonio ?? g.wedding ?? g.m ?? g.M);
+    const gOn = truthy(g.g ?? g.flag_g ?? g.gruppo_g ?? g.group ?? g.G ?? g.g_flag);
+    const cOn = truthy(g.col_c ?? g.colC ?? g.c ?? g.C ?? g.flag_c ?? g.flagC ?? g.colc);
 
     for (let d = new Date(ci); d < co; d = addDays(d, 1)) {
       if (d < weekStart || d >= weekEnd) continue;
@@ -8430,7 +8481,7 @@ function buildWeekOccupancy(weekStart){
 
       for (const r of roomsArr) {
         const dots = dotsForGuestRoom(guestId, r);
-        map.set(`${dIso}:${r}`, { guestId, initials, dots, lastDay: isLast, gOn });
+        map.set(`${dIso}:${r}`, { guestId, initials, dots, lastDay: isLast, mOn, gOn, cOn });
       }
     }
   }
@@ -8523,7 +8574,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.127)
+   Lavanderia (dDAE_2.128)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -8919,7 +8970,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.127: renderSpese allineato al backend ---
+// --- FIX dDAE_2.128: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -9015,7 +9066,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.127: delete reale ospiti ---
+// --- FIX dDAE_2.128: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -9050,7 +9101,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.127: mostra nome ospite ---
+// --- FIX dDAE_2.128: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -9304,7 +9355,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.127
+   Build: dDAE_2.128
 ========================= */
 
 state.orepulizia = state.orepulizia || {
