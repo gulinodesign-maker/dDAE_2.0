@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.130";
+const BUILD_VERSION = "dDAE_2.131";
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -60,7 +60,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.130)
+// AUTH + SESSION (dDAE_2.131)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -511,7 +511,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.130 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.131 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -853,6 +853,46 @@ function formatLongDateIT(value){
     return parts.join(" ");
   }
   return s;
+}
+
+function formatRangeCompactIT(checkInValue, checkOutValue){
+  const ciIso = formatISODateLocal(checkInValue);
+  const coIso = formatISODateLocal(checkOutValue);
+  if (!ciIso || !coIso) return "";
+  if (!/^\d{4}-\d{2}-\d{2}$/.test(ciIso) || !/^\d{4}-\d{2}-\d{2}$/.test(coIso)) return "";
+
+  const ci = new Date(ciIso + "T00:00:00");
+  const co = new Date(coIso + "T00:00:00");
+  if (isNaN(ci) || isNaN(co)) return "";
+
+  // Range notti: ultimo giorno = check_out - 1
+  let lastNight = addDays(co, -1);
+  if (lastNight < ci) lastNight = new Date(ci);
+
+  const d1 = ci.getDate();
+  const d2 = lastNight.getDate();
+  const m1 = ci.getMonth();
+  const m2 = lastNight.getMonth();
+  const y1 = ci.getFullYear();
+  const y2 = lastNight.getFullYear();
+
+  const monthCap = (dt) => {
+    const s = dt.toLocaleDateString("it-IT", { month: "long" });
+    return s.charAt(0).toUpperCase() + s.slice(1);
+  };
+
+  // stesso mese/anno -> "21-24 Agosto"
+  if (y1 === y2 && m1 === m2){
+    return `${d1}-${d2} ${monthCap(ci)}`;
+  }
+
+  // mesi diversi -> "28 Agosto-2 Settembre"
+  if (y1 === y2){
+    return `${d1} ${monthCap(ci)}-${d2} ${monthCap(lastNight)}`;
+  }
+
+  // anni diversi (raro): mantieni compatto senza anno
+  return `${d1} ${monthCap(ci)}-${d2} ${monthCap(lastNight)}`;
 }
 
 function formatShortDateIT(input){
@@ -2238,7 +2278,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.130 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.131 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2698,7 +2738,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.130: fallback visualizzazione Pulizie
+  // dDAE_2.131: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3665,7 +3705,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.130)
+// STATISTICHE (dDAE_2.131)
 // =========================
 
 function computeStatGen(){
@@ -5318,7 +5358,8 @@ function renderRoomsReadOnly(ospite){
   }catch(_){ }
 
   // Range date sempre visibile (pill bianca)
-  const datesHTML = `<div class="guest-booking-dates-pill">${ci} → ${co}</div>`;
+  const rangeCompact = formatRangeCompactIT(ospite?.check_in ?? ospite?.checkIn ?? "", ospite?.check_out ?? ospite?.checkOut ?? "");
+  const datesHTML = `<div class="guest-booking-dates-pill">${rangeCompact || "—"}</div>`;
 
   // Matrimonio + pallino notti (azzurro) a destra della pill data
   const marriageOn = !!(ospite?.matrimonio);
@@ -5350,7 +5391,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.130 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.131 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -5802,7 +5843,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.130: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.131: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -8121,7 +8162,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.130) =====
+// ===== CALENDARIO (dDAE_2.131) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -8361,12 +8402,29 @@ function renderCalendario(){
       if (info) {
         cell.classList.add("has-booking");
         try{
-          const rings = [];
-          let spread = 2;
-          if (info.mOn){ rings.push(`0 0 0 ${spread}px rgba(50,173,230,0.95)`); spread += 2; }
-          if (info.gOn){ rings.push(`0 0 0 ${spread}px rgba(255,204,0,0.95)`); spread += 2; }
-          if (info.cOn){ rings.push(`0 0 0 ${spread}px rgba(52,199,89,0.95)`); spread += 2; }
-          if (rings.length){ cell.style.boxShadow = rings.join(", "); }
+          const ringDefs = [];
+          const step = 4; // doppio spessore
+          let total = 0;
+
+          // Ultima notte: bordo rosso (anello più esterno)
+          if (info.lastDay){
+            total += step;
+            ringDefs.push({ t: total, c: "rgba(255,59,48,0.95)" });
+          }
+          if (info.mOn){ total += step; ringDefs.push({ t: total, c: "rgba(50,173,230,0.95)" }); }
+          if (info.gOn){ total += step; ringDefs.push({ t: total, c: "rgba(255,204,0,0.95)" }); }
+          if (info.cOn){ total += step; ringDefs.push({ t: total, c: "rgba(52,199,89,0.95)" }); }
+
+          if (ringDefs.length){
+            // inset: concentrici verso l'interno, senza invadere le celle attorno
+            const shadows = ringDefs
+              .slice()
+              .sort((a,b)=>b.t-a.t)
+              .map(r => `inset 0 0 0 ${r.t}px ${r.c}`);
+            cell.style.boxShadow = shadows.join(", ");
+          } else {
+            cell.style.boxShadow = "";
+          }
         }catch(_){ }
         if (info.lastDay) cell.classList.add("last-day");
 
@@ -8558,7 +8616,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.130)
+   Lavanderia (dDAE_2.131)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -8954,7 +9012,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.130: renderSpese allineato al backend ---
+// --- FIX dDAE_2.131: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -9050,7 +9108,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.130: delete reale ospiti ---
+// --- FIX dDAE_2.131: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -9085,7 +9143,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.130: mostra nome ospite ---
+// --- FIX dDAE_2.131: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -9339,7 +9397,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.130
+   Build: dDAE_2.131
 ========================= */
 
 state.orepulizia = state.orepulizia || {
