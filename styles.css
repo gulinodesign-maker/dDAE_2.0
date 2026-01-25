@@ -4560,7 +4560,7 @@ grid-template-rows: 34px repeat(7, 54px);
   margin-top: 14px;
   display: flex;
   flex-direction: column;
-  gap: 14px;
+  gap: 24px;
   min-width: 0;
 }
 .clean-op-row{
@@ -6584,12 +6584,16 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 
 /* Pulizie: reset (tinta unita arancione, testo bianco bold) */
 #cleanResetLaundry{
-  background: #ff7a00;
-  border-color: rgba(255,122,0,0.85);
-  color: #ffffff;
-  font-weight: 900;
-  box-shadow: none;
-  backdrop-filter: none;
+  background: #ff7a00 !important;
+  background-color: #ff7a00 !important;
+  background-image: none !important;
+  border-color: rgba(255,122,0,0.85) !important;
+  color: #ffffff !important;
+  -webkit-text-fill-color: #ffffff !important;
+  font-weight: 900 !important;
+  box-shadow: none !important;
+  backdrop-filter: none !important;
+  opacity: 1 !important;
 }
 #cleanResetLaundry:active{ transform: translateY(1px); }
 /* Pulizie: reset biancheria (centrato sotto griglia) */
