@@ -3,12 +3,13 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.140";
+const BUILD_VERSION = "dDAE_2.141";
 
 /* Audio SFX (iOS-friendly, no assets) */
 const AUDIO_PREF_KEY = "ddae_audio_enabled";
 let __audioEnabled = false;
 let __audioCtx = null;
+let __lastTapSfxAt = 0;
 
 function __loadAudioPref(){
   try{ __audioEnabled = (localStorage.getItem(AUDIO_PREF_KEY) === "1"); }
@@ -37,60 +38,76 @@ function __sfxTap(){
   if (!__audioEnabled) return;
   const ctx = __ensureAudioCtx();
   if (!ctx) return;
+  const __now = (typeof performance !== "undefined" && performance.now) ? performance.now() : Date.now();
+  if (__now - __lastTapSfxAt < 70) return;
+  __lastTapSfxAt = __now;
   try{
     const t = ctx.currentTime;
     const o = ctx.createOscillator();
     const g = ctx.createGain();
-    o.type = "square";
-    o.frequency.setValueAtTime(880, t);
+    o.type = "sine";
+    o.frequency.setValueAtTime(1200, t);
+    o.frequency.exponentialRampToValueAtTime(900, t + 0.03);
+
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.08, t + 0.005);
-    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+    g.gain.exponentialRampToValueAtTime(0.03, t + 0.004);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.05);
+
     o.connect(g);
     g.connect(ctx.destination);
     o.start(t);
-    o.stop(t + 0.07);
-  }catch(_){}
+    o.stop(t + 0.06);
+  }catch(_){} 
 }
 function __sfxGlass(){
+  // "Carta stropicciata" (usato per cancellazioni/long-press)
   if (!__audioEnabled) return;
   const ctx = __ensureAudioCtx();
   if (!ctx) return;
   try{
     const sr = ctx.sampleRate || 44100;
-    const dur = 0.22;
+    const dur = 0.28;
     const buf = ctx.createBuffer(1, Math.max(1, (sr * dur)|0), sr);
     const ch = buf.getChannelData(0);
+
     for (let i=0;i<ch.length;i++){
-      // noise with fast decay (pseudo "shatter")
-      ch[i] = (Math.random()*2-1) * Math.pow(1 - i/ch.length, 2);
+      const x = i / ch.length;
+      const env = Math.pow(1 - x, 1.8);
+      const flutter = (Math.random() < 0.18 ? 1.0 : 0.35);
+      ch[i] = (Math.random()*2 - 1) * env * flutter;
     }
+
     const src = ctx.createBufferSource();
     src.buffer = buf;
 
     const hp = ctx.createBiquadFilter();
     hp.type = "highpass";
-    hp.frequency.setValueAtTime(700, ctx.currentTime);
+    hp.frequency.setValueAtTime(80, ctx.currentTime);
+
+    const lp = ctx.createBiquadFilter();
+    lp.type = "lowpass";
+    lp.frequency.setValueAtTime(1200, ctx.currentTime);
 
     const bp = ctx.createBiquadFilter();
     bp.type = "bandpass";
-    bp.frequency.setValueAtTime(2400, ctx.currentTime);
-    bp.Q.setValueAtTime(1.2, ctx.currentTime);
+    bp.frequency.setValueAtTime(420, ctx.currentTime);
+    bp.Q.setValueAtTime(0.8, ctx.currentTime);
 
     const g = ctx.createGain();
     const t = ctx.currentTime;
     g.gain.setValueAtTime(0.0001, t);
-    g.gain.exponentialRampToValueAtTime(0.22, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.11, t + 0.01);
     g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
 
     src.connect(hp);
-    hp.connect(bp);
+    hp.connect(lp);
+    lp.connect(bp);
     bp.connect(g);
     g.connect(ctx.destination);
 
     src.start(t);
     src.stop(t + dur);
-  }catch(_){}
+  }catch(_){} 
 }
 function __sfxSave(){
   if (!__audioEnabled) return;
@@ -227,7 +244,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.140)
+// AUTH + SESSION (dDAE_2.141)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -678,7 +695,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.140 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.141 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2431,6 +2448,7 @@ function bindFastTap(el, fn){
     last = now;
     try{ e.preventDefault(); }catch(_){ }
     try{ e.stopPropagation(); }catch(_){ }
+    try{ __sfxTap(); }catch(_){ }
     fn();
   };
 
@@ -2445,7 +2463,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.140 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.141 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2906,7 +2924,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.140: fallback visualizzazione Pulizie
+  // dDAE_2.141: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3873,7 +3891,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.140)
+// STATISTICHE (dDAE_2.141)
 // =========================
 
 function computeStatGen(){
@@ -5559,7 +5577,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.140 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.141 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -6013,7 +6031,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.140: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.141: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -7443,11 +7461,13 @@ function setupColazione(){
     qtyTargetId = id;
     qtyTimer = setTimeout(() => {
       qtyLongFired = true;
+      try{ __sfxGlass(); }catch(_){ }
       patchItem(id, { qty: 0, saved: 0 }, { showLoader:false }).catch(()=>{});
     }, 500);
   };
 
   const tapQty = (id) => {
+    try{ __sfxTap(); }catch(_){ }
     const it = findItem(id);
     const cur = parseInt(String(it?.qty ?? 0), 10);
     const next = (isNaN(cur) ? 0 : cur) + 1;
@@ -7477,6 +7497,7 @@ function setupColazione(){
   };
 
   const toggleCheck = (id) => {
+    try{ __sfxTap(); }catch(_){ }
     const it = findItem(id);
     const cur = __normBool01(it?.checked);
     patchItem(id, { checked: cur ? 0 : 1 }, { showLoader:false }).catch(()=>{});
@@ -7933,7 +7954,7 @@ try{
     };
 
     const onLong = () => { try{ __sfxGlass(); }catch(_){ } el.classList.remove("is-saved"); writeHourDot(el, 0); scheduleHoursSave(); };
-    const onTap = () => { el.classList.remove("is-saved"); writeHourDot(el, readHourDot(el) + 1); scheduleHoursSave(); };
+    const onTap = () => { try{ __sfxTap(); }catch(_){ } el.classList.remove("is-saved"); writeHourDot(el, readHourDot(el) + 1); scheduleHoursSave(); };
 
     el.addEventListener("touchstart", (e) => {
       lastTouchAt = Date.now();
@@ -8202,6 +8223,7 @@ const buildPuliziePayload = () => {
   };
 
   const tapSlot = (slot) => {
+    try{ __sfxTap(); }catch(_){ }
     slot.classList.remove("is-saved");
     writeCell(slot, readCell(slot) + 1);
     scheduleLaundrySave();
@@ -8221,6 +8243,7 @@ const buildPuliziePayload = () => {
       const code = __pickHeadCode(e);
       if (!code) return;
       __lastHeadTouchAt = Date.now();
+      try{ __sfxTap(); }catch(_){ }
       openCleanHeaderModal(code);
       e.preventDefault();
       e.stopPropagation();
@@ -8230,6 +8253,7 @@ const buildPuliziePayload = () => {
       const code = __pickHeadCode(e);
       if (!code) return;
       if (Date.now() - __lastHeadTouchAt < 450) { e.preventDefault(); e.stopPropagation(); return; }
+      try{ __sfxTap(); }catch(_){ }
       openCleanHeaderModal(code);
       e.preventDefault();
       e.stopPropagation();
@@ -8382,7 +8406,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.140) =====
+// ===== CALENDARIO (dDAE_2.141) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -8837,7 +8861,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.140)
+   Lavanderia (dDAE_2.141)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -9233,7 +9257,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.140: renderSpese allineato al backend ---
+// --- FIX dDAE_2.141: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -9329,13 +9353,14 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.140: delete reale ospiti ---
+// --- FIX dDAE_2.141: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
   btn.textContent = "Elimina";
   btn.addEventListener("click", async () => {
     if (!confirm("Eliminare definitivamente questo ospite?")) return;
+    try{ __sfxGlass(); }catch(_){ }
     await api("ospiti", { method:"DELETE", params:{ id: ospite.id } });
     toast("Ospite eliminato");
     invalidateApiCache("ospiti|");
@@ -9364,7 +9389,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.140: mostra nome ospite ---
+// --- FIX dDAE_2.141: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -9618,7 +9643,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.140
+   Build: dDAE_2.141
 ========================= */
 
 state.orepulizia = state.orepulizia || {
