@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.146";
+const BUILD_VERSION = "dDAE_2.147";
 
 /* Audio SFX (iOS-friendly, no assets) */
 const AUDIO_PREF_KEY = "ddae_audio_enabled";
@@ -244,7 +244,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.146)
+// AUTH + SESSION (dDAE_2.147)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -695,7 +695,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.146 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.147 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2521,7 +2521,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.146 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.147 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2639,6 +2639,8 @@ const lav = e.target.closest && e.target.closest("#goLavanderia") || e.target.cl
     if (s5){ hideLauncher(); showPage("statazienda"); return; }
     const s6 = e.target.closest && e.target.closest("#goStatAmministratore");
     if (s6){ hideLauncher(); showPage("statamministratore"); return; }
+    const s7 = e.target.closest && e.target.closest("#goStatPiscina");
+    if (s7){ hideLauncher(); showPage("statpiscina"); return; }
 });
 }
 
@@ -2874,6 +2876,12 @@ state.page = page;
   if (statAmmTopTools){
     statAmmTopTools.hidden = (page !== "statamministratore");
   }
+
+  const statPiscinaTopTools = $("#statPiscinaTopTools");
+  if (statPiscinaTopTools){
+    statPiscinaTopTools.hidden = (page !== "statpiscina");
+  }
+
 // render on demand
   if (page === "prodotti") {
     const _nav = navId;
@@ -2979,10 +2987,18 @@ state.page = page;
       .catch(e=>toast(e.message));
   }
 
+  if (page === "statpiscina") {
+    const _nav = navId;
+    loadPiscinaAll({ force:false, showLoader:true })
+      .then(()=>{ if (state.navId !== _nav || state.page !== "statpiscina") return; renderPiscinaCalendar(); })
+      .catch(e=>toast(e.message));
+  }
+
+
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.146: fallback visualizzazione Pulizie
+  // dDAE_2.147: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3242,6 +3258,13 @@ if (goCalendarioTopOspiti){
   if (btnBackStatsAzienda){ bindFastTap(btnBackStatsAzienda, () => { showPage("statistiche"); }); }
   const btnBackStatsAmm = $("#btnBackStatisticheAmministratore");
   if (btnBackStatsAmm){ bindFastTap(btnBackStatsAmm, () => { showPage("statistiche"); }); }
+
+  // STATPISCINA: topbar tools
+  const btnBackStatsPiscina = $("#btnBackStatistichePiscina");
+  if (btnBackStatsPiscina){ bindFastTap(btnBackStatsPiscina, () => { showPage("statistiche"); }); }
+  const btnPiscinaBackfillTop = $("#btnPiscinaBackfillTop");
+  if (btnPiscinaBackfillTop){ bindFastTap(btnPiscinaBackfillTop, () => { try{ piscinaBackfillCurrentMonth(); }catch(e){ toast(e.message||"Errore"); } }); }
+
 const btnPieSpese = $("#btnStatSpesePie");
   if (btnPieSpese){ bindFastTap(btnPieSpese, () => { openStatSpesePieModal(); }); }
 
@@ -3949,7 +3972,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.146)
+// STATISTICHE (dDAE_2.147)
 // =========================
 
 function computeStatGen(){
@@ -5635,7 +5658,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.146 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.147 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -6089,7 +6112,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.146: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.147: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -7760,6 +7783,523 @@ function refreshFloatingLabels(){
 }
 
 
+
+/* =========================
+   Piscina (dDAE_2.147)
+========================= */
+const PISCINA_ACTION = "piscina";
+
+function __pad2(n){ return String(n).padStart(2,"0"); }
+function __isoDayLocal(d){
+  try{
+    const x = new Date(d);
+    const y = x.getFullYear();
+    const m = __pad2(x.getMonth()+1);
+    const dd = __pad2(x.getDate());
+    return `${y}-${m}-${dd}`;
+  }catch(_){ return ""; }
+}
+
+function __capFirst(s){
+  s = String(s||"");
+  if (!s) return s;
+  return s.charAt(0).toUpperCase() + s.slice(1);
+}
+
+function __fmtItDateLong(d){
+  try{
+    const fmt = new Intl.DateTimeFormat("it-IT", { weekday:"long", day:"2-digit", month:"long", year:"numeric" });
+    return __capFirst(fmt.format(d));
+  }catch(_){
+    try{ return new Date(d).toLocaleDateString("it-IT"); }catch(__){ return ""; }
+  }
+}
+
+function __fmtMonthYear(d){
+  try{
+    const fmt = new Intl.DateTimeFormat("it-IT", { month:"long", year:"numeric" });
+    return __capFirst(fmt.format(d));
+  }catch(_){
+    const x = new Date(d);
+    return `${x.getMonth()+1}/${x.getFullYear()}`;
+  }
+}
+
+function __hash01(str){
+  try{
+    let h = 2166136261;
+    const s = String(str||"");
+    for (let i=0;i<s.length;i++){
+      h ^= s.charCodeAt(i);
+      h = Math.imul(h, 16777619);
+    }
+    // to [0,1)
+    return (h >>> 0) / 4294967296;
+  }catch(_){ return Math.random(); }
+}
+
+function __dayOfYear(d){
+  const x = new Date(d);
+  const start = new Date(x.getFullYear(), 0, 0);
+  const diff = x - start;
+  return Math.floor(diff / 86400000);
+}
+
+function piscinaSimulateForDay(day){
+  const uid = String(state?.session?.user_id || "u");
+  const yr = String(state?.exerciseYear || new Date().getFullYear());
+  const key = `${uid}|${yr}`;
+  const h = __hash01(key);
+  const phaseA = h * Math.PI * 2;
+  const phaseB = __hash01(key+"b") * Math.PI * 2;
+
+  const doy = __dayOfYear(day);
+  const t = doy / 365;
+
+  // Temperatura stagionale (Italia): inverno più bassa, estate più alta
+  const tempBase = 20 + 6 * Math.sin(2*Math.PI*(t - 0.22)); // picco ~ estate
+  const tempFine = 0.6 * Math.sin(2*Math.PI*(doy/14) + phaseA) + 0.4 * Math.sin(2*Math.PI*(doy/31) + phaseB);
+  let temp = tempBase + tempFine;
+  temp = Math.max(12, Math.min(30, temp));
+
+  // Cloro libero (ottimale ~ 1.2–1.8)
+  const clA = 1.5 + 0.18 * Math.sin(2*Math.PI*(doy/9) + phaseA) + 0.10 * Math.sin(2*Math.PI*(doy/21) + phaseB);
+  let clLib = Math.max(1.20, Math.min(1.80, clA));
+
+  // Cloro combinato (ottimale basso 0.0–0.3)
+  const ccA = 0.12 + 0.05 * Math.sin(2*Math.PI*(doy/11) + phaseB) + 0.03 * Math.sin(2*Math.PI*(doy/27) + phaseA);
+  let clComb = Math.max(0.00, Math.min(0.30, ccA));
+
+  // pH (ottimale ~ 7.2–7.6)
+  const phA = 7.4 + 0.10 * Math.sin(2*Math.PI*(doy/13) + phaseA) + 0.06 * Math.sin(2*Math.PI*(doy/33) + phaseB);
+  let ph = Math.max(7.20, Math.min(7.60, phA));
+
+  // arrotondamenti “da scheda”
+  const round2 = (x)=>Math.round(x*100)/100;
+  const round1 = (x)=>Math.round(x*10)/10;
+
+  return {
+    cloro_attivo_libero: round2(clLib),
+    cloro_attivo_combinato: round2(clComb),
+    ph: round2(ph),
+    temp_acqua: round1(temp),
+  };
+}
+
+function piscinaEnsureState(){
+  if (!state._piscina) {
+    state._piscina = {
+      rows: [],
+      fetchedAt: 0,
+      viewMonth: null,
+      byDay: {},
+      monthKey: "",
+    };
+  }
+  return state._piscina;
+}
+
+function piscinaIndexRows(){
+  const s = piscinaEnsureState();
+  const map = {};
+  (s.rows||[]).forEach(r=>{
+    const ts = r.timestamp_report || r.timestamp || r.ts || r.createdAt || r.created_at || "";
+    const d = ts ? new Date(ts) : null;
+    const dayKey = d && !isNaN(d) ? __isoDayLocal(d) : (r.data || r.date || "");
+    if (!dayKey) return;
+    // uno per giorno (se duplicati, prende il più recente)
+    if (!map[dayKey]) { map[dayKey] = r; return; }
+    try{
+      const a = new Date(map[dayKey].timestamp_report || map[dayKey].createdAt || 0).getTime() || 0;
+      const b = new Date(ts).getTime() || 0;
+      if (b >= a) map[dayKey] = r;
+    }catch(_){ map[dayKey] = r; }
+  });
+  s.byDay = map;
+}
+
+async function loadPiscinaAll({ force=false, showLoader=false } = {}){
+  const s = piscinaEnsureState();
+  if (!state?.session?.user_id) return [];
+  const age = Date.now() - (s.fetchedAt || 0);
+  if (!force && s.fetchedAt && age < 60*1000 && Array.isArray(s.rows)) return s.rows;
+
+  const res = await api(PISCINA_ACTION, { method:"GET", showLoader: !!showLoader, params:{} });
+  const rows = Array.isArray(res) ? res
+    : (res && Array.isArray(res.data) ? res.data
+    : (res && res.data && Array.isArray(res.data.data) ? res.data.data
+    : (res && Array.isArray(res.rows) ? res.rows
+    : [])));
+
+  s.rows = rows || [];
+  s.fetchedAt = Date.now();
+  piscinaIndexRows();
+  return s.rows;
+}
+
+function piscinaGetRowByDayKey(dayKey){
+  const s = piscinaEnsureState();
+  return s.byDay ? s.byDay[dayKey] : null;
+}
+
+function piscinaSetViewMonth(d){
+  const s = piscinaEnsureState();
+  const x = new Date(d.getFullYear(), d.getMonth(), 1);
+  s.viewMonth = x;
+  s.monthKey = `${x.getFullYear()}-${__pad2(x.getMonth()+1)}`;
+}
+
+function piscinaGetViewMonth(){
+  const s = piscinaEnsureState();
+  if (!s.viewMonth) piscinaSetViewMonth(new Date());
+  return s.viewMonth;
+}
+
+function renderPiscinaCalendar(){
+  const s = piscinaEnsureState();
+  const grid = document.getElementById("piscinaGrid");
+  const label = document.getElementById("piscinaNavLabel");
+  const todayLbl = document.getElementById("piscinaTodayLabel");
+  if (!grid || !label || !todayLbl) return;
+
+  const viewMonth = piscinaGetViewMonth();
+  label.textContent = __fmtMonthYear(viewMonth);
+
+  const now = new Date();
+  todayLbl.textContent = __fmtItDateLong(now);
+
+  const y = viewMonth.getFullYear();
+  const m = viewMonth.getMonth();
+  const first = new Date(y, m, 1);
+  const last = new Date(y, m+1, 0);
+  const daysInMonth = last.getDate();
+
+  // offset: lun=0 ... dom=6
+  let dow = first.getDay(); // dom=0
+  dow = (dow + 6) % 7;
+
+  const frag = document.createDocumentFragment();
+
+  // blank cells
+  for (let i=0;i<dow;i++){
+    const blank = document.createElement("div");
+    blank.className = "piscina-cell";
+    blank.setAttribute("disabled","disabled");
+    blank.style.visibility = "hidden";
+    frag.appendChild(blank);
+  }
+
+  for (let day=1; day<=daysInMonth; day++){
+    const d = new Date(y, m, day);
+    const dayKey = __isoDayLocal(d);
+    const btn = document.createElement("button");
+    btn.type = "button";
+    btn.className = "piscina-cell";
+    btn.setAttribute("role","gridcell");
+    btn.dataset.date = dayKey;
+
+    const span = document.createElement("div");
+    span.className = "piscina-day";
+    span.textContent = String(day);
+    btn.appendChild(span);
+
+    const row = piscinaGetRowByDayKey(dayKey);
+    if (row){
+      const dot = document.createElement("div");
+      dot.className = "piscina-dot";
+      btn.appendChild(dot);
+    }
+
+    frag.appendChild(btn);
+  }
+
+  grid.innerHTML = "";
+  grid.appendChild(frag);
+}
+
+function piscinaOpenModal(dayKey){
+  const modal = document.getElementById("piscinaModal");
+  if (!modal) return;
+  const title = document.getElementById("piscinaModalTitle");
+  const r = piscinaGetRowByDayKey(dayKey);
+  if (!r) { toast("Nessun report per questo giorno"); return; }
+
+  try{
+    if (title) title.textContent = `Report piscina — ${__fmtItDateLong(new Date(dayKey+"T00:00:00"))}`;
+  }catch(_){}
+
+  const set = (id, v)=>{ const el = document.getElementById(id); if (el) el.textContent = v; };
+
+  set("pmCloroLibero", (r.cloro_attivo_libero ?? "—") + " ppm");
+  set("pmCloroComb", (r.cloro_attivo_combinato ?? "—") + " ppm");
+  set("pmPh", (r.ph ?? "—"));
+  set("pmTemp", (r.temp_acqua ?? "—") + " °C");
+  const meta = [];
+  if (r.timestamp_report) meta.push(String(r.timestamp_report));
+  if (r.origine) meta.push(String(r.origine));
+  set("pmMeta", meta.length ? meta.join(" · ") : "—");
+
+  try{ modal.hidden = false; }catch(_){ modal.style.display = "block"; }
+}
+
+function piscinaCloseModal(){
+  const modal = document.getElementById("piscinaModal");
+  if (!modal) return;
+  try{ modal.hidden = true; }catch(_){ modal.style.display = "none"; }
+}
+
+function __piscinaValuesForMonth(viewMonth){
+  const y = viewMonth.getFullYear();
+  const m = viewMonth.getMonth();
+  const last = new Date(y, m+1, 0);
+  const days = last.getDate();
+  const out = [];
+  for (let d=1; d<=days; d++){
+    const dayKey = __isoDayLocal(new Date(y,m,d));
+    const row = piscinaGetRowByDayKey(dayKey);
+    out.push({ day: d, dayKey, row });
+  }
+  return out;
+}
+
+function piscinaPrintCurrentMonth(){
+  const viewMonth = piscinaGetViewMonth();
+  const monthItems = __piscinaValuesForMonth(viewMonth);
+
+  const rows = monthItems.filter(x=>!!x.row).map(x=>x.row);
+  if (!rows.length){ toast("Nessun report nel mese selezionato"); return; }
+
+  // Costruisci serie per grafici
+  const series = {
+    cloroL: monthItems.map(x=>x.row ? Number(x.row.cloro_attivo_libero) : null),
+    cloroC: monthItems.map(x=>x.row ? Number(x.row.cloro_attivo_combinato) : null),
+    ph: monthItems.map(x=>x.row ? Number(x.row.ph) : null),
+    temp: monthItems.map(x=>x.row ? Number(x.row.temp_acqua) : null),
+  };
+
+  const minmax = (arr)=>{
+    const v = arr.filter(x=>x!==null && !isNaN(x));
+    if (!v.length) return {min:0,max:1};
+    return { min: Math.min(...v), max: Math.max(...v) };
+  };
+
+  const spark = (arr)=>{
+    const w=260, h=46, pad=4;
+    const mm=minmax(arr);
+    const span = (mm.max-mm.min) || 1;
+    let pts=[];
+    const n=arr.length;
+    for (let i=0;i<n;i++){
+      const v=arr[i];
+      if (v===null || isNaN(v)){ continue; }
+      const x = pad + (i/(n-1))*(w-2*pad);
+      const y = pad + (1-((v-mm.min)/span))*(h-2*pad);
+      pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
+    }
+    return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">
+      <rect x="0" y="0" width="${w}" height="${h}" rx="10" ry="10" fill="rgba(255,255,255,0.6)" stroke="rgba(15,23,42,0.10)"/>
+      <polyline points="${pts.join(" ")}" fill="none" stroke="rgba(15,23,42,0.85)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+    </svg>`;
+  };
+
+  const fmt = (x, unit="")=>{
+    if (x===null || x===undefined || isNaN(Number(x))) return "—";
+    return `${x}${unit}`;
+  };
+
+  const monthTitle = __fmtMonthYear(viewMonth);
+  const html = `<!doctype html>
+  <html lang="it"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
+  <title>Report Piscina - ${monthTitle}</title>
+  <style>
+    body{ font-family: -apple-system,BlinkMacSystemFont,system-ui,Segoe UI,Roboto,Helvetica,Arial; margin: 18px; color: #0f172a; }
+    h1{ font-size: 18px; margin:0 0 8px 0; }
+    .sub{ font-size: 12px; color: rgba(15,23,42,0.70); margin-bottom: 14px; }
+    .grid{ display:flex; flex-direction:column; gap: 12px; }
+    .card{ border: 1px solid rgba(15,23,42,0.10); border-radius: 14px; padding: 12px; background: rgba(255,255,255,0.65); }
+    .row{ display:flex; justify-content:space-between; gap: 10px; margin: 6px 0; font-size: 12px; }
+    .k{ font-weight: 800; }
+    .v{ font-weight: 900; }
+    table{ width:100%; border-collapse: collapse; font-size: 11px; }
+    th,td{ border-bottom: 1px solid rgba(15,23,42,0.10); padding: 6px 4px; text-align:left; }
+    th{ font-weight: 900; }
+    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
+    @media print { body{ margin: 10mm; } }
+  </style></head><body>
+    <h1>Report Piscina — ${monthTitle}</h1>
+    <div class="sub">Daedalium PMS · ${new Date().toLocaleString("it-IT")}</div>
+
+    <div class="grid">
+      <div class="card">
+        <div class="row"><span class="k">Cloro attivo libero</span><span class="v">${spark(series.cloroL)}</span></div>
+        <div class="row"><span class="k">Cloro attivo combinato</span><span class="v">${spark(series.cloroC)}</span></div>
+        <div class="row"><span class="k">pH</span><span class="v">${spark(series.ph)}</span></div>
+        <div class="row"><span class="k">Temperatura acqua</span><span class="v">${spark(series.temp)}</span></div>
+      </div>
+
+      <div class="card">
+        <table>
+          <thead><tr><th>Giorno</th><th>Cloro libero</th><th>Cloro comb.</th><th>pH</th><th>Temp</th><th>Origine</th></tr></thead>
+          <tbody>
+          ${monthItems.map(x=>{
+            if (!x.row) return `<tr><td>${x.day}</td><td colspan="5" style="color:rgba(15,23,42,0.45)">—</td></tr>`;
+            const r=x.row;
+            return `<tr>
+              <td class="mono">${x.day}</td>
+              <td>${fmt(r.cloro_attivo_libero," ppm")}</td>
+              <td>${fmt(r.cloro_attivo_combinato," ppm")}</td>
+              <td>${fmt(r.ph,"")}</td>
+              <td>${fmt(r.temp_acqua," °C")}</td>
+              <td>${String(r.origine||"").slice(0,24)}</td>
+            </tr>`;
+          }).join("")}
+          </tbody>
+        </table>
+      </div>
+    </div>
+    <script>setTimeout(()=>{ try{ window.focus(); }catch(e){} }, 100);</script>
+  </body></html>`;
+
+  const w = window.open("", "_blank");
+  if (!w){ toast("Popup bloccato: abilita finestre per stampare"); return; }
+  try{
+    w.document.open();
+    w.document.write(html);
+    w.document.close();
+    setTimeout(()=>{ try{ w.focus(); w.print(); }catch(e){} }, 450);
+  }catch(_){ try{ w.close(); }catch(__){} }
+}
+
+async function piscinaCreateReportForDay(dayKey, { origine="auto19" } = {}){
+  const s = piscinaEnsureState();
+  if (piscinaGetRowByDayKey(dayKey)) return false;
+
+  const d = new Date(dayKey + "T00:00:00");
+  if (isNaN(d)) return false;
+
+  const ts = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 19, 0, 0, 0).toISOString();
+
+  const sim = piscinaSimulateForDay(d);
+  const payload = {
+    id: genId("piscina"),
+    timestamp_report: ts,
+    origine,
+    cloro_attivo_libero: sim.cloro_attivo_libero,
+    cloro_attivo_combinato: sim.cloro_attivo_combinato,
+    ph: sim.ph,
+    temp_acqua: sim.temp_acqua,
+    createdAt: new Date().toISOString(),
+    updatedAt: new Date().toISOString(),
+  };
+
+  await api(PISCINA_ACTION, { method:"POST", body: payload, showLoader:false });
+
+  // aggiorna cache locale
+  s.rows = Array.isArray(s.rows) ? s.rows : [];
+  s.rows.push(Object.assign({}, payload));
+  s.fetchedAt = Date.now();
+  piscinaIndexRows();
+  return true;
+}
+
+async function piscinaEnsureDailyReports(){
+  if (!state?.session?.user_id) return;
+  await loadPiscinaAll({ force:false, showLoader:false });
+
+  const now = new Date();
+  const nowDayKey = __isoDayLocal(now);
+  const canIncludeToday = (now.getHours() > 19) || (now.getHours() === 19 && now.getMinutes() >= 0);
+
+  const viewMonth = new Date(now.getFullYear(), now.getMonth(), 1);
+  const y = viewMonth.getFullYear();
+  const m = viewMonth.getMonth();
+  const last = new Date(y, m+1, 0);
+  const days = last.getDate();
+
+  for (let d=1; d<=days; d++){
+    const dayKey = __isoDayLocal(new Date(y,m,d));
+    // solo giorni passati + oggi dopo le 19
+    if (dayKey > nowDayKey) continue;
+    if (dayKey === nowDayKey && !canIncludeToday) continue;
+    if (!piscinaGetRowByDayKey(dayKey)){
+      try{ await piscinaCreateReportForDay(dayKey, { origine:"auto19" }); }catch(_){}
+    }
+  }
+
+  if (state.page === "statpiscina") {
+    try{ renderPiscinaCalendar(); }catch(_){}
+  }
+}
+
+async function piscinaBackfillCurrentMonth(){
+  if (!state?.session?.user_id) return;
+  await loadPiscinaAll({ force:false, showLoader:true });
+
+  const viewMonth = piscinaGetViewMonth();
+  const y = viewMonth.getFullYear();
+  const m = viewMonth.getMonth();
+  const last = new Date(y, m+1, 0);
+  const days = last.getDate();
+
+  const now = new Date();
+  const nowDayKey = __isoDayLocal(now);
+  const isCurrentMonth = (y === now.getFullYear() && m === now.getMonth());
+
+  for (let d=1; d<=days; d++){
+    const dayKey = __isoDayLocal(new Date(y,m,d));
+    if (isCurrentMonth && dayKey > nowDayKey) break;
+    if (!piscinaGetRowByDayKey(dayKey)){
+      await piscinaCreateReportForDay(dayKey, { origine:"backfill" });
+    }
+  }
+
+  if (state.page === "statpiscina") {
+    renderPiscinaCalendar();
+  }
+  toast("Report mese aggiornati");
+}
+
+function setupPiscina(){
+  // default: mese corrente
+  try{ piscinaSetViewMonth(new Date()); }catch(_){}
+
+  const prev = document.getElementById("piscinaPrevMonth");
+  const next = document.getElementById("piscinaNextMonth");
+  const grid = document.getElementById("piscinaGrid");
+  const close = document.getElementById("piscinaModalClose");
+  const modal = document.getElementById("piscinaModal");
+  const printBtn = document.getElementById("piscinaPrintBtn");
+
+  if (prev) bindFastTap(prev, ()=>{ const vm = piscinaGetViewMonth(); piscinaSetViewMonth(new Date(vm.getFullYear(), vm.getMonth()-1, 1)); renderPiscinaCalendar(); });
+  if (next) bindFastTap(next, ()=>{ const vm = piscinaGetViewMonth(); piscinaSetViewMonth(new Date(vm.getFullYear(), vm.getMonth()+1, 1)); renderPiscinaCalendar(); });
+
+  if (grid){
+    grid.addEventListener("click", (e)=>{
+      const cell = e.target && e.target.closest ? e.target.closest(".piscina-cell") : null;
+      if (!cell || cell.hasAttribute("disabled")) return;
+      const dayKey = String(cell.dataset.date||"").trim();
+      if (!dayKey) return;
+      piscinaOpenModal(dayKey);
+    });
+  }
+
+  if (close) bindFastTap(close, ()=>piscinaCloseModal());
+  if (modal){
+    modal.addEventListener("click", (e)=>{ if (e.target === modal) piscinaCloseModal(); });
+  }
+  if (printBtn) bindFastTap(printBtn, ()=>piscinaPrintCurrentMonth());
+
+  // scheduler robusto: quando l'app è aperta o torna attiva
+  try{
+    const tick = ()=>{ try{ piscinaEnsureDailyReports(); }catch(_){ } };
+    setTimeout(tick, 350);
+    window.addEventListener("focus", tick);
+    document.addEventListener("visibilitychange", ()=>{ if (!document.hidden) tick(); });
+    // ogni 5 minuti (leggero)
+    setInterval(tick, 5*60*1000);
+  }catch(_){}
+}
+
 async function init(){
   // Perf mode: deve girare DOPO che body esiste e DOPO init delle costanti
   applyPerfMode();
@@ -7781,6 +8321,7 @@ async function init(){
   try{ applyRoleMode(); }catch(_){ }
   setupCalendario();
   setupImpostazioni();
+setupPiscina();
 setupProdotti();
 // Avvio: prima cosa dopo il bootstrap UI (utente autenticato) è controllare entrambe le liste spesa
 try{
@@ -8621,7 +9162,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.146) =====
+// ===== CALENDARIO (dDAE_2.147) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -9076,7 +9617,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.146)
+   Lavanderia (dDAE_2.147)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -9472,7 +10013,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.146: renderSpese allineato al backend ---
+// --- FIX dDAE_2.147: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -9568,7 +10109,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.146: delete reale ospiti ---
+// --- FIX dDAE_2.147: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -9604,7 +10145,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.146: mostra nome ospite ---
+// --- FIX dDAE_2.147: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -9888,7 +10429,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.146
+   Build: dDAE_2.147
 ========================= */
 
 state.orepulizia = state.orepulizia || {
