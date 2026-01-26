@@ -3,7 +3,174 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.139";
+const BUILD_VERSION = "dDAE_2.140";
+
+/* Audio SFX (iOS-friendly, no assets) */
+const AUDIO_PREF_KEY = "ddae_audio_enabled";
+let __audioEnabled = false;
+let __audioCtx = null;
+
+function __loadAudioPref(){
+  try{ __audioEnabled = (localStorage.getItem(AUDIO_PREF_KEY) === "1"); }
+  catch(_){ __audioEnabled = false; }
+}
+function __setAudioPref(v){
+  __audioEnabled = !!v;
+  try{ localStorage.setItem(AUDIO_PREF_KEY, __audioEnabled ? "1" : "0"); }catch(_){}
+  try{
+    const t = document.getElementById("audioToggle");
+    if (t) t.checked = __audioEnabled;
+  }catch(_){}
+}
+function __ensureAudioCtx(){
+  try{
+    const AC = window.AudioContext || window.webkitAudioContext;
+    if (!AC) return null;
+    if (!__audioCtx) __audioCtx = new AC();
+    if (__audioCtx && __audioCtx.state === "suspended"){
+      __audioCtx.resume().catch(()=>{});
+    }
+    return __audioCtx;
+  }catch(_){ return null; }
+}
+function __sfxTap(){
+  if (!__audioEnabled) return;
+  const ctx = __ensureAudioCtx();
+  if (!ctx) return;
+  try{
+    const t = ctx.currentTime;
+    const o = ctx.createOscillator();
+    const g = ctx.createGain();
+    o.type = "square";
+    o.frequency.setValueAtTime(880, t);
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.08, t + 0.005);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.06);
+    o.connect(g);
+    g.connect(ctx.destination);
+    o.start(t);
+    o.stop(t + 0.07);
+  }catch(_){}
+}
+function __sfxGlass(){
+  if (!__audioEnabled) return;
+  const ctx = __ensureAudioCtx();
+  if (!ctx) return;
+  try{
+    const sr = ctx.sampleRate || 44100;
+    const dur = 0.22;
+    const buf = ctx.createBuffer(1, Math.max(1, (sr * dur)|0), sr);
+    const ch = buf.getChannelData(0);
+    for (let i=0;i<ch.length;i++){
+      // noise with fast decay (pseudo "shatter")
+      ch[i] = (Math.random()*2-1) * Math.pow(1 - i/ch.length, 2);
+    }
+    const src = ctx.createBufferSource();
+    src.buffer = buf;
+
+    const hp = ctx.createBiquadFilter();
+    hp.type = "highpass";
+    hp.frequency.setValueAtTime(700, ctx.currentTime);
+
+    const bp = ctx.createBiquadFilter();
+    bp.type = "bandpass";
+    bp.frequency.setValueAtTime(2400, ctx.currentTime);
+    bp.Q.setValueAtTime(1.2, ctx.currentTime);
+
+    const g = ctx.createGain();
+    const t = ctx.currentTime;
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.22, t + 0.01);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + dur);
+
+    src.connect(hp);
+    hp.connect(bp);
+    bp.connect(g);
+    g.connect(ctx.destination);
+
+    src.start(t);
+    src.stop(t + dur);
+  }catch(_){}
+}
+function __sfxSave(){
+  if (!__audioEnabled) return;
+  const ctx = __ensureAudioCtx();
+  if (!ctx) return;
+  try{
+    const t = ctx.currentTime;
+    const o1 = ctx.createOscillator();
+    const o2 = ctx.createOscillator();
+    const g = ctx.createGain();
+
+    o1.type = "sine";
+    o2.type = "triangle";
+    o1.frequency.setValueAtTime(180, t);
+    o2.frequency.setValueAtTime(90, t);
+
+    g.gain.setValueAtTime(0.0001, t);
+    g.gain.exponentialRampToValueAtTime(0.18, t + 0.03);
+    g.gain.exponentialRampToValueAtTime(0.0001, t + 0.55);
+
+    o1.connect(g);
+    o2.connect(g);
+    g.connect(ctx.destination);
+
+    o1.start(t);
+    o2.start(t);
+    o1.stop(t + 0.6);
+    o2.stop(t + 0.6);
+  }catch(_){}
+}
+
+function setupAudioUI(){
+  __loadAudioPref();
+
+  // Aggancia toggle in Impostazioni (se presente)
+  try{
+    const t = document.getElementById("audioToggle");
+    if (t){
+      t.checked = __audioEnabled;
+      t.addEventListener("change", () => {
+        __ensureAudioCtx(); // unlock su gesto utente
+        __setAudioPref(!!t.checked);
+        if (__audioEnabled) __sfxTap();
+      }, { passive:true });
+    }
+  }catch(_){}
+
+  // iOS: sblocca/resume AudioContext sul primo gesto (anche senza suono)
+  const unlock = () => { try{ if (__audioEnabled) __ensureAudioCtx(); }catch(_){ } };
+  try{ document.addEventListener("pointerdown", unlock, { capture:true, passive:true }); }catch(_){}
+  try{ document.addEventListener("touchstart", unlock, { capture:true, passive:true }); }catch(_){}
+
+  // Tap SFX: click su bottoni/icone e focus su input
+  try{
+    document.addEventListener("click", (e) => {
+      if (!__audioEnabled) return;
+      try{
+        const t = e.target;
+        if (!t) return;
+        if (t.closest && t.closest("button, a, .icon-btn, [role='button']")) { __sfxTap(); return; }
+        if (t.closest && t.closest("input, textarea, select, label")) { __sfxTap(); return; }
+      }catch(_){}
+    }, true);
+  }catch(_){}
+
+  try{
+    let __lastFocusTapAt = 0;
+    document.addEventListener("focusin", (e) => {
+      if (!__audioEnabled) return;
+      const now = Date.now();
+      if (now - __lastFocusTapAt < 120) return;
+      __lastFocusTapAt = now;
+      try{
+        const t = e.target;
+        if (t && t.matches && t.matches("input, textarea, select")) __sfxTap();
+      }catch(_){}
+    }, true);
+  }catch(_){}
+}
+
 
 // Ruoli: "user" (default) | "operatore"
 function isOperatoreSession(sess){
@@ -60,7 +227,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.139)
+// AUTH + SESSION (dDAE_2.140)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -511,7 +678,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.139 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.140 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2278,7 +2445,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.139 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.140 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2317,6 +2484,7 @@ function bindGuestTapCounters(){
       try{ e.stopPropagation(); }catch(_){}
       t = setTimeout(()=>{
         longFired = true;
+        try{ __sfxGlass(); }catch(_){ }
         setVal(el, 0);
       }, 500);
     };
@@ -2738,7 +2906,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.139: fallback visualizzazione Pulizie
+  // dDAE_2.140: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3705,7 +3873,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.139)
+// STATISTICHE (dDAE_2.140)
 // =========================
 
 function computeStatGen(){
@@ -5391,7 +5559,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.139 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.140 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -5712,11 +5880,13 @@ if (!name) return toast("Inserisci il nome");
     try{
       loadOspiti({ ...(state.period || {}), force:true }).catch(e => toast(e.message));
     }catch(_){ }
-    toast(isEdit ? "Modifiche salvate" : "Ospite creato");
+    try{ __sfxSave(); }catch(_){ }
+  toast(isEdit ? "Modifiche salvate" : "Ospite creato");
     return;
   }
 
   await loadOspiti({ ...(state.period || {}), force:true });
+  try{ __sfxSave(); }catch(_){ }
   toast(isEdit ? "Modifiche salvate" : "Ospite creato");
 
   // Dopo salvataggio: torna sempre alla lista ospiti
@@ -5843,7 +6013,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.139: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.140: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -7301,6 +7471,7 @@ function setupColazione(){
     delTargetId = id;
     delTimer = setTimeout(() => {
       delFired = true;
+      try{ __sfxGlass(); }catch(_){ }
       patchItem(id, { isDeleted: 1, qty: 0, checked: 0, saved: 0 }, { showLoader:true }).catch(()=>{});
     }, 2000);
   };
@@ -7427,6 +7598,7 @@ function refreshFloatingLabels(){
 async function init(){
   // Perf mode: deve girare DOPO che body esiste e DOPO init delle costanti
   applyPerfMode();
+  try{ setupAudioUI(); }catch(_){ }
   const __restore = __readRestoreState();
   // Session + anno
   state.session = loadSession();
@@ -7760,7 +7932,7 @@ try{
       longFired = false;
     };
 
-    const onLong = () => { el.classList.remove("is-saved"); writeHourDot(el, 0); scheduleHoursSave(); };
+    const onLong = () => { try{ __sfxGlass(); }catch(_){ } el.classList.remove("is-saved"); writeHourDot(el, 0); scheduleHoursSave(); };
     const onTap = () => { el.classList.remove("is-saved"); writeHourDot(el, readHourDot(el) + 1); scheduleHoursSave(); };
 
     el.addEventListener("touchstart", (e) => {
@@ -8022,6 +8194,7 @@ const buildPuliziePayload = () => {
     pressTarget = slot;
     pressTimer = setTimeout(() => {
       longFired = true;
+      try{ __sfxGlass(); }catch(_){ }
       slot.classList.remove("is-saved");
       writeCell(slot, 0);
       scheduleLaundrySave();
@@ -8209,7 +8382,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.139) =====
+// ===== CALENDARIO (dDAE_2.140) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -8664,7 +8837,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.139)
+   Lavanderia (dDAE_2.140)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -9060,7 +9233,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.139: renderSpese allineato al backend ---
+// --- FIX dDAE_2.140: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -9156,7 +9329,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.139: delete reale ospiti ---
+// --- FIX dDAE_2.140: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -9191,7 +9364,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.139: mostra nome ospite ---
+// --- FIX dDAE_2.140: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -9445,7 +9618,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.139
+   Build: dDAE_2.140
 ========================= */
 
 state.orepulizia = state.orepulizia || {
