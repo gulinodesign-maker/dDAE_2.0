@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.141";
+const BUILD_VERSION = "dDAE_2.142";
 
 /* Audio SFX (iOS-friendly, no assets) */
 const AUDIO_PREF_KEY = "ddae_audio_enabled";
@@ -244,7 +244,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.141)
+// AUTH + SESSION (dDAE_2.142)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -695,7 +695,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.141 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.142 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2463,7 +2463,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.141 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.142 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2924,7 +2924,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.141: fallback visualizzazione Pulizie
+  // dDAE_2.142: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3891,7 +3891,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.141)
+// STATISTICHE (dDAE_2.142)
 // =========================
 
 function computeStatGen(){
@@ -5577,7 +5577,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.141 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.142 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -6031,7 +6031,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.141: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.142: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -7331,6 +7331,91 @@ function setupProdotti(){
   };
 
   // Event delegation: qty / check
+
+  // Qty dot: tap cycle (draft), long-press (0.5s) reset to empty + "carta stropicciata"
+  let prodQtyTimer = null;
+  let prodQtyTargetId = null;
+  let prodQtyLongFired = false;
+  let prodLastQtyTouch = 0;
+
+  const clearProdQtyPress = () => {
+    if (prodQtyTimer){ clearTimeout(prodQtyTimer); prodQtyTimer = null; }
+    prodQtyTargetId = null;
+    prodQtyLongFired = false;
+  };
+
+  const getProdBaseQty = (id) => {
+    const it = findItem(id);
+    const draftQty = __prodDraftGetQty_(id);
+    if (draftQty !== null) {
+      const n = parseInt(String(draftQty ?? 0), 10);
+      return isNaN(n) ? 0 : Math.max(0, n);
+    }
+    const n = parseInt(String(it?.qty ?? 0), 10);
+    return isNaN(n) ? 0 : Math.max(0, n);
+  };
+
+  const cycleProdQty = (id) => {
+    const base = getProdBaseQty(id);
+    const next = (base >= 9) ? 0 : (base + 1);
+    __prodDraftSetQty_(id, next);
+    renderProdotti();
+  };
+
+  const startProdQtyPress = (id) => {
+    clearProdQtyPress();
+    prodQtyTargetId = id;
+    prodQtyTimer = setTimeout(() => {
+      prodQtyLongFired = true;
+      // Long press: gesto distinto (non deve attivare anche il tap)
+      // Se il pallino è pieno: svuota e suona "carta stropicciata"
+      const base = getProdBaseQty(id);
+      if (base > 0){
+        try{ __sfxGlass(); }catch(_){ }
+        __prodDraftSetQty_(id, 0);
+        renderProdotti();
+      }
+    }, 500);
+  };
+
+  // Delegation (touch): long-press su qtydot
+  list.addEventListener("touchstart", (e) => {
+    const row = e.target.closest && e.target.closest(".colazione-item");
+    if (!row) return;
+    const id = String(row.dataset.id || "");
+    if (!id) return;
+
+    if (e.target.closest && e.target.closest(".colazione-qtydot")) {
+      prodLastQtyTouch = Date.now();
+      startProdQtyPress(id);
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+  }, { passive:false, capture:true });
+
+  list.addEventListener("touchend", (e) => {
+    const row = e.target.closest && e.target.closest(".colazione-item");
+    if (!row) return;
+    const id = String(row.dataset.id || "");
+    if (!id) return;
+
+    if (e.target.closest && e.target.closest(".colazione-qtydot")) {
+      if (prodQtyTimer){ clearTimeout(prodQtyTimer); prodQtyTimer = null; }
+      if (!prodQtyLongFired) cycleProdQty(id);
+      clearProdQtyPress();
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
+  }, { passive:false, capture:true });
+
+  list.addEventListener("touchcancel", (e) => {
+    clearProdQtyPress();
+    try{ e.preventDefault(); e.stopPropagation(); }catch(_){ }
+  }, { passive:false, capture:true });
+
+
   list.addEventListener("click", (e) => {
     const t = e.target;
     const qtyBtn = t && t.closest ? t.closest(".colazione-qtydot") : null;
@@ -7341,6 +7426,7 @@ function setupProdotti(){
 
     // qty: ciclo 0->1->2..->9->0 (draft)
     if (qtyBtn){
+      if (Date.now() - prodLastQtyTouch < 450) { e.preventDefault(); e.stopPropagation(); return; }
       e.preventDefault();
       const it = findItem(id);
       const base = (()=>{
@@ -8406,7 +8492,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.141) =====
+// ===== CALENDARIO (dDAE_2.142) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -8861,7 +8947,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.141)
+   Lavanderia (dDAE_2.142)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -9257,7 +9343,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.141: renderSpese allineato al backend ---
+// --- FIX dDAE_2.142: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -9353,7 +9439,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.141: delete reale ospiti ---
+// --- FIX dDAE_2.142: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -9389,7 +9475,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.141: mostra nome ospite ---
+// --- FIX dDAE_2.142: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -9643,7 +9729,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.141
+   Build: dDAE_2.142
 ========================= */
 
 state.orepulizia = state.orepulizia || {
