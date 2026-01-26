@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.155";
+const BUILD_VERSION = "dDAE_2.156";
 
 /* Audio SFX (iOS-friendly, no assets) */
 const AUDIO_PREF_KEY = "ddae_audio_enabled";
@@ -9259,6 +9259,36 @@ function __calMonthGridStart(anchor){
   first.setHours(0,0,0,0);
   return startOfWeekMonday(first);
 }
+
+function __calApplyLandscapeMonthSizing(){
+  try{
+    const page = document.getElementById("page-calendario");
+    const wrap = page ? page.querySelector(".cal-grid-wrap") : null;
+    const grid = document.getElementById("calGrid");
+    if (!page || !wrap || !grid) return;
+
+    const isLand = __calIsLandscape();
+    const mode = (state.calendar && state.calendar.view) ? state.calendar.view : __calViewMode();
+
+    if (!(isLand && mode === "month")){
+      try{ wrap.style.height = ""; wrap.style.maxHeight = ""; }catch(_){}
+      try{ grid.style.height = ""; grid.style.gridTemplateRows = ""; grid.style.gridAutoRows = ""; }catch(_){}
+      return;
+    }
+
+    const rect = wrap.getBoundingClientRect();
+    const vh = (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight;
+    const avail = Math.max(140, Math.floor(vh - rect.top - 10));
+
+    try{ wrap.style.height = avail + "px"; wrap.style.maxHeight = avail + "px"; }catch(_){}
+    try{
+      grid.style.height = "100%";
+      grid.style.gridTemplateRows = "repeat(7, minmax(0, 1fr))";
+      grid.style.gridAutoRows = "1fr";
+    }catch(_){}
+  }catch(_){}
+}
+
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -9470,6 +9500,14 @@ function renderCalendario(){
   }else{
     renderCalendarioWeek();
   }
+
+  try{
+    if (mode === "month"){
+      try{ requestAnimationFrame(() => { try{ __calApplyLandscapeMonthSizing(); }catch(_){ } }); }catch(_){ try{ __calApplyLandscapeMonthSizing(); }catch(__){} }
+    }else{
+      try{ __calApplyLandscapeMonthSizing(); }catch(_){ }
+    }
+  }catch(_){ }
 }
 
 function renderCalendarioMonth(){

@@ -6962,11 +6962,12 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   #page-calendario .cal-body{
     display:flex;
     flex-direction:column;
-    height: calc(100dvh - 140px);
-    height: calc(100vh - 140px);
+    /* altezza gestita dinamicamente via JS per evitare bug iOS in landscape */
+    min-height: 0;
   }
   #page-calendario .cal-grid-wrap{
     flex:1;
+    min-height:0;
     overflow:hidden;
     padding: 0 5px 6px;
   }
