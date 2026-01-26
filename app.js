@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.145";
+const BUILD_VERSION = "dDAE_2.146";
 
 /* Audio SFX (iOS-friendly, no assets) */
 const AUDIO_PREF_KEY = "ddae_audio_enabled";
@@ -244,7 +244,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.145)
+// AUTH + SESSION (dDAE_2.146)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -695,7 +695,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.145 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.146 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -908,6 +908,64 @@ function toast(msg, kind){
     t.dataset.kind = "";
   }, 1700);
 }
+
+// Conferma con modal Sì/No (label esplicite)
+let __confirmYesNoResolve = null;
+function confirmYesNo(message){
+  return new Promise((resolve)=>{
+    try{
+      const modal = document.getElementById("confirmYesNoModal");
+      const textEl = document.getElementById("confirmYesNoText");
+      const yesBtn = document.getElementById("confirmYesNoYes");
+      const noBtn  = document.getElementById("confirmYesNoNo");
+      if (!modal || !textEl || !yesBtn || !noBtn){
+        // fallback
+        try{ resolve(!!confirm(String(message || "Confermare?"))); }catch(_){ resolve(false); }
+        return;
+      }
+
+      // chiude eventuale precedente
+      try{ if (__confirmYesNoResolve){ __confirmYesNoResolve(false); } }catch(_){ }
+      __confirmYesNoResolve = resolve;
+
+      textEl.textContent = String(message || "Confermare?");
+      modal.hidden = false;
+      try{ modal.setAttribute("aria-hidden", "false"); }catch(_){ }
+
+      const cleanup = (val) => {
+        if (__confirmYesNoResolve){
+          const r = __confirmYesNoResolve;
+          __confirmYesNoResolve = null;
+          try{ r(!!val); }catch(_){ }
+        }
+        try{ modal.hidden = true; }catch(_){ }
+        try{ modal.setAttribute("aria-hidden", "true"); }catch(_){ }
+        try{ yesBtn.removeEventListener("click", onYes, true); }catch(_){ }
+        try{ noBtn.removeEventListener("click", onNo, true); }catch(_){ }
+        try{ modal.removeEventListener("click", onBackdrop, true); }catch(_){ }
+      };
+
+      const onYes = (e) => { try{ e.preventDefault(); e.stopPropagation(); }catch(_){ } cleanup(true); };
+      const onNo  = (e) => { try{ e.preventDefault(); e.stopPropagation(); }catch(_){ } cleanup(false); };
+      const onBackdrop = (e) => {
+        try{
+          if (e && e.target === modal){ cleanup(false); }
+        }catch(_){ }
+      };
+
+      yesBtn.addEventListener("click", onYes, true);
+      noBtn.addEventListener("click", onNo, true);
+      modal.addEventListener("click", onBackdrop, true);
+
+      // focus sul "No" per sicurezza (evita reset accidentale)
+      try{ noBtn.focus(); }catch(_){ }
+
+    }catch(_){
+      try{ resolve(false); }catch(__){}
+    }
+  });
+}
+
 
 function todayISO(){
   const d = new Date();
@@ -2463,7 +2521,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.145 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.146 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2924,7 +2982,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.145: fallback visualizzazione Pulizie
+  // dDAE_2.146: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3891,7 +3949,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.145)
+// STATISTICHE (dDAE_2.146)
 // =========================
 
 function computeStatGen(){
@@ -5577,7 +5635,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.145 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.146 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -6031,7 +6089,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.145: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.146: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -7821,6 +7879,7 @@ try{
 
   const cleanResetLaundry = document.getElementById("cleanResetLaundry");
   const cleanResetHours = document.getElementById("cleanResetHours");
+  const cleanResetAll = document.getElementById("cleanResetAll");
 
   // --- Autosave (debounce 1s): Pulizie (biancheria) + Ore operatori ---
   let __laundrySaveT = null;
@@ -8444,6 +8503,49 @@ if (cleanResetHours){
 }
 
 
+// Reset TUTTO (Pulizie + Ore) dalla cella corner (con conferma Sì/No)
+if (cleanResetAll){
+  const doResetAllPulizie = async () => {
+    const ok = await confirmYesNo("Resettare tutto?");
+    if (!ok) return;
+
+    try{
+      // azzera tutte le celle biancheria (griglia pulizie)
+      document.querySelectorAll(".clean-grid .cell.slot").forEach(el => {
+        try{ el.classList.remove("is-saved"); }catch(_){ }
+        try{ writeCell(el, 0); }catch(_){ }
+      });
+
+      // azzera tutti i pallini ore (solo operatori visibili)
+      try{
+        (opEls||[]).forEach(r => {
+          try{ r.hours.classList.remove("is-saved"); }catch(_){ }
+          try{ writeHourDot(r.hours, 0); }catch(_){ }
+        });
+      }catch(_){ }
+
+      // salva immediatamente (prima biancheria, poi ore)
+      await saveLaundryNow();
+      await saveHoursNow();
+    }catch(err){
+      try{ toast(String(err && err.message || "Errore reset pulizie"), "orange"); }catch(_){ }
+    }
+  };
+
+  bindFastTap(cleanResetAll, doResetAllPulizie);
+
+  // supporto tastiera (Enter/Space)
+  try{
+    cleanResetAll.addEventListener("keydown", (e) => {
+      const k = (e && e.key) ? e.key : "";
+      if (k === "Enter" || k === " "){
+        try{ e.preventDefault(); e.stopPropagation(); }catch(_){ }
+        try{ doResetAllPulizie(); }catch(_){ }
+      }
+    }, true);
+  }catch(_){ }
+}
+
   const updateCleanLabel = () => {
     const lab = document.getElementById("cleanDateLabel");
     if (!lab) return;
@@ -8519,7 +8621,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.145) =====
+// ===== CALENDARIO (dDAE_2.146) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -8974,7 +9076,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.145)
+   Lavanderia (dDAE_2.146)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -9370,7 +9472,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.145: renderSpese allineato al backend ---
+// --- FIX dDAE_2.146: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -9466,7 +9568,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.145: delete reale ospiti ---
+// --- FIX dDAE_2.146: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -9502,7 +9604,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.145: mostra nome ospite ---
+// --- FIX dDAE_2.146: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -9786,7 +9888,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.145
+   Build: dDAE_2.146
 ========================= */
 
 state.orepulizia = state.orepulizia || {
