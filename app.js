@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.147";
+const BUILD_VERSION = "dDAE_2.148";
 
 /* Audio SFX (iOS-friendly, no assets) */
 const AUDIO_PREF_KEY = "ddae_audio_enabled";
@@ -244,7 +244,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.147)
+// AUTH + SESSION (dDAE_2.148)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -695,7 +695,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.147 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.148 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2521,7 +2521,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.147 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.148 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2701,6 +2701,51 @@ function setSpeseView(view, { render=false } = {}){
 }
 
 /* NAV pages (5 pagine interne: home + 4 funzioni) */
+
+
+// dDAE_2.148 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
+// Applichiamo una classe .is-light ai pulsanti con background chiaro, così CSS forza icone scure.
+function __parseRGBA__(s){
+  try{
+    const m = String(s||"").match(/rgba?\(([^)]+)\)/i);
+    if (!m) return null;
+    const parts = m[1].split(",").map(x=>x.trim());
+    const r = parseFloat(parts[0]);
+    const g = parseFloat(parts[1]);
+    const b = parseFloat(parts[2]);
+    let a = null;
+    if (parts.length > 3) a = parseFloat(parts[3]);
+    return {
+      r: (isFinite(r) ? r : 0),
+      g: (isFinite(g) ? g : 0),
+      b: (isFinite(b) ? b : 0),
+      a: (a != null && isFinite(a) ? a : null),
+    };
+  }catch(_){ return null; }
+}
+
+function ensureTopbarIconContrast(){
+  try{
+    const btns = document.querySelectorAll('.topbar .icon-btn');
+    btns.forEach((btn)=>{
+      if (!btn || btn.hidden) return;
+      const cs = getComputedStyle(btn);
+      const bg = cs.backgroundColor || '';
+      const rgba = __parseRGBA__(bg);
+      let isLight = false;
+      if (!rgba){
+        // con backdrop/trasparenza Safari può dare valori inattesi: trattiamo come "chiaro" (glass)
+        isLight = true;
+      } else {
+        const r = rgba.r, g = rgba.g, b = rgba.b;
+        const a = (rgba.a == null ? 1 : rgba.a);
+        const lum = 0.2126*r + 0.7152*g + 0.0722*b;
+        isLight = (lum >= 210) || (a <= 0.25);
+      }
+      btn.classList.toggle('is-light', !!isLight);
+    });
+  }catch(_){ }
+}
 function showPage(page){
   // Back-compat: vecchia pagina "colazione" ora è "prodotti"
   if (page === "colazione") page = "prodotti";
@@ -2882,6 +2927,8 @@ state.page = page;
     statPiscinaTopTools.hidden = (page !== "statpiscina");
   }
 
+  try{ ensureTopbarIconContrast(); }catch(_){ }
+
 // render on demand
   if (page === "prodotti") {
     const _nav = navId;
@@ -2998,7 +3045,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.147: fallback visualizzazione Pulizie
+  // dDAE_2.148: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3972,7 +4019,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.147)
+// STATISTICHE (dDAE_2.148)
 // =========================
 
 function computeStatGen(){
@@ -5658,7 +5705,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.147 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.148 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -6112,7 +6159,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.147: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.148: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -7785,7 +7832,7 @@ function refreshFloatingLabels(){
 
 
 /* =========================
-   Piscina (dDAE_2.147)
+   Piscina (dDAE_2.148)
 ========================= */
 const PISCINA_ACTION = "piscina";
 
@@ -9162,7 +9209,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.147) =====
+// ===== CALENDARIO (dDAE_2.148) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -9617,7 +9664,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.147)
+   Lavanderia (dDAE_2.148)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -10013,7 +10060,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.147: renderSpese allineato al backend ---
+// --- FIX dDAE_2.148: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -10109,7 +10156,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.147: delete reale ospiti ---
+// --- FIX dDAE_2.148: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -10145,7 +10192,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.147: mostra nome ospite ---
+// --- FIX dDAE_2.148: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -10429,7 +10476,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.147
+   Build: dDAE_2.148
 ========================= */
 
 state.orepulizia = state.orepulizia || {
