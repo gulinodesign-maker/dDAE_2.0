@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.156";
+const BUILD_VERSION = "dDAE_2.157";
 
 /* Audio SFX (iOS-friendly, no assets) */
 const AUDIO_PREF_KEY = "ddae_audio_enabled";
@@ -9424,14 +9424,19 @@ function setupCalendario(){
               try{ state.calendar.ready = false; }catch(_){}
               try{ await ensureCalendarData({ force:false, showLoader:false }); }catch(_){}
             }
-            if (state.page === "calendario"){
-              try{ renderCalendario(); }catch(_){}
-            }
+            try{ renderCalendario(); }catch(_){}
+            try{ setTimeout(() => { try{ renderCalendario(); }catch(__){} }, 250); }catch(_){}
           }catch(_){}
         }, 50);
       };
       window.addEventListener("orientationchange", onViewport, { passive:true });
       window.addEventListener("resize", onViewport, { passive:true });
+      try{
+        if (window.visualViewport){
+          window.visualViewport.addEventListener("resize", onViewport, { passive:true });
+          window.visualViewport.addEventListener("scroll", onViewport, { passive:true });
+        }
+      }catch(_){ }
       // Stato iniziale
       try{ state.calendar.view = __calViewMode(); }catch(_){}
     }
