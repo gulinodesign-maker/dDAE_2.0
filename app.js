@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.152";
+const BUILD_VERSION = "dDAE_2.153";
 
 /* Audio SFX (iOS-friendly, no assets) */
 const AUDIO_PREF_KEY = "ddae_audio_enabled";
@@ -244,7 +244,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.152)
+// AUTH + SESSION (dDAE_2.153)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -695,7 +695,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.152 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.153 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2521,7 +2521,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.152 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.153 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2703,7 +2703,7 @@ function setSpeseView(view, { render=false } = {}){
 /* NAV pages (5 pagine interne: home + 4 funzioni) */
 
 
-// dDAE_2.152 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
+// dDAE_2.153 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
 // Applichiamo una classe .is-light ai pulsanti con background chiaro, così CSS forza icone scure.
 function __parseRGBA__(s){
   try{
@@ -3047,7 +3047,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.152: fallback visualizzazione Pulizie
+  // dDAE_2.153: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -4022,7 +4022,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.152)
+// STATISTICHE (dDAE_2.153)
 // =========================
 
 function computeStatGen(){
@@ -5708,7 +5708,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.152 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.153 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -6162,7 +6162,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.152: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.153: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -7835,7 +7835,7 @@ function refreshFloatingLabels(){
 
 
 /* =========================
-   Piscina (dDAE_2.152)
+   Piscina (dDAE_2.153)
 ========================= */
 const PISCINA_ACTION = "piscina";
 
@@ -8134,7 +8134,7 @@ function piscinaPrintCurrentMonth(){
   };
 
   const spark = (arr)=>{
-    const w=260, h=46, pad=4;
+    const w=228, h=36, pad=4;
     const mm=minmax(arr);
     const span = (mm.max-mm.min) || 1;
     let pts=[];
@@ -8147,8 +8147,8 @@ function piscinaPrintCurrentMonth(){
       pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
     }
     return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">
-      <rect x="0" y="0" width="${w}" height="${h}" rx="10" ry="10" fill="rgba(255,255,255,0.6)" stroke="rgba(15,23,42,0.10)"/>
-      <polyline points="${pts.join(" ")}" fill="none" stroke="rgba(15,23,42,0.85)" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+      <rect x="0" y="0" width="${w}" height="${h}" rx="10" ry="10" fill="rgba(255,255,255,0.92)" stroke="rgba(15,23,42,0.10)"/>
+      <polyline points="${pts.join(" ")}" fill="none" stroke="#2B7CB4" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
     </svg>`;
   };
 
@@ -8162,19 +8162,35 @@ function piscinaPrintCurrentMonth(){
   <html lang="it"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/>
   <title>Report Piscina - ${monthTitle}</title>
   <style>
-    body{ font-family: -apple-system,BlinkMacSystemFont,system-ui,Segoe UI,Roboto,Helvetica,Arial; margin: 18px; color: #0f172a; }
-    h1{ font-size: 18px; margin:0 0 8px 0; }
-    .sub{ font-size: 12px; color: rgba(15,23,42,0.70); margin-bottom: 14px; }
-    .grid{ display:flex; flex-direction:column; gap: 12px; }
-    .card{ border: 1px solid rgba(15,23,42,0.10); border-radius: 14px; padding: 12px; background: rgba(255,255,255,0.65); }
-    .row{ display:flex; justify-content:space-between; gap: 10px; margin: 6px 0; font-size: 12px; }
+    :root{
+      --blue:#2B7CB4;
+      --orange:#C9772B;
+      --text:#0f172a;
+      --border: rgba(15,23,42,0.10);
+      --muted: rgba(15,23,42,0.70);
+      --card: rgba(255,255,255,0.92);
+      --headbg: rgba(43,124,180,0.12);
+    }
+    *{ box-sizing:border-box; }
+    body{ font-family: -apple-system,BlinkMacSystemFont,system-ui,Segoe UI,Roboto,Helvetica,Arial; margin: 14px; color: var(--text); background:#ffffff; }
+    h1{ font-size: 18px; margin:0 0 6px 0; color: var(--blue); }
+    .sub{ font-size: 11px; color: var(--muted); margin-bottom: 10px; }
+    .grid{ display:flex; flex-direction:column; gap: 8px; }
+    .card{ border: 1px solid var(--border); border-radius: 14px; padding: 10px; background: var(--card); }
+    .row{ display:flex; justify-content:space-between; align-items:center; gap: 10px; margin: 5px 0; font-size: 11px; }
     .k{ font-weight: 800; }
     .v{ font-weight: 900; }
-    table{ width:100%; border-collapse: collapse; font-size: 11px; }
-    th,td{ border-bottom: 1px solid rgba(15,23,42,0.10); padding: 6px 4px; text-align:left; }
+    table{ width:100%; border-collapse: collapse; font-size: 10px; }
+    th,td{ border-bottom: 1px solid var(--border); padding: 4px 4px; text-align:left; vertical-align:top; }
+    thead th{ background: var(--headbg); }
     th{ font-weight: 900; }
     .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
-    @media print { body{ margin: 10mm; } }
+    @page{ size: A4; margin: 8mm; }
+    @media print {
+      body{ margin: 0; }
+      .card{ break-inside: avoid; page-break-inside: avoid; }
+      table, thead, tbody, tr, td, th{ break-inside: avoid; page-break-inside: avoid; }
+    }
   </style></head><body>
     <h1>Report Piscina — ${monthTitle}</h1>
     <div class="sub">Daedalium PMS · ${new Date().toLocaleString("it-IT")}</div>
@@ -8189,10 +8205,10 @@ function piscinaPrintCurrentMonth(){
 
       <div class="card">
         <table>
-          <thead><tr><th>Giorno</th><th>Cloro libero</th><th>Cloro comb.</th><th>pH</th><th>Temp</th><th>Origine</th></tr></thead>
+          <thead><tr><th>Giorno</th><th>Cloro libero</th><th>Cloro comb.</th><th>pH</th><th>Temp</th></tr></thead>
           <tbody>
           ${monthItems.map(x=>{
-            if (!x.row) return `<tr><td>${x.day}</td><td colspan="5" style="color:rgba(15,23,42,0.45)">—</td></tr>`;
+            if (!x.row) return `<tr><td>${x.day}</td><td colspan="4" style="color:rgba(15,23,42,0.45)">—</td></tr>`;
             const r=x.row;
             return `<tr>
               <td class="mono">${x.day}</td>
@@ -8200,8 +8216,7 @@ function piscinaPrintCurrentMonth(){
               <td>${fmt(r.cloro_attivo_combinato," ppm")}</td>
               <td>${fmt(r.ph,"")}</td>
               <td>${fmt(r.temp_acqua," °C")}</td>
-              <td>${String(r.origine||"").slice(0,24)}</td>
-            </tr>`;
+</tr>`;
           }).join("")}
           </tbody>
         </table>
@@ -9212,7 +9227,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.152) =====
+// ===== CALENDARIO (dDAE_2.153) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -9667,7 +9682,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.152)
+   Lavanderia (dDAE_2.153)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -10063,7 +10078,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.152: renderSpese allineato al backend ---
+// --- FIX dDAE_2.153: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -10159,7 +10174,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.152: delete reale ospiti ---
+// --- FIX dDAE_2.153: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -10195,7 +10210,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.152: mostra nome ospite ---
+// --- FIX dDAE_2.153: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -10479,7 +10494,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.152
+   Build: dDAE_2.153
 ========================= */
 
 state.orepulizia = state.orepulizia || {
