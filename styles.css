@@ -6970,8 +6970,8 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
     min-height:0;
     overflow:hidden;
     padding: 0 5px 6px;
-    height: calc(100dvh - 160px);
-    max-height: calc(100dvh - 160px);
+    height: calc(100vh - 160px);
+    max-height: calc(100vh - 160px);
     min-height: 240px;
   }
 

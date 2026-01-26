@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.157";
+const BUILD_VERSION = "dDAE_2.158";
 
 /* Audio SFX (iOS-friendly, no assets) */
 const AUDIO_PREF_KEY = "ddae_audio_enabled";
@@ -9277,8 +9277,15 @@ function __calApplyLandscapeMonthSizing(){
     }
 
     const rect = wrap.getBoundingClientRect();
-    const vh = (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : window.innerHeight;
-    const avail = Math.max(140, Math.floor(vh - rect.top - 10));
+    const top = Math.max(0, rect.top || 0);
+
+    const vvH = (window.visualViewport && window.visualViewport.height) ? window.visualViewport.height : 0;
+    const inH = window.innerHeight || 0;
+    const deH = (document.documentElement && document.documentElement.clientHeight) ? document.documentElement.clientHeight : 0;
+    const viewH = Math.max(vvH, inH, deH);
+
+    // Garantisce che il mese non "sparisca" in landscape (bug iOS: height 0/instabile durante rotazione)
+    const avail = Math.max(240, Math.floor(viewH - top - 10));
 
     try{ wrap.style.height = avail + "px"; wrap.style.maxHeight = avail + "px"; }catch(_){}
     try{
@@ -9413,19 +9420,28 @@ function setupCalendario(){
       let t = null;
       const onViewport = () => {
         try{ if (t) clearTimeout(t); }catch(_){}
-        t = setTimeout(async () => {
+        t = setTimeout(() => {
           try{
             if (!state.calendar) return;
             const mode = __calViewMode();
             const prev = state.calendar.view || "week";
             state.calendar.view = mode;
-            // Se cambia vista, invalida rangeKey per ricaricare dati (range diverso)
-            if (prev !== mode){
-              try{ state.calendar.ready = false; }catch(_){}
-              try{ await ensureCalendarData({ force:false, showLoader:false }); }catch(_){}
-            }
+
+            // Render subito per evitare "sparizioni" durante la rotazione iOS
             try{ renderCalendario(); }catch(_){}
             try{ setTimeout(() => { try{ renderCalendario(); }catch(__){} }, 250); }catch(_){}
+
+            // Se cambia vista, invalida rangeKey e ricarica dati in background
+            if (prev !== mode){
+              try{ state.calendar.ready = false; }catch(_){}
+              Promise.resolve(ensureCalendarData({ force:false, showLoader:false }))
+                .then(() => { try{ if (state.page === "calendario") renderCalendario(); }catch(_){ } })
+                .catch(() => {});
+            }else{
+              if (mode === "month"){
+                try{ requestAnimationFrame(() => { try{ __calApplyLandscapeMonthSizing(); }catch(_){ } }); }catch(_){}
+              }
+            }
           }catch(_){}
         }, 50);
       };
