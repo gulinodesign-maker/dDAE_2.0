@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.143";
+const BUILD_VERSION = "dDAE_2.145";
 
 /* Audio SFX (iOS-friendly, no assets) */
 const AUDIO_PREF_KEY = "ddae_audio_enabled";
@@ -244,7 +244,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.143)
+// AUTH + SESSION (dDAE_2.145)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -695,7 +695,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.143 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.145 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2463,7 +2463,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.143 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.145 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2924,7 +2924,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.143: fallback visualizzazione Pulizie
+  // dDAE_2.145: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3891,7 +3891,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.143)
+// STATISTICHE (dDAE_2.145)
 // =========================
 
 function computeStatGen(){
@@ -5577,7 +5577,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.143 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.145 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -6031,7 +6031,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.143: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.145: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -8519,7 +8519,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.143) =====
+// ===== CALENDARIO (dDAE_2.145) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -8974,7 +8974,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.143)
+   Lavanderia (dDAE_2.145)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -9370,7 +9370,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.143: renderSpese allineato al backend ---
+// --- FIX dDAE_2.145: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -9466,7 +9466,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.143: delete reale ospiti ---
+// --- FIX dDAE_2.145: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -9502,7 +9502,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.143: mostra nome ospite ---
+// --- FIX dDAE_2.145: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -9587,12 +9587,12 @@ function resetTassaUI(){
   ids.forEach(id => { const el = $("#"+id); if (el) el.textContent = "—"; });
 }
 
-async function calcTassa(){
+async function calcTassa(fromOverride, toOverride){
   const fromEl = $("#taxFrom");
   const toEl = $("#taxTo");
-  const from = fromEl ? fromEl.value : "";
-  const to   = toEl ? toEl.value : "";
-  if (!from || !to){
+  const from = (fromOverride || (fromEl ? fromEl.value : "")) || "";
+  const to   = (toOverride   || (toEl ? toEl.value : ""))   || "";
+if (!from || !to){
     toast("Seleziona un periodo (Da/A)");
     resetTassaUI();
     return;
@@ -9731,32 +9731,62 @@ function openTaxReportModal(text){
 }
 
 
+
 function initTassaPage(){
   if (__tassaBound) return;
   __tassaBound = true;
 
+  const setYearLabel = () => {
+    const y = (new Date()).getFullYear();
+    const yl = $("#taxYearBtnLabel");
+    if (yl) yl.textContent = String(y);
+    return y;
+  };
+
+  const doCalcRange = async (fromISO, toISO) => {
+    try { await calcTassa(fromISO, toISO); }
+    catch (err) { toast(String(err && err.message || err || "Errore")); resetTassaUI(); }
+  };
+
+  const yearBtn = $("#taxYearBtn");
+  if (yearBtn){
+    bindFastTap(yearBtn, async () => {
+      const y = setYearLabel();
+      await doCalcRange(`${y}-01-01`, `${y}-12-31`);
+    });
+  }
+
+  const q1 = $("#taxQ1Btn");
+  const q2 = $("#taxQ2Btn");
+  const q3 = $("#taxQ3Btn");
+  const q4 = $("#taxQ4Btn");
+  const quarterBind = (btn, fromMMDD, toMMDD) => {
+    if (!btn) return;
+    bindFastTap(btn, async () => {
+      const y = setYearLabel();
+      await doCalcRange(`${y}-${fromMMDD}`, `${y}-${toMMDD}`);
+    });
+  };
+  quarterBind(q1, "01-01", "03-31");
+  quarterBind(q2, "04-01", "06-30");
+  quarterBind(q3, "07-01", "09-30");
+  quarterBind(q4, "10-01", "12-31");
+
+  // Mantieni listeners (inputs nascosti) per compatibilità
   const from = $("#taxFrom");
   const to = $("#taxTo");
   if (from) from.addEventListener("change", resetTassaUI);
   if (to) to.addEventListener("change", resetTassaUI);
 
-  const btn = $("#taxCalcBtn");
-  if (btn){
-    bindFastTap(btn, async () => {
-      try { await calcTassa(); }
-      catch (err) { toast(String(err && err.message || err || "Errore")); resetTassaUI(); }
-    });
-  }
-
-
-// Stato iniziale: risultati nascosti finché non premi "Calcola"
+  // Stato iniziale: risultati nascosti finché non premi un tasto
+  setYearLabel();
   resetTassaUI();
 }
 
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.143
+   Build: dDAE_2.145
 ========================= */
 
 state.orepulizia = state.orepulizia || {
