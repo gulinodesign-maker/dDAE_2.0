@@ -8,12 +8,12 @@
 <meta content="no-cache, no-store, must-revalidate" http-equiv="Cache-Control"/>
 <meta content="no-cache" http-equiv="Pragma"/>
 <meta content="0" http-equiv="Expires"/>
-<link href="./styles.css?v=dDAE_2.148" rel="stylesheet"/>
-<link href="./manifest.json?v=dDAE_2.148" rel="manifest"/>
-<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.148" rel="apple-touch-icon" sizes="180x180"/>
-<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.148" rel="apple-touch-icon-precomposed" sizes="180x180"/>
-<link href="./assets/icons/favicon-32.png?v=dDAE_2.148" rel="icon" sizes="32x32" type="image/png"/>
-<link href="./assets/icons/favicon-16.png?v=dDAE_2.148" rel="icon" sizes="16x16" type="image/png"/>
+<link href="./styles.css?v=dDAE_2.149" rel="stylesheet"/>
+<link href="./manifest.json?v=dDAE_2.149" rel="manifest"/>
+<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.149" rel="apple-touch-icon" sizes="180x180"/>
+<link href="./assets/icons/apple-touch-icon.png?v=dDAE_2.149" rel="apple-touch-icon-precomposed" sizes="180x180"/>
+<link href="./assets/icons/favicon-32.png?v=dDAE_2.149" rel="icon" sizes="32x32" type="image/png"/>
+<link href="./assets/icons/favicon-16.png?v=dDAE_2.149" rel="icon" sizes="16x16" type="image/png"/>
 <meta content="#ffffff" name="theme-color"/>
 <meta content="yes" name="apple-mobile-web-app-capable"/>
 <meta content="Daedalium PMS" name="apple-mobile-web-app-title"/>
@@ -23,7 +23,7 @@
 <header class="topbar">
 <div class="brand">
 <div class="brand-left">
-<img alt="Daedalium logo" class="logo" src="./assets/logo.jpg?v=dDAE_2.148"/>
+<img alt="Daedalium logo" class="logo" src="./assets/logo.jpg?v=dDAE_2.149"/>
 <div class="top-led-grid" id="topLedGrid" aria-label="Stato" role="status">
   <span aria-label="Spesa colazione" class="top-led top-led-blue" id="prodLedColazione"></span>
   <span aria-label="Spesa prodotti" class="top-led top-led-orange" id="prodLedPulizia"></span>
@@ -191,7 +191,7 @@
 <div class="auth-page">
 <div class="auth-card">
 <div class="auth-logo-wrap">
-<img alt="Daedalium" class="auth-logo" src="./assets/logo.jpg?v=dDAE_2.148"/>
+<img alt="Daedalium" class="auth-logo" src="./assets/logo.jpg?v=dDAE_2.149"/>
 </div>
 <!-- MENU (4 pulsanti) -->
 <div class="auth-menu" id="authMenu">
@@ -346,7 +346,7 @@
 <path d="M4 12h.01"></path>
 <path d="M4 18h.01"></path>
 </svg></div><div class="home-main-label">Spesa</div></button>
-</div><div class="build" id="buildText">dDAE_2.148</div></div></section>
+</div><div class="build" id="buildText">dDAE_2.149</div></div></section>
 <!-- PRODOTTI -->
 <section class="page" hidden="" id="page-prodotti">
 <div class="prodotti-page">
@@ -549,6 +549,42 @@
 </div>
 </div>
 </section>
+<section class="page" hidden="" id="page-statpiscina">
+  <div class="stats-page">
+    <div class="stats-title">Piscina</div>
+    <div aria-hidden="true" class="stats-divider"></div>
+
+    <div class="piscina-wrap" aria-label="Sezione Piscina">
+      <div class="piscina-nav" aria-label="Navigazione mese">
+        <button aria-label="Mese precedente" class="icon-btn icon-btn-whiteblue" id="piscinaPrevMonth" type="button">
+          <svg aria-hidden="true" class="ui-ico" viewBox="0 0 24 24">
+            <path d="M15 18l-6-6 6-6"></path>
+          </svg>
+        </button>
+
+        <div class="piscina-nav-center" id="piscinaNavLabel">—</div>
+
+        <button aria-label="Mese successivo" class="icon-btn icon-btn-whiteblue" id="piscinaNextMonth" type="button">
+          <svg aria-hidden="true" class="ui-ico" viewBox="0 0 24 24">
+            <path d="M9 6l6 6-6 6"></path>
+          </svg>
+        </button>
+      </div>
+
+      <div class="piscina-today" id="piscinaTodayLabel">—</div>
+
+      <div class="piscina-cal" aria-label="Calendario piscina">
+        <div aria-hidden="true" class="piscina-dow">
+          <div>Lun</div><div>Mar</div><div>Mer</div><div>Gio</div><div>Ven</div><div>Sab</div><div>Dom</div>
+        </div>
+        <div class="piscina-grid" id="piscinaGrid" role="grid" aria-label="Griglia giorni"></div>
+      </div>
+
+      <button class="piscina-print-btn" id="piscinaPrintBtn" type="button">Genera stampe report</button>
+    </div>
+  </div>
+</section>
+
 <!-- STATISTICHE: PRENOTAZIONI -->
 <section class="page" hidden="" id="page-statprenotazioni">
 <div class="stats-gen">
@@ -1229,8 +1265,8 @@
 </div>
 </div>
 </div>
-<script defer="" src="./config.js?v=dDAE_2.148"></script>
-<script defer="" src="./app.js?v=dDAE_2.148"></script>
+<script defer="" src="./config.js?v=dDAE_2.149"></script>
+<script defer="" src="./app.js?v=dDAE_2.149"></script>
 <!-- TAX REPORT MODAL -->
 <div aria-hidden="true" class="modal" hidden="" id="taxReportModal">
 <div aria-labelledby="taxReportTitle" aria-modal="true" class="modal-card tax-report-card" role="dialog">
@@ -1383,5 +1419,38 @@
   </div>
 </div>
 
+
+<!-- PISCINA MODAL -->
+<div aria-hidden="true" class="modal modal-center" hidden="" id="piscinaModal">
+  <div aria-label="Dettaglio report piscina" aria-modal="true" class="modal-card piscina-modal-card" role="dialog">
+    <div class="clean-info-title" id="piscinaModalTitle">Report piscina —</div>
+    <div class="piscina-modal-body">
+      <div class="piscina-field">
+        <div class="piscina-k">Cloro attivo libero</div>
+        <div class="piscina-v" id="pmCloroLibero">—</div>
+      </div>
+      <div class="piscina-field">
+        <div class="piscina-k">Cloro attivo combinato</div>
+        <div class="piscina-v" id="pmCloroComb">—</div>
+      </div>
+      <div class="piscina-field">
+        <div class="piscina-k">pH</div>
+        <div class="piscina-v" id="pmPh">—</div>
+      </div>
+      <div class="piscina-field">
+        <div class="piscina-k">Temperatura acqua</div>
+        <div class="piscina-v" id="pmTemp">—</div>
+      </div>
+      <div class="piscina-field piscina-field-meta">
+        <div class="piscina-k">Info</div>
+        <div class="piscina-v" id="pmMeta">—</div>
+      </div>
+
+      <div class="row" style="justify-content:center; margin-top:6px;">
+        <button class="btn primary" id="piscinaModalClose" type="button">Chiudi</button>
+      </div>
+    </div>
+  </div>
+</div>
 </body>
 </html>
