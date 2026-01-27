@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.157";
+const BUILD_VERSION = "dDAE_2.158";
 
 /* Audio SFX (iOS-friendly, no assets) */
 const AUDIO_PREF_KEY = "ddae_audio_enabled";
@@ -244,7 +244,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.157)
+// AUTH + SESSION (dDAE_2.158)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -695,7 +695,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.157 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.158 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2521,7 +2521,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.157 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.158 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2703,7 +2703,7 @@ function setSpeseView(view, { render=false } = {}){
 /* NAV pages (5 pagine interne: home + 4 funzioni) */
 
 
-// dDAE_2.157 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
+// dDAE_2.158 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
 // Applichiamo una classe .is-light ai pulsanti con background chiaro, così CSS forza icone scure.
 function __parseRGBA__(s){
   try{
@@ -3047,7 +3047,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.157: fallback visualizzazione Pulizie
+  // dDAE_2.158: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -4022,7 +4022,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.157)
+// STATISTICHE (dDAE_2.158)
 // =========================
 
 function computeStatGen(){
@@ -5708,7 +5708,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.157 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.158 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -6162,7 +6162,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.157: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.158: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -7835,7 +7835,7 @@ function refreshFloatingLabels(){
 
 
 /* =========================
-   Piscina (dDAE_2.157)
+   Piscina (dDAE_2.158)
 ========================= */
 const PISCINA_ACTION = "piscina";
 
@@ -8179,7 +8179,13 @@ function piscinaPrintCurrentMonth(){
       --bg:#ffffff;
     }
     *{ box-sizing:border-box; }
-    body{ font-family: -apple-system,BlinkMacSystemFont,system-ui,Segoe UI,Roboto,Helvetica,Arial; margin: 14px; color: var(--text); background:var(--bg); }
+    body{ font-family: -apple-system,BlinkMacSystemFont,system-ui,Segoe UI,Roboto,Helvetica,Arial; margin: 0; color: var(--text); background:var(--bg); }
+    .page{ padding: 14px; }
+    .hdr{ display:flex; align-items:center; gap:12px; margin:0 0 10px 0; }
+    .logo{ width:56px; height:auto; border-radius:8px; flex:0 0 auto; }
+    .htxt{ flex:1; min-width:0; }
+    @page{ margin: 0; }
+    @media print{ body{ background:#fff; } }
     h1{ font-size: 18px; margin:0 0 6px 0; color: var(--p1); }
     .sub{ font-size: 11px; color: var(--muted); margin-bottom: 10px; }
 
@@ -8209,10 +8215,15 @@ function piscinaPrintCurrentMonth(){
       .card{ break-inside: avoid; page-break-inside: avoid; }
       table, thead, tbody, tr, td, th{ break-inside: avoid; page-break-inside: avoid; }
     }
-  </style></head><body>
-    <h1>Report Piscina — ${monthTitle}</h1>
+  </style></head><body><div class="page">
+    <div class="hdr">
+      <img class="logo" src="./assets/logo.jpg" alt="Daedalium"/>
+      <div class="htxt">
+        <h1>Report Piscina — ${monthTitle}</h1>
+        <div class="sub">Daedalium PMS</div>
+      </div>
+    </div>
     <div class="brandbar" aria-hidden="true"><span class="c1"></span><span class="c2"></span><span class="c3"></span><span class="c4"></span><span class="c5"></span><span class="c6"></span><span class="c7"></span><span class="c8"></span></div>
-    <div class="sub">Daedalium PMS · ${new Date().toLocaleString("it-IT")}</div>
 
     <div class="grid">
       <div class="card">
@@ -8241,6 +8252,7 @@ function piscinaPrintCurrentMonth(){
         </table>
       </div>
     </div>
+  </div>
     <script>setTimeout(()=>{ try{ window.focus(); }catch(e){} }, 100);</script>
   </body></html>`;
 
@@ -9246,7 +9258,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.157) =====
+// ===== CALENDARIO (dDAE_2.158) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -10096,7 +10108,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.157)
+   Lavanderia (dDAE_2.158)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -10492,7 +10504,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.157: renderSpese allineato al backend ---
+// --- FIX dDAE_2.158: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -10588,7 +10600,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.157: delete reale ospiti ---
+// --- FIX dDAE_2.158: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -10624,7 +10636,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.157: mostra nome ospite ---
+// --- FIX dDAE_2.158: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -10908,7 +10920,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.157
+   Build: dDAE_2.158
 ========================= */
 
 state.orepulizia = state.orepulizia || {
