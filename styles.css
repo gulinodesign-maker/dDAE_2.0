@@ -7138,20 +7138,21 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 
 /* Scheda nuovo ospite: centra i campi importi */
 /* FIX iOS: forza centratura effettiva dei tab importi in Nuovo ospite (solo prenotazione + booking) */
-.guest-form-card.is-create .total-row,
-.guest-form-card.is-create .booking-row{
-  display:flex;
-  justify-content:center;
+/* NOTE: #page-ospite .field.two-col ha specificità alta (ID) → qui usiamo selector più specifico + !important */
+#page-ospite .guest-form-card.is-create .total-row,
+#page-ospite .guest-form-card.is-create .booking-row{
+  display:flex !important;
+  justify-content:center !important;
 }
-.guest-form-card.is-create .total-row .subfield.paywrap,
-.guest-form-card.is-create .booking-row .subfield.paywrap{
+#page-ospite .guest-form-card.is-create .total-row .subfield.paywrap,
+#page-ospite .guest-form-card.is-create .booking-row .subfield.paywrap{
   display:none !important;
 }
-.guest-form-card.is-create .total-row .subfield.field.float,
-.guest-form-card.is-create .booking-row .subfield.field.float{
-  width: min(420px, 92%);
-  margin-left:auto;
-  margin-right:auto;
+#page-ospite .guest-form-card.is-create .total-row .subfield.field.float,
+#page-ospite .guest-form-card.is-create .booking-row .subfield.field.float{
+  width: min(420px, 92%) !important;
+  margin-left:auto !important;
+  margin-right:auto !important;
 }
 
 
