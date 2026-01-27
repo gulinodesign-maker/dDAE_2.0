@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.154";
+const BUILD_VERSION = "dDAE_2.155";
 
 /* Audio SFX (iOS-friendly, no assets) */
 const AUDIO_PREF_KEY = "ddae_audio_enabled";
@@ -244,7 +244,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.154)
+// AUTH + SESSION (dDAE_2.155)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -695,7 +695,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.154 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.155 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2521,7 +2521,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.154 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.155 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2703,7 +2703,7 @@ function setSpeseView(view, { render=false } = {}){
 /* NAV pages (5 pagine interne: home + 4 funzioni) */
 
 
-// dDAE_2.154 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
+// dDAE_2.155 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
 // Applichiamo una classe .is-light ai pulsanti con background chiaro, così CSS forza icone scure.
 function __parseRGBA__(s){
   try{
@@ -3047,7 +3047,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.154: fallback visualizzazione Pulizie
+  // dDAE_2.155: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -4022,7 +4022,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.154)
+// STATISTICHE (dDAE_2.155)
 // =========================
 
 function computeStatGen(){
@@ -5708,7 +5708,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.154 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.155 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -6162,7 +6162,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.154: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.155: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -7835,7 +7835,7 @@ function refreshFloatingLabels(){
 
 
 /* =========================
-   Piscina (dDAE_2.154)
+   Piscina (dDAE_2.155)
 ========================= */
 const PISCINA_ACTION = "piscina";
 
@@ -9246,7 +9246,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.154) =====
+// ===== CALENDARIO (dDAE_2.155) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -9256,10 +9256,27 @@ function setupCalendario(){
   const nextMonthBtn = document.getElementById("calNextMonthBtn");
   const syncBtn = document.getElementById("calSyncBtn");
   const input = document.getElementById("calDateInput");
+  const toggleMonthBtn = document.getElementById("calToggleMonthBtn");
 
   if (!state.calendar) {
     state.calendar = { anchor: new Date(), ready: false, guests: [] };
   }
+// View mode: "week" (default) / "month"
+  if (!state.calendar.viewMode) state.calendar.viewMode = "week";
+
+  const applyCalendarViewUI = () => {
+    const sec = document.getElementById("page-calendario");
+    const isMonth = (state.calendar && state.calendar.viewMode === "month");
+    try{ if (sec) sec.classList.toggle("is-month-view", !!isMonth); }catch(_){}
+
+    if (toggleMonthBtn){
+      try{
+        toggleMonthBtn.setAttribute("aria-label", isMonth ? "Calendario settimanale" : "Calendario mensile");
+        toggleMonthBtn.classList.toggle("is-active", !!isMonth);
+      }catch(_){}
+    }
+  };
+
 
   const __scheduleCalendarFetch = (() => {
     let t = null;
@@ -9363,6 +9380,16 @@ function setupCalendario(){
   if (nextMonthBtn) nextMonthBtn.addEventListener("click", () => {
     shiftAnchorAndRender(addMonthsClamped(state.calendar.anchor, 1));
   });
+  if (toggleMonthBtn) toggleMonthBtn.addEventListener("click", () => {
+    if (!state.calendar) state.calendar = { anchor: new Date(), ready: false, guests: [] };
+    state.calendar.viewMode = (state.calendar.viewMode === "month") ? "week" : "month";
+    applyCalendarViewUI();
+    renderCalendario();
+    __scheduleCalendarFetch({ force:false, showLoader:false });
+  });
+
+  // Applica stato UI all'avvio
+  applyCalendarViewUI();
 }
 
 
@@ -9370,12 +9397,26 @@ async function ensureCalendarData({ force = false, showLoader = false } = {}) {
   if (!state.calendar) state.calendar = { anchor: new Date(), ready: false, guests: [], rangeKey: "" };
 
   const anchor = (state.calendar && state.calendar.anchor) ? state.calendar.anchor : new Date();
-  const start = startOfWeekMonday(anchor);
 
-  // Finestra dati: 2 settimane prima + 2 settimane dopo (evita payload enormi)
-  const winFrom = toISO(addDays(start, -14));
-  const winTo = toISO(addDays(start, 7 + 14));
-  const rangeKey = `${winFrom}|${winTo}`;
+  const mode = (state.calendar && state.calendar.viewMode) ? state.calendar.viewMode : "week";
+  let winFrom, winTo, rangeKey;
+
+  if (mode === "month"){
+    const monthStart = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+    const monthEndEx = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 1);
+
+    // Finestra dati mese: piccolo buffer ai bordi (copre check-in/out adiacenti)
+    winFrom = toISO(addDays(monthStart, -3));
+    winTo   = toISO(addDays(monthEndEx, 3));
+    rangeKey = `M:${winFrom}|${winTo}`;
+  } else {
+    const start = startOfWeekMonday(anchor);
+
+    // Finestra dati: 2 settimane prima + 2 settimane dopo (evita payload enormi)
+    winFrom = toISO(addDays(start, -14));
+    winTo   = toISO(addDays(start, 7 + 14));
+    rangeKey = `W:${winFrom}|${winTo}`;
+  }
 
   // Se ho già i dati per questa finestra, non ricarico
   if (!force && state.calendar.ready && state.calendar.rangeKey === rangeKey) return;
@@ -9394,6 +9435,26 @@ async function ensureCalendarData({ force = false, showLoader = false } = {}) {
 
 
 function renderCalendario(){
+  if (!state.calendar) state.calendar = { anchor: new Date(), ready: false, guests: [] };
+  const mode = state.calendar.viewMode || "week";
+
+  try{
+    const sec = document.getElementById("page-calendario");
+    if (sec) sec.classList.toggle("is-month-view", mode === "month");
+  }catch(_){}
+
+  const gWeek = document.getElementById("calGrid");
+  const gMonth = document.getElementById("calGridMonth");
+  try{
+    if (gWeek && mode !== "month") gWeek.hidden = false;
+    if (gMonth && mode !== "month") gMonth.hidden = true;
+  }catch(_){}
+
+  if (mode === "month") return renderCalendarioMonth();
+  return renderCalendarioWeek();
+}
+
+function renderCalendarioWeek(){
   const grid = document.getElementById("calGrid");
   try{ if (grid) grid.classList.toggle("is-loading", !!(state.calendar && state.calendar.loading)); }catch(_){ }
   const title = document.getElementById("calWeekTitle");
@@ -9556,10 +9617,226 @@ if (info.lastDay) cell.classList.add("last-day");
 }
 
 
+
+
+function renderCalendarioMonth(){
+  const grid = document.getElementById("calGridMonth");
+  const gridWeek = document.getElementById("calGrid");
+  try{ if (gridWeek) gridWeek.classList.remove("is-loading"); }catch(_){ }
+  try{ if (grid) grid.classList.toggle("is-loading", !!(state.calendar && state.calendar.loading)); }catch(_){ }
+  const title = document.getElementById("calWeekTitle");
+  const input = document.getElementById("calDateInput");
+  if (!grid) return;
+
+  // Toggle DOM visibility
+  try{ if (gridWeek) gridWeek.hidden = true; }catch(_){ }
+  try{ grid.hidden = false; }catch(_){ }
+
+  grid.replaceChildren();
+  const frag = document.createDocumentFragment();
+
+  const anchor = (state.calendar && state.calendar.anchor) ? state.calendar.anchor : new Date();
+  const monthStart = new Date(anchor.getFullYear(), anchor.getMonth(), 1);
+  const daysCount = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0).getDate();
+  const days = Array.from({ length: daysCount }, (_, i) => addDays(monthStart, i));
+
+  // Mantieni input data sincronizzato con l'anchor
+  try{ if (input) input.value = formatISODateLocal(anchor) || todayISO(); }catch(_){ }
+
+  if (title) {
+    const month = monthNameIT(anchor).toUpperCase();
+    title.textContent = month;
+  }
+
+  // Imposta le colonne dinamiche (1 colonna stanze + N giorni)
+  try{
+    grid.style.gridTemplateColumns = `var(--cal-room-w) repeat(${daysCount}, var(--cal-day-w))`;
+  }catch(_){ }
+
+  const occ = buildMonthOccupancy(monthStart, daysCount);
+
+  const corner = document.createElement("div");
+  corner.className = "cal-cell cal-head cal-corner";
+  corner.innerHTML = `<div class="cal-corner-text">ST</div>`;
+  frag.appendChild(corner);
+
+  for (let i = 0; i < daysCount; i++) {
+    const d = days[i];
+    const dayPill = document.createElement("div");
+    dayPill.className = "cal-cell cal-head";
+
+    const ab = document.createElement("div");
+    ab.className = "cal-day-abbrev";
+    ab.textContent = weekdayShortIT(d).toUpperCase();
+
+    const num = document.createElement("div");
+    num.className = "cal-day-num";
+    num.textContent = String(d.getDate());
+
+    dayPill.appendChild(ab);
+    dayPill.appendChild(num);
+
+    frag.appendChild(dayPill);
+  }
+
+  for (let r = 1; r <= 6; r++) {
+    const pill = document.createElement("div");
+    pill.className = `cal-pill room room-${r}`;
+
+    const rn = document.createElement("span");
+    rn.className = "cal-room-num";
+    rn.textContent = String(r);
+    pill.appendChild(rn);
+
+    frag.appendChild(pill);
+
+    for (let i = 0; i < daysCount; i++) {
+      const d = days[i];
+      const dIso = isoDate(d);
+
+      const cell = document.createElement("button");
+      cell.type = "button";
+      cell.className = `cal-cell room-${r}`;
+      cell.setAttribute("aria-label", `Stanza ${r}, ${weekdayShortIT(d)} ${d.getDate()}`);
+      cell.dataset.date = dIso;
+      cell.dataset.room = String(r);
+
+      const info = occ.get(`${dIso}:${r}`);
+      if (!info) {
+        cell.addEventListener("click", (ev)=>{
+          try { ev.preventDefault(); } catch (_) {}
+          try { ev.stopPropagation(); } catch (_) {}
+          try{
+            const prev = grid.querySelector(".cal-cell.empty-selected");
+            if (prev && prev !== cell) prev.classList.remove("empty-selected");
+            cell.classList.toggle("empty-selected");
+          }catch(_){}
+        });
+      }
+
+      if (info) {
+        cell.classList.add("has-booking");
+        if (info.lastDay) cell.classList.add("last-day");
+
+        try{
+          const flags = document.createElement("div");
+          flags.className = "cal-flags";
+
+          if (info.mOn){
+            const f = document.createElement("span");
+            f.className = "cal-flag cal-flag-m";
+            f.textContent = "m";
+            flags.appendChild(f);
+          }
+          if (info.cOn){
+            const f = document.createElement("span");
+            f.className = "cal-flag cal-flag-c";
+            f.textContent = "c";
+            flags.appendChild(f);
+          }
+          if (info.gOn){
+            const f = document.createElement("span");
+            f.className = "cal-flag cal-flag-g";
+            f.textContent = "g";
+            flags.appendChild(f);
+          }
+
+          if (flags.childNodes.length) cell.appendChild(flags);
+        }catch(_){ }
+
+        const inner = document.createElement("div");
+        inner.className = "cal-cell-inner";
+
+        const ini = document.createElement("div");
+        ini.className = "cal-initials";
+        ini.textContent = info.initials;
+        inner.appendChild(ini);
+
+        const dots = document.createElement("div");
+        dots.className = "cal-dots";
+        const arr = info.dots.slice(0, 4);
+        for (const t of arr) {
+          const s = document.createElement("span");
+          s.className = `bed-dot ${t === "m" ? "bed-dot-m" : t === "s" ? "bed-dot-s" : "bed-dot-c"}`;
+          dots.appendChild(s);
+        }
+        inner.appendChild(dots);
+
+        cell.appendChild(inner);
+
+        cell.addEventListener("click", (ev) => {
+          try{ const prev = grid.querySelector(".cal-cell.empty-selected"); if (prev) prev.classList.remove("empty-selected"); }catch(_){}
+          try { ev.preventDefault(); } catch (_) {}
+          try { ev.stopPropagation(); } catch (_) {}
+
+          const ospite = findCalendarGuestById(info.guestId);
+          if (!ospite) return;
+          enterGuestViewMode(ospite);
+          showPage("ospite");
+        });
+      }
+
+      frag.appendChild(cell);
+    }
+  }
+
+  grid.appendChild(frag);
+}
+
 function findCalendarGuestById(id){
   const gid = String(id ?? "").trim();
   const arr = (state.calendar && Array.isArray(state.calendar.guests)) ? state.calendar.guests : [];
   return arr.find(o => String(o.id ?? o.ID ?? o.ospite_id ?? o.ospiteId ?? o.guest_id ?? o.guestId ?? "").trim() === gid) || null;
+}
+
+function buildMonthOccupancy(monthStart, daysCount){
+  const map = new Map();
+  const guests = (state.calendar && Array.isArray(state.calendar.guests)) ? state.calendar.guests : [];
+  const monthEndEx = addDays(monthStart, daysCount);
+
+  for (const g of guests){
+    const guestId = String(g.id ?? g.ID ?? g.ospite_id ?? g.ospiteId ?? g.guest_id ?? g.guestId ?? "").trim();
+    if (!guestId) continue;
+
+    const ciStr = formatISODateLocal(g.check_in || g.checkIn || "");
+    const coStr = formatISODateLocal(g.check_out || g.checkOut || "");
+    if (!ciStr || !coStr) continue;
+
+    const ci = new Date(ciStr + "T00:00:00");
+    const co = new Date(coStr + "T00:00:00");
+    const last = addDays(co, -1);
+    const lastIso = isoDate(last);
+
+    let roomsArr = [];
+    try {
+      const st = g.stanze;
+      if (Array.isArray(st)) roomsArr = st;
+      else if (st != null && String(st).trim().length) {
+        const m = String(st).match(/[1-6]/g) || [];
+        roomsArr = m.map(x => parseInt(x, 10));
+      }
+    } catch (_) {}
+    roomsArr = Array.from(new Set((roomsArr||[]).map(n=>parseInt(n,10)).filter(n=>isFinite(n) && n>=1 && n<=6))).sort((a,b)=>a-b);
+    if (!roomsArr.length) continue;
+
+    const initials = initialsFromName(g.nome || g.name || "");
+
+    const mOn = !!(g.matrimonio);
+    const gOn = truthy(g.g ?? g.flag_g ?? g.gruppo_g ?? g.group ?? g.g_flag);
+    const cOn = truthy(g.col_c ?? g.colC ?? g.c ?? g.C ?? g.flag_c ?? g.flagC ?? g.colc ?? g.c_flag);
+
+    for (let d = new Date(ci); d < co; d = addDays(d, 1)) {
+      if (d < monthStart || d >= monthEndEx) continue;
+      const dIso = isoDate(d);
+      const isLast = dIso === lastIso;
+
+      for (const r of roomsArr) {
+        const dots = dotsForGuestRoom(guestId, r);
+        map.set(`${dIso}:${r}`, { guestId, initials, dots, lastDay: isLast, mOn, gOn, cOn });
+      }
+    }
+  }
+  return map;
 }
 
 function buildWeekOccupancy(weekStart){
@@ -9701,7 +9978,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.154)
+   Lavanderia (dDAE_2.155)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -10097,7 +10374,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.154: renderSpese allineato al backend ---
+// --- FIX dDAE_2.155: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -10193,7 +10470,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.154: delete reale ospiti ---
+// --- FIX dDAE_2.155: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -10229,7 +10506,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.154: mostra nome ospite ---
+// --- FIX dDAE_2.155: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -10513,7 +10790,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.154
+   Build: dDAE_2.155
 ========================= */
 
 state.orepulizia = state.orepulizia || {
