@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.155";
+const BUILD_VERSION = "dDAE_2.156";
 
 /* Audio SFX (iOS-friendly, no assets) */
 const AUDIO_PREF_KEY = "ddae_audio_enabled";
@@ -244,7 +244,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.155)
+// AUTH + SESSION (dDAE_2.156)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -695,7 +695,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.155 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.156 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2521,7 +2521,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.155 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.156 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2703,7 +2703,7 @@ function setSpeseView(view, { render=false } = {}){
 /* NAV pages (5 pagine interne: home + 4 funzioni) */
 
 
-// dDAE_2.155 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
+// dDAE_2.156 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
 // Applichiamo una classe .is-light ai pulsanti con background chiaro, così CSS forza icone scure.
 function __parseRGBA__(s){
   try{
@@ -3047,7 +3047,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.155: fallback visualizzazione Pulizie
+  // dDAE_2.156: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -4022,7 +4022,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.155)
+// STATISTICHE (dDAE_2.156)
 // =========================
 
 function computeStatGen(){
@@ -5708,7 +5708,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.155 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.156 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -6162,7 +6162,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.155: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.156: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -7835,7 +7835,7 @@ function refreshFloatingLabels(){
 
 
 /* =========================
-   Piscina (dDAE_2.155)
+   Piscina (dDAE_2.156)
 ========================= */
 const PISCINA_ACTION = "piscina";
 
@@ -9246,7 +9246,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.155) =====
+// ===== CALENDARIO (dDAE_2.156) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -9390,7 +9390,28 @@ function setupCalendario(){
 
   // Applica stato UI all'avvio
   applyCalendarViewUI();
+
+  // Landscape-fit: ridimensiona la griglia mensile per rientrare a schermo (solo in vista mese)
+  try{
+    if (!window.__ddaeCalMonthFitBound){
+      window.__ddaeCalMonthFitBound = true;
+      let __t = null;
+      window.addEventListener("resize", () => {
+        try{
+          if (__t) clearTimeout(__t);
+          __t = setTimeout(() => {
+            try{
+              if (state && state.page === "calendario" && state.calendar && state.calendar.viewMode === "month"){
+                requestAnimationFrame(()=>{ try{ __fitCalendarioMonthLandscape(); }catch(_){ } });
+              }
+            }catch(_){ }
+          }, 120);
+        }catch(_){ }
+      }, { passive:true });
+    }
+  }catch(_){ }
 }
+
 
 
 async function ensureCalendarData({ force = false, showLoader = false } = {}) {
@@ -9619,6 +9640,87 @@ if (info.lastDay) cell.classList.add("last-day");
 
 
 
+
+function __fitCalendarioMonthLandscape(){
+  try{
+    if (!state || state.page !== "calendario") return;
+    if (!state.calendar || state.calendar.viewMode !== "month") return;
+
+    const isLandscape = (window.matchMedia && window.matchMedia("(orientation: landscape)").matches);
+    const grid = document.getElementById("calGridMonth");
+    const wrap = document.querySelector("#page-calendario .cal-grid-wrap");
+    if (!grid || !wrap) return;
+
+    // Pulisci override se non landscape
+    if (!isLandscape){
+      try{ grid.style.removeProperty("--cal-cell-h"); }catch(_){}
+      try{ grid.style.removeProperty("--cal-pill-h"); }catch(_){}
+      try{ grid.style.removeProperty("grid-template-columns"); }catch(_){}
+      // Ripristina template dinamico standard (var day width) se possibile
+      try{
+        const anchor = (state.calendar && state.calendar.anchor) ? state.calendar.anchor : new Date();
+        const daysCount = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0).getDate();
+        grid.style.gridTemplateColumns = `var(--cal-room-w) repeat(${daysCount}, var(--cal-day-w))`;
+      }catch(_){}
+      return;
+    }
+
+    const anchor = (state.calendar && state.calendar.anchor) ? state.calendar.anchor : new Date();
+    const daysCount = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0).getDate();
+
+    // Misure reali (px)
+    const wrapW = wrap.clientWidth || 0;
+    if (wrapW <= 0) return;
+
+    // Room col: usa la larghezza effettiva della prima colonna (corner)
+    let roomW = 0;
+    try{
+      const corner = grid.querySelector(".cal-corner");
+      if (corner) roomW = corner.getBoundingClientRect().width;
+    }catch(_){}
+    if (!roomW || roomW < 10) roomW = 44;
+
+    // Gap colonna
+    let gap = 0;
+    try{
+      const st = getComputedStyle(grid);
+      gap = parseFloat(st.columnGap || st.gap || "0") || 0;
+    }catch(_){}
+    // gap totali tra (1+daysCount) colonne = daysCount
+    const totalGap = gap * daysCount;
+
+    const availDaysW = wrapW - roomW - totalGap;
+    if (availDaysW <= 0) return;
+
+    let dayW = Math.floor(availDaysW / daysCount);
+    // Limiti di sicurezza: evita colonne troppo piccole o negative
+    dayW = Math.max(10, Math.min(dayW, 64));
+
+    // Altezza: 1 header + 6 righe stanze = 7 righe
+    const rows = 7;
+    const rowGaps = gap * (rows - 1);
+    let availH = 0;
+    try{
+      const rect = wrap.getBoundingClientRect();
+      availH = Math.floor(window.innerHeight - rect.top - 10);
+    }catch(_){}
+    if (!availH || availH < 200) availH = 260;
+
+    let cellH = Math.floor((availH - rowGaps) / rows);
+    cellH = Math.max(34, Math.min(cellH, 120));
+
+    let pillH = Math.floor(cellH * 0.38);
+    pillH = Math.max(18, Math.min(pillH, 46));
+
+    // Applica override inline (solo month+landscape)
+    try{
+      grid.style.gridTemplateColumns = `${Math.floor(roomW)}px repeat(${daysCount}, ${dayW}px)`;
+      grid.style.setProperty("--cal-cell-h", `${cellH}px`);
+      grid.style.setProperty("--cal-pill-h", `${pillH}px`);
+    }catch(_){}
+  }catch(_){}
+}
+
 function renderCalendarioMonth(){
   const grid = document.getElementById("calGridMonth");
   const gridWeek = document.getElementById("calGrid");
@@ -9781,6 +9883,9 @@ function renderCalendarioMonth(){
   }
 
   grid.appendChild(frag);
+
+  // In landscape (solo vista mese) ridimensiona la griglia per rientrare nello schermo
+  try{ requestAnimationFrame(()=>{ try{ __fitCalendarioMonthLandscape(); }catch(_){ } }); }catch(_){ }
 }
 
 function findCalendarGuestById(id){
@@ -9978,7 +10083,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.155)
+   Lavanderia (dDAE_2.156)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -10374,7 +10479,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.155: renderSpese allineato al backend ---
+// --- FIX dDAE_2.156: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -10470,7 +10575,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.155: delete reale ospiti ---
+// --- FIX dDAE_2.156: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -10506,7 +10611,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.155: mostra nome ospite ---
+// --- FIX dDAE_2.156: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -10790,7 +10895,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.155
+   Build: dDAE_2.156
 ========================= */
 
 state.orepulizia = state.orepulizia || {
