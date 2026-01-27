@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.165";
+const BUILD_VERSION = "dDAE_2.166";
 
 /* Audio SFX (iOS-friendly, no assets) */
 const AUDIO_PREF_KEY = "ddae_audio_enabled";
@@ -244,7 +244,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.165)
+// AUTH + SESSION (dDAE_2.166)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -695,7 +695,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.165 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.166 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2521,7 +2521,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.165 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.166 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2703,7 +2703,7 @@ function setSpeseView(view, { render=false } = {}){
 /* NAV pages (5 pagine interne: home + 4 funzioni) */
 
 
-// dDAE_2.165 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
+// dDAE_2.166 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
 // Applichiamo una classe .is-light ai pulsanti con background chiaro, così CSS forza icone scure.
 function __parseRGBA__(s){
   try{
@@ -3047,7 +3047,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.165: fallback visualizzazione Pulizie
+  // dDAE_2.166: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -4022,7 +4022,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.165)
+// STATISTICHE (dDAE_2.166)
 // =========================
 
 function computeStatGen(){
@@ -5708,7 +5708,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.165 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.166 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -6162,7 +6162,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.165: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.166: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -7391,12 +7391,8 @@ function setupProdotti(){
     }catch(e){ toast(e.message); }
   });
 
-  if (btnSave) bindFastTap(btnSave, async () => {
-    const action = __prodAction_();
-    try{
-      const draft = __prodDraftBucket_();
-      const dirty = __prodDraftDirtyBucket_();
-      const ids = Object.keys(dirty || {});
+  if (btnSave) bindFastTap(btnSave, () => { __prodSaveDirtyNow_(); });
+
       if (!ids.length){
         // comunque forza normalizzazione LED
         updateProdottiHomeBlink();
@@ -7461,6 +7457,85 @@ function setupProdotti(){
     }
   };
 
+
+  // Autosave (come Pulizie): salva qty in background dopo le modifiche
+  let __prodAutoSaveTimer = null;
+  let __prodAutoSaving = false;
+  let __prodAutoSaveQueued = false;
+
+  const __prodSaveDirtyNow_ = async () => {
+    const action = __prodAction_();
+    try{
+      const draft = __prodDraftBucket_();
+      const dirty = __prodDraftDirtyBucket_();
+      const ids = Object.keys(dirty || {});
+      if (!ids.length){
+        updateProdottiHomeBlink();
+        return;
+      }
+
+      const bucket = __prodStateBucket_();
+      const items = bucket.items || [];
+
+      const qtyById = {};
+      for (const id of ids){
+        const qn = parseInt(String(draft[id] ?? 0), 10);
+        const qty = isNaN(qn) ? 0 : Math.max(0, qn);
+        qtyById[id] = qty;
+
+        const it = items.find(x => String(x.id||"") === String(id));
+        if (it){
+          it.qty = qty;
+          __spesaNormalizeItem_(it);
+          it.updatedAt = new Date().toISOString();
+          // finché non arriva conferma backend, non marcare "saved"
+          try{ it.saved = 0; }catch(_){}
+        }
+      }
+
+      // UI immediata
+      __prodDraftClear_();
+      renderProdotti();
+      updateProdottiHomeBlink();
+
+      // Sync backend in background (serializzato)
+      await Promise.all(ids.map((id) => (
+        api(action, { method:"PUT", body:{ id:String(id), qty: qtyById[id], saved: 0 }, showLoader:false })
+      )));
+      await api(action, { method:"POST", body:{ op:"save" }, showLoader:false });
+
+      // aggiorna entrambe le liste (LED Home su altri device) + bordo rosso post-save
+      await loadSpesaAll({ force:true, showLoader:false });
+      try{ renderProdotti(); updateProdottiHomeBlink(); }catch(_){}
+    }catch(e){
+      try{ toast(e.message || "Errore"); }catch(_){}
+    }
+  };
+
+  const __prodAutoSaveSchedule_ = () => {
+    try{
+      if (__prodAutoSaveTimer) clearTimeout(__prodAutoSaveTimer);
+      __prodAutoSaveTimer = setTimeout(async () => {
+        __prodAutoSaveTimer = null;
+        if (__prodAutoSaving){
+          __prodAutoSaveQueued = true;
+          return;
+        }
+        __prodAutoSaving = true;
+        try{
+          await __prodSaveDirtyNow_();
+        }finally{
+          __prodAutoSaving = false;
+          if (__prodAutoSaveQueued){
+            __prodAutoSaveQueued = false;
+            __prodAutoSaveSchedule_();
+          }
+        }
+      }, 550);
+    }catch(_){}
+  };
+
+
   // Event delegation: qty / check
 
   // Qty dot: tap cycle (draft), long-press (0.5s) reset to empty + "carta stropicciata"
@@ -7491,6 +7566,7 @@ function setupProdotti(){
     const next = (base >= 9) ? 0 : (base + 1);
     __prodDraftSetQty_(id, next);
     renderProdotti();
+    __prodAutoSaveSchedule_();
   };
 
   const startProdQtyPress = (id) => {
@@ -7505,6 +7581,7 @@ function setupProdotti(){
         try{ __sfxGlass(); }catch(_){ }
         __prodDraftSetQty_(id, 0);
         renderProdotti();
+        __prodAutoSaveSchedule_();
       }
     }, 500);
   };
@@ -7569,6 +7646,7 @@ function setupProdotti(){
       const next = (base >= 9) ? 0 : (base + 1);
       __prodDraftSetQty_(id, next);
       renderProdotti();
+      __prodAutoSaveSchedule_();
       return;
     }
 
@@ -7835,7 +7913,7 @@ function refreshFloatingLabels(){
 
 
 /* =========================
-   Piscina (dDAE_2.165)
+   Piscina (dDAE_2.166)
 ========================= */
 const PISCINA_ACTION = "piscina";
 
@@ -8538,7 +8616,7 @@ try{
   let __laundryRefreshT = null;
   let __savingHours = false;
   let __pendingHours = false;
-  // dDAE_2.165: salvataggio PULIZIE per-stanza (evita generazione righe/report inutili)
+  // dDAE_2.166: salvataggio PULIZIE per-stanza (evita generazione righe/report inutili)
   // Mantiene UI fluida: nessun "blink" dei numeri durante autosave / refresh.
   let __dirtyLaundryRooms = new Set();   // stanze modificate (solo queste vengono salvate)
   let __dirtyLaundryCells = new Set();   // celle modificate (solo queste ricevono bordo rosso post-save)
@@ -9394,7 +9472,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.165) =====
+// ===== CALENDARIO (dDAE_2.166) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -9799,7 +9877,7 @@ function __fitCalendarioMonthLandscape(){
 
     const isLandscape = (window.matchMedia && window.matchMedia("(orientation: landscape)").matches);
 
-    // dDAE_2.165: in vista mese su iPad landscape usa tutta la larghezza disponibile (margine 10px L/R)
+    // dDAE_2.166: in vista mese su iPad landscape usa tutta la larghezza disponibile (margine 10px L/R)
     try{ document.body.classList.toggle("cal-month-landscape", !!isLandscape); }catch(_){}
 
     const grid = document.getElementById("calGridMonth");
@@ -10258,7 +10336,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.165)
+   Lavanderia (dDAE_2.166)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -10654,7 +10732,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.165: renderSpese allineato al backend ---
+// --- FIX dDAE_2.166: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -10750,7 +10828,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.165: delete reale ospiti ---
+// --- FIX dDAE_2.166: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -10786,7 +10864,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.165: mostra nome ospite ---
+// --- FIX dDAE_2.166: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -11070,7 +11148,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.165
+   Build: dDAE_2.166
 ========================= */
 
 state.orepulizia = state.orepulizia || {
