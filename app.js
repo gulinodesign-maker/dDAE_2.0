@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.163";
+const BUILD_VERSION = "dDAE_2.164";
 
 /* Audio SFX (iOS-friendly, no assets) */
 const AUDIO_PREF_KEY = "ddae_audio_enabled";
@@ -244,7 +244,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.163)
+// AUTH + SESSION (dDAE_2.164)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -695,7 +695,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.163 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.164 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2521,7 +2521,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.163 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.164 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2703,7 +2703,7 @@ function setSpeseView(view, { render=false } = {}){
 /* NAV pages (5 pagine interne: home + 4 funzioni) */
 
 
-// dDAE_2.163 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
+// dDAE_2.164 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
 // Applichiamo una classe .is-light ai pulsanti con background chiaro, così CSS forza icone scure.
 function __parseRGBA__(s){
   try{
@@ -3047,7 +3047,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.163: fallback visualizzazione Pulizie
+  // dDAE_2.164: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -4022,7 +4022,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.163)
+// STATISTICHE (dDAE_2.164)
 // =========================
 
 function computeStatGen(){
@@ -5708,7 +5708,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.163 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.164 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -6162,7 +6162,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.163: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.164: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -7835,7 +7835,7 @@ function refreshFloatingLabels(){
 
 
 /* =========================
-   Piscina (dDAE_2.163)
+   Piscina (dDAE_2.164)
 ========================= */
 const PISCINA_ACTION = "piscina";
 
@@ -8538,6 +8538,29 @@ try{
   let __laundryRefreshT = null;
   let __savingHours = false;
   let __pendingHours = false;
+  // dDAE_2.164: salvataggio PULIZIE per-stanza (evita generazione righe/report inutili)
+  // Mantiene UI fluida: nessun "blink" dei numeri durante autosave / refresh.
+  let __dirtyLaundryRooms = new Set();   // stanze modificate (solo queste vengono salvate)
+  let __dirtyLaundryCells = new Set();   // celle modificate (solo queste ricevono bordo rosso post-save)
+
+  const __recalcDirtyLaundryRoomsFromCells = () => {
+    try{
+      const next = new Set();
+      __dirtyLaundryCells.forEach(el => { try{ if (el && el.dataset && el.dataset.room) next.add(String(el.dataset.room)); }catch(_){ } });
+      __dirtyLaundryRooms = next;
+    }catch(_){}
+  };
+
+  const __markLaundryDirty = (cellEl) => {
+    try{
+      if (!cellEl || !cellEl.dataset) return;
+      const room = String(cellEl.dataset.room || "").trim();
+      if (!room) return;
+      __dirtyLaundryRooms.add(room);
+      __dirtyLaundryCells.add(cellEl);
+    }catch(_){}
+  };
+
   function scheduleLaundrySave(){
     try{
       if (__laundrySaveT) clearTimeout(__laundrySaveT);
@@ -8563,11 +8586,34 @@ try{
     try{
       if (!ensureCanEditPulizieDay()) return;
       if (__savingLaundry){ __pendingLaundry = true; return; }
+
+      // Salva SOLO le stanze effettivamente toccate (evita righe/report inutili)
+      try{ __recalcDirtyLaundryRoomsFromCells(); }catch(_){}
+
+      const rooms = Array.from(__dirtyLaundryRooms || []);
+      if (!rooms.length) return;
+
+      const touchedCells = Array.from(__dirtyLaundryCells || []);
+
       __savingLaundry = true;
-      const payload = buildPuliziePayload();
+
+      const payload = buildPuliziePayload(rooms);
       await api("pulizie", { method:"POST", body: payload, showLoader:false });
-      // refresh in background (non blocca UI): riduce lentezza percepita su iOS
-      try{ schedulePulizieRefresh(); }catch(_){ }
+
+      // Post-save UI: nessun refresh/clear → niente blink.
+      // Applica bordo rosso (is-saved) solo sulle celle toccate in base al valore corrente.
+      touchedCells.forEach(el => {
+        try{
+          if (!el || !el.classList) return;
+          const v = readCell(el);
+          el.classList.toggle("is-saved", (typeof v === "number" ? v : parseInt(String(v||0),10)) > 0);
+        }catch(_){}
+      });
+
+      // Rimuove dal "dirty" le celle salvate in questo batch (le nuove modifiche restano)
+      touchedCells.forEach(el => { try{ __dirtyLaundryCells.delete(el); }catch(_){ } });
+      try{ __recalcDirtyLaundryRoomsFromCells(); }catch(_){}
+
     }catch(err){
       try{ toast(String(err && err.message || "Errore salvataggio biancheria")); }catch(_){}
     }finally{
@@ -8578,6 +8624,7 @@ try{
       }
     }
   }
+
 
   async function saveHoursNow(){
     try{
@@ -8930,19 +8977,33 @@ try{
     document.querySelectorAll(".clean-grid .cell.slot").forEach(el => { el.textContent = ""; el.classList.remove("is-saved"); });
   };
 
-  const applyPulizieRows = (rows) => {
-    clearAllSlots();
-    if (!Array.isArray(rows)) return;
+  const applyPulizieRows = (rows, { preserveDirty = false } = {}) => {
+    if (!Array.isArray(rows)) rows = [];
+    const map = new Map();
     rows.forEach(r => {
-      const room = String(r.stanza || r.room || "").trim();
-      if (!room) return;
-      ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"].forEach(c => {
-        const cell = document.querySelector(`.clean-grid .cell.slot[data-room="${room}"][data-col="${c}"]`);
-        if (!cell) return;
-        const n = parseInt(r[c] ?? 0, 10);
-        cell.textContent = (!isNaN(n) && n>0) ? String(n) : "";
-        cell.classList.toggle("is-saved", (!isNaN(n) && n>0));
-      });
+      const room = String(r?.stanza || r?.room || r?.Stanza || r?.ROOM || "").trim();
+      if (room) map.set(room, r);
+    });
+
+    const cols = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
+
+    // Snapshot update: aggiorna tutte le celle in un colpo solo (niente clear→repaint→blink)
+    document.querySelectorAll(".clean-grid .cell.slot").forEach(cell => {
+      try{
+        if (!cell || !cell.dataset) return;
+        if (preserveDirty && __dirtyLaundryCells && __dirtyLaundryCells.has(cell)) return;
+
+        const room = String(cell.dataset.room || "").trim();
+        const col  = String(cell.dataset.col  || "").trim().toUpperCase();
+        if (!room || !col) return;
+
+        const r = map.get(room);
+        const n = parseInt((r && (r[col] ?? r[col.toLowerCase()])) ?? 0, 10);
+        const isPos = (!isNaN(n) && n > 0);
+
+        cell.textContent = isPos ? String(n) : "";
+        cell.classList.toggle("is-saved", isPos);
+      }catch(_){}
     });
   };
 
@@ -8995,32 +9056,46 @@ try{
 
 
   const loadPulizieForDay = async ({ clearFirst = true } = {}) => {
-    // Regola: quando cambi giorno, la griglia deve essere SUBITO vuota.
-    // Poi, se ci sono dati salvati per quel giorno, li carichiamo.
+    // Quando cambi giorno: griglia subito vuota, poi (se ci sono) applica dati salvati.
     if (clearFirst) clearAllSlots();
     try{
       const day = state.cleanDay ? new Date(state.cleanDay) : new Date();
       const data = toISODateLocal(day);
       const res = await api("pulizie", { method:"GET", params:{ data }, showLoader:false });
-      // Supporta risposte: array diretto, oppure {data:[...]}
+
+      // Supporta risposte: array diretto, oppure {data:[...]} / {rows:[...]} / nesting
       const rows = Array.isArray(res) ? res
         : (res && Array.isArray(res.data) ? res.data
         : (res && res.data && Array.isArray(res.data.data) ? res.data.data
         : (res && Array.isArray(res.rows) ? res.rows
         : [])));
-      if (rows.length) applyPulizieRows(rows);
-      // altrimenti resta come sta
+
+      const preserveDirty = (!clearFirst) && (__savingLaundry || (__dirtyLaundryCells && __dirtyLaundryCells.size));
+      applyPulizieRows(rows, { preserveDirty });
+
     }catch(_){
-      // offline/errore: se stiamo cambiando giorno, resta vuota; se stiamo solo ricaricando dopo salvataggio, non tocchiamo
+      // offline/errore: se stiamo cambiando giorno, resta vuota; se è un refresh "soft", non tocchiamo
       if (clearFirst) clearAllSlots();
     }
   };
 
-const buildPuliziePayload = () => {
+const buildPuliziePayload = (roomsList = null) => {
     const data = getCleanDate();
-    const rooms = ["1","2","3","4","5","6","RES"];
     const cols = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
-    const rows = rooms.map(stanza => {
+
+    let rooms = null;
+    if (Array.isArray(roomsList) && roomsList.length){
+      rooms = roomsList.map(r => String(r)).filter(Boolean);
+    } else {
+      // fallback: tutte le stanze presenti nella griglia (1..6, ecc.)
+      try{
+        rooms = Array.from(new Set(Array.from(document.querySelectorAll('.clean-grid .cell.slot'))
+          .map(el => String(el && el.dataset ? el.dataset.room : '').trim())
+          .filter(Boolean)));
+      }catch(_){ rooms = []; }
+    }
+
+    const rows = (rooms||[]).map(stanza => {
       const row = { data, stanza };
       cols.forEach(c => {
         const cell = document.querySelector(`.clean-grid .cell.slot[data-room="${stanza}"][data-col="${c}"]`);
@@ -9028,6 +9103,7 @@ const buildPuliziePayload = () => {
       });
       return row;
     });
+
     return { data, rows };
   };
 
@@ -9052,6 +9128,7 @@ const buildPuliziePayload = () => {
       try{ __sfxGlass(); }catch(_){ }
       slot.classList.remove("is-saved");
       writeCell(slot, 0);
+      try{ __markLaundryDirty(slot); }catch(_){ }
       scheduleLaundrySave();
     }, 500);
   };
@@ -9061,6 +9138,7 @@ const buildPuliziePayload = () => {
     try{ __sfxTap(); }catch(_){ }
     slot.classList.remove("is-saved");
     writeCell(slot, readCell(slot) + 1);
+    try{ __markLaundryDirty(slot); }catch(_){ }
     scheduleLaundrySave();
   };
 
@@ -9304,7 +9382,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.163) =====
+// ===== CALENDARIO (dDAE_2.164) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -9709,7 +9787,7 @@ function __fitCalendarioMonthLandscape(){
 
     const isLandscape = (window.matchMedia && window.matchMedia("(orientation: landscape)").matches);
 
-    // dDAE_2.163: in vista mese su iPad landscape usa tutta la larghezza disponibile (margine 10px L/R)
+    // dDAE_2.164: in vista mese su iPad landscape usa tutta la larghezza disponibile (margine 10px L/R)
     try{ document.body.classList.toggle("cal-month-landscape", !!isLandscape); }catch(_){}
 
     const grid = document.getElementById("calGridMonth");
@@ -10168,7 +10246,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.163)
+   Lavanderia (dDAE_2.164)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -10564,7 +10642,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.163: renderSpese allineato al backend ---
+// --- FIX dDAE_2.164: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -10660,7 +10738,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.163: delete reale ospiti ---
+// --- FIX dDAE_2.164: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -10696,7 +10774,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.163: mostra nome ospite ---
+// --- FIX dDAE_2.164: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -10980,7 +11058,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.163
+   Build: dDAE_2.164
 ========================= */
 
 state.orepulizia = state.orepulizia || {
