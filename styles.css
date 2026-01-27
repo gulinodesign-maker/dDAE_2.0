@@ -7137,13 +7137,18 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 .services-modal-actions .btn{ flex: 1 1 0; }
 
 /* Scheda nuovo ospite: centra i campi importi */
+/* FIX iOS: forza centratura effettiva dei tab importi in Nuovo ospite */
+.guest-form-card.is-create .payment-row .subfield.field.float,
+.guest-form-card.is-create .booking-row .subfield.field.float,
+.guest-form-card.is-create .services-row .subfield.field.float{
+  justify-self: center;
+  margin-left: auto;
+  margin-right: auto;
+}
+
 .guest-form-card.is-create .payment-row,
 .guest-form-card.is-create .booking-row,
-.guest-form-card.is-create .services-row{
-  grid-template-columns: minmax(0,1fr);
-  justify-items: center;
-}
-.guest-form-card.is-create .payment-row .subfield.paywrap,
+.guest-form-card.is-create .guest-form-card.is-create .payment-row .subfield.paywrap,
 .guest-form-card.is-create .booking-row .subfield.paywrap,
 .guest-form-card.is-create .services-row .subfield.paywrap{
   display:none;
