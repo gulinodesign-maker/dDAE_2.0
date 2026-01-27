@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.166";
+const BUILD_VERSION = "dDAE_2.167";
 
 /* Audio SFX (iOS-friendly, no assets) */
 const AUDIO_PREF_KEY = "ddae_audio_enabled";
@@ -244,7 +244,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.166)
+// AUTH + SESSION (dDAE_2.167)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -695,7 +695,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.166 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.167 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -747,6 +747,13 @@ guestMarriage: false,
   guestISTATRegistered: false,
   // Scheda ospite (sola lettura): ultimo ospite aperto
   guestViewItem: null,
+
+  // Servizi (scheda ospite)
+  guestServicesItems: [],
+  guestServicesComputedTotal: 0,
+  guestServicesManualOverride: false,
+  guestServicesLoadedFor: null,
+
 
   // Lavanderia (resoconti settimanali)
   laundry: { list: [], current: null },
@@ -2521,7 +2528,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.166 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.167 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2703,7 +2710,7 @@ function setSpeseView(view, { render=false } = {}){
 /* NAV pages (5 pagine interne: home + 4 funzioni) */
 
 
-// dDAE_2.166 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
+// dDAE_2.167 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
 // Applichiamo una classe .is-light ai pulsanti con background chiaro, così CSS forza icone scure.
 function __parseRGBA__(s){
   try{
@@ -3047,7 +3054,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.166: fallback visualizzazione Pulizie
+  // dDAE_2.167: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -4022,7 +4029,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.166)
+// STATISTICHE (dDAE_2.167)
 // =========================
 
 function computeStatGen(){
@@ -5243,14 +5250,16 @@ function updateGuestRemaining(){
   if (!out) return;
 
   const totalEl = document.getElementById("guestTotal");
+  const servicesEl = document.getElementById("guestServices");
   const depEl = document.getElementById("guestDeposit");
   const saldoEl = document.getElementById("guestSaldo");
 
   const totalStr = (totalEl?.value ?? "");
+  const servicesStr = (servicesEl?.value ?? "");
   const depStr = (depEl?.value ?? "");
   const saldoStr = (saldoEl?.value ?? "");
 
-  const anyFilled = [totalStr, depStr, saldoStr].some(s => String(s).trim().length > 0);
+  const anyFilled = [totalStr, servicesStr, depStr, saldoStr].some(s => String(s).trim().length > 0);
   if (!anyFilled) {
     out.value = "";
     try { refreshFloatingLabels(); } catch (_) {}
@@ -5258,9 +5267,10 @@ function updateGuestRemaining(){
   }
 
   const total = parseFloat(totalStr || "0") || 0;
+  const services = parseFloat(servicesStr || "0") || 0;
   const deposit = parseFloat(depStr || "0") || 0;
   const saldo = parseFloat(saldoStr || "0") || 0;
-  const remaining = total - deposit - saldo;
+  const remaining = (total + services) - deposit - saldo;
 
   out.value = (isFinite(remaining) ? remaining.toFixed(2) : "");
   try { refreshFloatingLabels(); } catch (_) {}
@@ -5334,8 +5344,10 @@ function enterGuestCreateMode(){
 
 
   // reset fields
-  const fields = ["guestName","guestAdults","guestKidsU10","guestCheckOut","guestTotal","guestBooking","guestDeposit","guestSaldo","guestRemaining"];
+  const fields = ["guestName","guestAdults","guestKidsU10","guestCheckOut","guestTotal","guestBooking","guestServices","guestDeposit","guestSaldo","guestRemaining"];
   fields.forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
+  // reset servizi state
+  try{ state.guestServicesItems = []; state.guestServicesComputedTotal = 0; state.guestServicesManualOverride = false; state.guestServicesLoadedFor = null; }catch(_){ }
   try { updateGuestRemaining(); } catch (_) {}
 
   const ci = document.getElementById("guestCheckIn");
@@ -5421,6 +5433,7 @@ function enterGuestEditMode(ospite){
   document.getElementById("guestCheckOut").value = formatISODateLocal(ospite.check_out || ospite.checkOut || "") || "";
   document.getElementById("guestTotal").value = ospite.importo_prenotazione ?? ospite.total ?? 0;
   document.getElementById("guestBooking").value = ospite.importo_booking ?? ospite.booking ?? 0;
+  document.getElementById("guestServices").value = ospite.servizi_totale ?? ospite.serviziTotal ?? ospite.importo_servizi ?? 0;
   document.getElementById("guestDeposit").value = ospite.acconto_importo ?? ospite.deposit ?? 0;
   document.getElementById("guestSaldo").value = ospite.saldo_pagato ?? ospite.saldoPagato ?? ospite.saldo ?? 0;
 
@@ -5708,7 +5721,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.166 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.167 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -5822,6 +5835,12 @@ function renderGuestMulti({ mode="view" } = {}){
   const blocks = shown.map(g => buildGuestBookingBlockHTML(g, { mode, showSelect:false, activeId })).join("");
   el.innerHTML = `${blocks}`;
   el.hidden = false;
+  // Servizi: carica elenco e imposta totale (edit/view)
+  try{
+    state.guestServicesManualOverride = false;
+    loadServiziForOspite(ospite);
+  }catch(_){}
+
 }
 
 function updateOspiteHdActions(){
@@ -5896,6 +5915,13 @@ function setGuestFormViewOnly(isView, ospite){
     hideRowByInputId("guestAdults", !!isView);
     // Date check-in / check-out
     hideRowByInputId("guestCheckIn", !!isView);
+    // Importo booking: non deve comparire in sola lettura
+    hideRowByInputId("guestBooking", !!isView);
+  }catch(_){ }
+  // Servizi: chiudi lista quando non in view
+  try{
+    const wrap = document.getElementById("servicesListWrap");
+    if (wrap && !isView) wrap.hidden = true;
   }catch(_){ }
 // Aggiorna i pallini in testata in base alla modalità corrente
   try { updateOspiteHdActions(); } catch (_) {}
@@ -5922,6 +5948,252 @@ function enterGuestViewMode(ospite){
     }
   }catch(_){ }
   try { updateOspiteHdActions(); } catch (_) {}
+
+/* ──────────────────────────────────────────────────────────────
+   SERVIZI (ospite): lista + totale + popup aggiunta
+   ────────────────────────────────────────────────────────────── */
+
+function normalizeServiziResponse(res){
+  if (!res) return [];
+  if (Array.isArray(res)) return res;
+  if (Array.isArray(res.items)) return res.items;
+  if (Array.isArray(res.data)) return res.data;
+  if (Array.isArray(res.rows)) return res.rows;
+  return [];
+}
+
+function serviziComputeTotal(items){
+  let sum = 0;
+  (items || []).forEach(s => {
+    if (!s) return;
+    const del = s.isDeleted ?? s.is_deleted ?? s.deleted;
+    if (String(del) === "1" || del === true) return;
+    const qty = parseFloat(s.qty ?? 1) || 1;
+    const amt = parseFloat(s.importo ?? s.amount ?? 0) || 0;
+    sum += (qty * amt);
+  });
+  return Math.round(sum * 100) / 100;
+}
+
+function serviziPreviewText(items){
+  const n = (items || []).filter(s => {
+    const del = s?.isDeleted ?? s?.is_deleted ?? s?.deleted;
+    return !(String(del) === "1" || del === true);
+  }).length;
+  return n > 0 ? (n + " servizi") : "";
+}
+
+function renderServiziList(){
+  const wrap = document.getElementById("servicesListWrap");
+  const body = document.getElementById("servicesListBody");
+  const totalEl = document.getElementById("servicesListTotal");
+  if (!wrap || !body || !totalEl) return;
+
+  totalEl.textContent = formatEUR(state.guestServicesComputedTotal || 0);
+
+  const items = (state.guestServicesItems || []).filter(s => {
+    const del = s?.isDeleted ?? s?.is_deleted ?? s?.deleted;
+    return !(String(del) === "1" || del === true);
+  });
+
+  body.innerHTML = "";
+  if (!items.length){
+    const empty = document.createElement("div");
+    empty.className = "service-item";
+    empty.innerHTML = '<div class="meta"><div class="name">Nessun servizio</div><div class="desc">—</div></div><div class="amt">€0,00</div>';
+    body.appendChild(empty);
+    return;
+  }
+
+  items.forEach(s => {
+    const name = String(s.servizio ?? s.name ?? "").trim() || "Servizio";
+    const desc = String(s.descrizione ?? s.desc ?? "").trim() || "";
+    const qty = parseFloat(s.qty ?? 1) || 1;
+    const amt = parseFloat(s.importo ?? s.amount ?? 0) || 0;
+    const row = document.createElement("div");
+    row.className = "service-item";
+    row.innerHTML = `
+      <div class="meta">
+        <div class="name">${escapeHtml(name)}${(qty && qty !== 1) ? ` <span style="opacity:.8;font-weight:800">×${qty}</span>` : ""}</div>
+        ${desc ? `<div class="desc">${escapeHtml(desc)}</div>` : `<div class="desc">—</div>`}
+      </div>
+      <div class="amt">${formatEUR(qty * amt)}</div>
+    `;
+    body.appendChild(row);
+  });
+}
+
+async function loadServiziForOspite(ospite){
+  const ospiteId = guestIdOf(ospite) || state.guestEditId;
+  if (!ospiteId) return;
+
+  // evita reload inutili
+  if (state.guestServicesLoadedFor === ospiteId) {
+    // aggiorna comunque UI (per cambio modalità)
+    try { applyServiziTotalsToUI(ospite); } catch (_) {}
+    return;
+  }
+
+  state.guestServicesLoadedFor = ospiteId;
+
+  let items = [];
+  try{
+    const res = await api("servizi", { method: "GET", params: { ospite_id: ospiteId }, showLoader: false });
+    items = normalizeServiziResponse(res);
+  }catch(_){
+    items = [];
+  }
+
+  state.guestServicesItems = Array.isArray(items) ? items : [];
+  state.guestServicesComputedTotal = serviziComputeTotal(state.guestServicesItems);
+
+  try { applyServiziTotalsToUI(ospite); } catch (_) {}
+}
+
+function applyServiziTotalsToUI(ospite){
+  const input = document.getElementById("guestServices");
+  if (!input) return;
+
+  // default: se esiste override in ospite.servizi_totale, usalo; altrimenti somma
+  const sheetOverride = parseFloat(ospite?.servizi_totale ?? ospite?.serviziTotal ?? ospite?.importo_servizi ?? "") ;
+  const hasOverride = isFinite(sheetOverride);
+  const base = hasOverride ? sheetOverride : (state.guestServicesComputedTotal || 0);
+
+  // in edit: se l'utente ha già modificato a mano, non sovrascrivere
+  const isEdit = String(state.guestMode || "").toLowerCase() === "edit";
+  if (isEdit && state.guestServicesManualOverride) {
+    // non toccare il valore digitato dall'utente
+  } else {
+    input.value = (isFinite(base) ? String(base) : "0");
+  }
+
+  try { updateGuestRemaining(); } catch (_) {}
+
+  // aggiorna dropdown se visibile
+  try { renderServiziList(); } catch (_) {}
+}
+
+async function persistServiziForCurrentGuest(){
+  const ospiteId = state.guestEditId;
+  if (!ospiteId) return;
+
+  const items = (state.guestServicesItems || []).filter(s => {
+    const del = s?.isDeleted ?? s?.is_deleted ?? s?.deleted;
+    return !(String(del) === "1" || del === true);
+  }).map(s => ({
+    servizio: String(s.servizio ?? s.name ?? "").trim(),
+    descrizione: String(s.descrizione ?? s.desc ?? "").trim(),
+    importo: parseFloat(s.importo ?? s.amount ?? 0) || 0,
+    qty: parseFloat(s.qty ?? 1) || 1
+  }));
+
+  try{
+    await api("servizi", { method: "POST", body: { ospite_id: ospiteId, servizi: items } });
+  }catch(_){}
+}
+
+function serviziAddLocal({ servizio, descrizione, importo }){
+  const row = {
+    id: genId("sv"),
+    ospite_id: state.guestEditId,
+    servizio: servizio,
+    descrizione: descrizione,
+    importo: importo,
+    qty: 1,
+    isDeleted: ""
+  };
+  state.guestServicesItems = state.guestServicesItems || [];
+  state.guestServicesItems.push(row);
+  state.guestServicesComputedTotal = serviziComputeTotal(state.guestServicesItems);
+}
+
+/* bind UI */
+function initServiziUI(){
+  const pillView = document.getElementById("servicesPillView");
+  const pillEdit = document.getElementById("servicesPillEdit");
+  const wrap = document.getElementById("servicesListWrap");
+
+  const modal = document.getElementById("servicesModal");
+  const closeBtn = document.getElementById("servicesModalClose");
+  const btnCancel = document.getElementById("svcCancel");
+  const btnSave = document.getElementById("svcSave");
+  const inName = document.getElementById("svcName");
+  const inAmt = document.getElementById("svcAmount");
+  const servicesInput = document.getElementById("guestServices");
+
+  const openModal = () => {
+    if (!modal) return;
+    // solo in edit
+    if (String(state.guestMode || "").toLowerCase() !== "edit") return;
+    modal.hidden = false;
+    try{ modal.setAttribute("aria-hidden", "false"); }catch(_){}
+    try{ inName && inName.focus(); }catch(_){}
+  };
+  const closeModal = () => {
+    if (!modal) return;
+    modal.hidden = true;
+    try{ modal.setAttribute("aria-hidden", "true"); }catch(_){}
+  };
+  const clearModal = () => {
+    if (inName) inName.value = "";
+    if (inAmt) inAmt.value = "";
+    try { refreshFloatingLabels(); } catch (_) {}
+  };
+
+  if (servicesInput){
+    servicesInput.addEventListener("input", () => {
+      if (String(state.guestMode || "").toLowerCase() === "edit") {
+        state.guestServicesManualOverride = true;
+      }
+      try { updateGuestRemaining(); } catch (_) {}
+    });
+  }
+
+  if (pillEdit) bindFastTap(pillEdit, openModal);
+  if (closeBtn) bindFastTap(closeBtn, closeModal);
+  if (btnCancel) bindFastTap(btnCancel, () => { clearModal(); });
+  if (btnSave) bindFastTap(btnSave, async () => {
+    if (!inName || !inAmt) return;
+    const servizio = String(inName.value || "").trim();
+    const importo = parseFloat(String(inAmt.value || "0").replace(",", ".")) || 0;
+    if (!servizio) return toast("Inserisci il servizio");
+    if (!isFinite(importo)) return toast("Importo non valido");
+
+    serviziAddLocal({ servizio, descrizione: "", importo });
+    // se non c'è override manuale, aggiorna input con la somma
+    if (!state.guestServicesManualOverride){
+      const sIn = document.getElementById("guestServices");
+      if (sIn) sIn.value = String(state.guestServicesComputedTotal || 0);
+    }
+    try { updateGuestRemaining(); } catch (_) {}
+    try { renderServiziList(); } catch (_) {}
+
+    // persisti subito su sheet "servizi"
+    await persistServiziForCurrentGuest();
+
+    clearModal();
+    closeModal();
+  });
+
+  if (modal) modal.addEventListener("click", (e)=>{ if (e.target === modal) closeModal(); });
+
+  if (pillView) bindFastTap(pillView, async () => {
+    // solo in view
+    if (String(state.guestMode || "").toLowerCase() !== "view") return;
+    if (!wrap) return;
+
+    // ensure loaded
+    try { await loadServiziForOspite(state.guestViewItem); } catch (_) {}
+
+    const willShow = !!wrap.hidden;
+    wrap.hidden = !willShow;
+    if (willShow){
+      try { renderServiziList(); } catch (_) {}
+    }
+  });
+}
+
+
 }
 
 
@@ -5933,6 +6205,7 @@ async function saveGuest(opts = {}){
   const checkOut = document.getElementById("guestCheckOut")?.value || "";
   const total = parseFloat(document.getElementById("guestTotal")?.value || "0") || 0;
   const booking = parseFloat(document.getElementById("guestBooking")?.value || "0") || 0;
+  const serviziTotale = parseFloat(document.getElementById("guestServices")?.value || "0") || 0;
   const deposit = parseFloat(document.getElementById("guestDeposit")?.value || "0") || 0;
   const saldoPagato = parseFloat(document.getElementById("guestSaldo")?.value || "0") || 0;
   const saldoTipo = state.guestSaldoType || "contante";
@@ -5952,6 +6225,8 @@ if (!name) return toast("Inserisci il nome");
     check_out: checkOut,
     importo_prenotazione: total,
     importo_booking: booking,
+    servizi_totale: serviziTotale,
+    servizi_preview: serviziPreviewText(state.guestServicesItems || []),
     acconto_importo: deposit,
     acconto_tipo: depositType,
     saldo_pagato: saldoPagato,
@@ -6017,6 +6292,13 @@ if (!name) return toast("Inserisci il nome");
   if (shouldSave){
     try { await api("stanze", { method:"POST", body: { ospite_id: ospiteId, stanze: stanzeSnap } }); } catch (_) {}
   }
+
+  // servizi: salva elenco (se presente)
+  try{
+    if (Array.isArray(state.guestServicesItems) && state.guestServicesItems.length){
+      await api("servizi", { method:"POST", body: { ospite_id: ospiteId, servizi: (state.guestServicesItems||[]).filter(s=>!(String(s?.isDeleted||s?.deleted||"" )==="1"||s?.isDeleted===true||s?.deleted===true)).map(s=>({ servizio:String(s.servizio??s.name??"").trim(), descrizione:String(s.descrizione??s.desc??"").trim(), importo: parseFloat(s.importo??s.amount??0)||0, qty: parseFloat(s.qty??1)||1 })) } });
+    }
+  }catch(_){ }
 
   // Invalida cache in-memory (ospiti/stanze) e forza refresh Calendario.
   // Questo evita che il calendario rimanga "stale" finche' non riavvii la PWA.
@@ -6162,7 +6444,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.166: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.167: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -6705,7 +6987,7 @@ function setupOspite(){
   bindRegPill("regTags");
 
   // Rimanenza da pagare (Importo prenotazione - Acconto - Saldo)
-  ["guestTotal","guestDeposit","guestSaldo"].forEach((id) => {
+  ["guestTotal","guestServices","guestDeposit","guestSaldo"].forEach((id) => {
     const el = document.getElementById(id);
     if (!el) return;
     el.addEventListener("input", () => { try { updateGuestRemaining(); } catch (_) {} });
@@ -7835,7 +8117,7 @@ function refreshFloatingLabels(){
 
 
 /* =========================
-   Piscina (dDAE_2.166)
+   Piscina (dDAE_2.167)
 ========================= */
 const PISCINA_ACTION = "piscina";
 
@@ -8442,6 +8724,7 @@ try{
   try{ setupColazione(); }catch(_){}
 
     setupOspite();
+    try{ initServiziUI(); }catch(_){}
   initFloatingLabels();
 
   // Non chiamare showPage qui: evitiamo doppie navigazioni/render all'avvio
@@ -8538,7 +8821,7 @@ try{
   let __laundryRefreshT = null;
   let __savingHours = false;
   let __pendingHours = false;
-  // dDAE_2.166: salvataggio PULIZIE per-stanza (evita generazione righe/report inutili)
+  // dDAE_2.167: salvataggio PULIZIE per-stanza (evita generazione righe/report inutili)
   // Mantiene UI fluida: nessun "blink" dei numeri durante autosave / refresh.
   let __dirtyLaundryRooms = new Set();   // stanze modificate (solo queste vengono salvate)
   let __dirtyLaundryCells = new Set();   // celle modificate (solo queste ricevono bordo rosso post-save)
@@ -9394,7 +9677,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.166) =====
+// ===== CALENDARIO (dDAE_2.167) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -9799,7 +10082,7 @@ function __fitCalendarioMonthLandscape(){
 
     const isLandscape = (window.matchMedia && window.matchMedia("(orientation: landscape)").matches);
 
-    // dDAE_2.166: in vista mese su iPad landscape usa tutta la larghezza disponibile (margine 10px L/R)
+    // dDAE_2.167: in vista mese su iPad landscape usa tutta la larghezza disponibile (margine 10px L/R)
     try{ document.body.classList.toggle("cal-month-landscape", !!isLandscape); }catch(_){}
 
     const grid = document.getElementById("calGridMonth");
@@ -10258,7 +10541,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.166)
+   Lavanderia (dDAE_2.167)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -10654,7 +10937,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.166: renderSpese allineato al backend ---
+// --- FIX dDAE_2.167: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -10750,7 +11033,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.166: delete reale ospiti ---
+// --- FIX dDAE_2.167: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -10786,7 +11069,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.166: mostra nome ospite ---
+// --- FIX dDAE_2.167: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -11070,7 +11353,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.166
+   Build: dDAE_2.167
 ========================= */
 
 state.orepulizia = state.orepulizia || {
