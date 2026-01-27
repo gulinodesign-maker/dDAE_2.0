@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.162";
+const BUILD_VERSION = "dDAE_2.163";
 
 /* Audio SFX (iOS-friendly, no assets) */
 const AUDIO_PREF_KEY = "ddae_audio_enabled";
@@ -244,7 +244,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.162)
+// AUTH + SESSION (dDAE_2.163)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -695,7 +695,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.162 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.163 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2521,7 +2521,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.162 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.163 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2703,7 +2703,7 @@ function setSpeseView(view, { render=false } = {}){
 /* NAV pages (5 pagine interne: home + 4 funzioni) */
 
 
-// dDAE_2.162 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
+// dDAE_2.163 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
 // Applichiamo una classe .is-light ai pulsanti con background chiaro, così CSS forza icone scure.
 function __parseRGBA__(s){
   try{
@@ -3047,7 +3047,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.162: fallback visualizzazione Pulizie
+  // dDAE_2.163: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -4022,7 +4022,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.162)
+// STATISTICHE (dDAE_2.163)
 // =========================
 
 function computeStatGen(){
@@ -5708,7 +5708,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.162 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.163 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -6162,7 +6162,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.162: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.163: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -7835,7 +7835,7 @@ function refreshFloatingLabels(){
 
 
 /* =========================
-   Piscina (dDAE_2.162)
+   Piscina (dDAE_2.163)
 ========================= */
 const PISCINA_ACTION = "piscina";
 
@@ -9304,7 +9304,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.162) =====
+// ===== CALENDARIO (dDAE_2.163) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -9325,7 +9325,10 @@ function setupCalendario(){
   const applyCalendarViewUI = () => {
     const sec = document.getElementById("page-calendario");
     const isMonth = (state.calendar && state.calendar.viewMode === "month");
-    try{ if (sec) sec.classList.toggle("is-month-view", !!isMonth); }catch(_){}
+    try{ if (sec) sec.classList.toggle("is-month-view", !!isMonth); }catch(_){
+
+    try{ if (!isMonth) document.body.classList.remove("cal-month-landscape"); }catch(_){}
+}
 
     if (toggleMonthBtn){
       try{
@@ -9705,6 +9708,10 @@ function __fitCalendarioMonthLandscape(){
     if (!state.calendar || state.calendar.viewMode !== "month") return;
 
     const isLandscape = (window.matchMedia && window.matchMedia("(orientation: landscape)").matches);
+
+    // dDAE_2.163: in vista mese su iPad landscape usa tutta la larghezza disponibile (margine 10px L/R)
+    try{ document.body.classList.toggle("cal-month-landscape", !!isLandscape); }catch(_){}
+
     const grid = document.getElementById("calGridMonth");
     const wrap = document.querySelector("#page-calendario .cal-grid-wrap");
     if (!grid || !wrap) return;
@@ -9740,7 +9747,14 @@ function __fitCalendarioMonthLandscape(){
     const daysCount = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0).getDate();
 
     // Misure reali (px)
-    const wrapW = wrap.clientWidth || 0;
+    let wrapW = wrap.clientWidth || 0;
+    // Rispetta padding/margini interni (10px L/R) se presenti
+    try{
+      const stWrap = getComputedStyle(wrap);
+      const pl = parseFloat(stWrap.paddingLeft || "0") || 0;
+      const pr = parseFloat(stWrap.paddingRight || "0") || 0;
+      wrapW = Math.max(0, wrapW - pl - pr);
+    }catch(_){}
     if (wrapW <= 0) return;
 
     // Room col: usa la larghezza effettiva della prima colonna (corner)
@@ -10154,7 +10168,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.162)
+   Lavanderia (dDAE_2.163)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -10550,7 +10564,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.162: renderSpese allineato al backend ---
+// --- FIX dDAE_2.163: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -10646,7 +10660,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.162: delete reale ospiti ---
+// --- FIX dDAE_2.163: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -10682,7 +10696,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.162: mostra nome ospite ---
+// --- FIX dDAE_2.163: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -10966,7 +10980,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.162
+   Build: dDAE_2.163
 ========================= */
 
 state.orepulizia = state.orepulizia || {
