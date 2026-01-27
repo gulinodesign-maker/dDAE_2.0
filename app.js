@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.164";
+const BUILD_VERSION = "dDAE_2.165";
 
 /* Audio SFX (iOS-friendly, no assets) */
 const AUDIO_PREF_KEY = "ddae_audio_enabled";
@@ -244,7 +244,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.164)
+// AUTH + SESSION (dDAE_2.165)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -695,7 +695,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.164 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.165 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2521,7 +2521,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.164 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.165 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2703,7 +2703,7 @@ function setSpeseView(view, { render=false } = {}){
 /* NAV pages (5 pagine interne: home + 4 funzioni) */
 
 
-// dDAE_2.164 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
+// dDAE_2.165 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
 // Applichiamo una classe .is-light ai pulsanti con background chiaro, così CSS forza icone scure.
 function __parseRGBA__(s){
   try{
@@ -3047,7 +3047,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.164: fallback visualizzazione Pulizie
+  // dDAE_2.165: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -4022,7 +4022,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.164)
+// STATISTICHE (dDAE_2.165)
 // =========================
 
 function computeStatGen(){
@@ -5708,7 +5708,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.164 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.165 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -6162,7 +6162,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.164: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.165: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -7835,7 +7835,7 @@ function refreshFloatingLabels(){
 
 
 /* =========================
-   Piscina (dDAE_2.164)
+   Piscina (dDAE_2.165)
 ========================= */
 const PISCINA_ACTION = "piscina";
 
@@ -8538,7 +8538,7 @@ try{
   let __laundryRefreshT = null;
   let __savingHours = false;
   let __pendingHours = false;
-  // dDAE_2.164: salvataggio PULIZIE per-stanza (evita generazione righe/report inutili)
+  // dDAE_2.165: salvataggio PULIZIE per-stanza (evita generazione righe/report inutili)
   // Mantiene UI fluida: nessun "blink" dei numeri durante autosave / refresh.
   let __dirtyLaundryRooms = new Set();   // stanze modificate (solo queste vengono salvate)
   let __dirtyLaundryCells = new Set();   // celle modificate (solo queste ricevono bordo rosso post-save)
@@ -9231,9 +9231,15 @@ if (cleanResetLaundry){
   bindFastTap(cleanResetLaundry, async () => {
     try{
       // azzera tutte le celle biancheria (griglia pulizie)
-      document.querySelectorAll(".clean-grid .cell.slot").forEach(el => {
+      // IMPORTANTE: marca tutte le stanze/celle come "dirty" così il salvataggio parte davvero
+      // e lo script può cancellare i record quando tutto è a zero.
+      try{ __dirtyLaundryRooms = new Set(); __dirtyLaundryCells = new Set(); }catch(_){}
+
+      const __allSlots = Array.from(document.querySelectorAll(".clean-grid .cell.slot"));
+      __allSlots.forEach(el => {
         try{ el.classList.remove("is-saved"); }catch(_){ }
         try{ writeCell(el, 0); }catch(_){ }
+        try{ __markLaundryDirty(el); }catch(_){ }
       });
       // salva immediatamente
       await saveLaundryNow();
@@ -9272,9 +9278,15 @@ if (cleanResetAll){
 
     try{
       // azzera tutte le celle biancheria (griglia pulizie)
-      document.querySelectorAll(".clean-grid .cell.slot").forEach(el => {
+      // IMPORTANTE: marca tutte le stanze/celle come "dirty" così il salvataggio parte davvero
+      // e lo script può cancellare i record quando tutto è a zero.
+      try{ __dirtyLaundryRooms = new Set(); __dirtyLaundryCells = new Set(); }catch(_){}
+
+      const __allSlots = Array.from(document.querySelectorAll(".clean-grid .cell.slot"));
+      __allSlots.forEach(el => {
         try{ el.classList.remove("is-saved"); }catch(_){ }
         try{ writeCell(el, 0); }catch(_){ }
+        try{ __markLaundryDirty(el); }catch(_){ }
       });
 
       // azzera tutti i pallini ore (solo operatori visibili)
@@ -9382,7 +9394,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.164) =====
+// ===== CALENDARIO (dDAE_2.165) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -9787,7 +9799,7 @@ function __fitCalendarioMonthLandscape(){
 
     const isLandscape = (window.matchMedia && window.matchMedia("(orientation: landscape)").matches);
 
-    // dDAE_2.164: in vista mese su iPad landscape usa tutta la larghezza disponibile (margine 10px L/R)
+    // dDAE_2.165: in vista mese su iPad landscape usa tutta la larghezza disponibile (margine 10px L/R)
     try{ document.body.classList.toggle("cal-month-landscape", !!isLandscape); }catch(_){}
 
     const grid = document.getElementById("calGridMonth");
@@ -10246,7 +10258,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.164)
+   Lavanderia (dDAE_2.165)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -10642,7 +10654,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.164: renderSpese allineato al backend ---
+// --- FIX dDAE_2.165: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -10738,7 +10750,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.164: delete reale ospiti ---
+// --- FIX dDAE_2.165: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -10774,7 +10786,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.164: mostra nome ospite ---
+// --- FIX dDAE_2.165: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -11058,7 +11070,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.164
+   Build: dDAE_2.165
 ========================= */
 
 state.orepulizia = state.orepulizia || {
