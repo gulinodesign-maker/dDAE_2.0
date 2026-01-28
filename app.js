@@ -3,7 +3,7 @@
 /**
  * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
  */
-const BUILD_VERSION = "dDAE_2.171";
+const BUILD_VERSION = "dDAE_2.173";
 
 /* Audio SFX (iOS-friendly, no assets) */
 const AUDIO_PREF_KEY = "ddae_audio_enabled";
@@ -244,7 +244,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.171)
+// AUTH + SESSION (dDAE_2.173)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -695,7 +695,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.171 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.173 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -1485,6 +1485,7 @@ function __apiProfile(action, method, body){
 
 async function api(action, { method="GET", params={}, body=null, showLoader=true } = {}){
   if (showLoader) beginRequest();
+  let realMethod = method; // definito subito per evitare ReferenceError nel finally
   try {
   if (!API_BASE_URL || API_BASE_URL.includes("INCOLLA_QUI")) {
     throw new Error("Config mancante: imposta API_BASE_URL in config.js");
@@ -1512,8 +1513,6 @@ async function api(action, { method="GET", params={}, body=null, showLoader=true
   Object.entries(params || {}).forEach(([k,v]) => {
     if (v !== undefined && v !== null && String(v).length) url.searchParams.set(k, v);
   });
-
-  let realMethod = method;
   if (method === "PUT" || method === "DELETE") {
     url.searchParams.set("_method", method);
     realMethod = "POST";
@@ -2528,7 +2527,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.171 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.173 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2710,7 +2709,7 @@ function setSpeseView(view, { render=false } = {}){
 /* NAV pages (5 pagine interne: home + 4 funzioni) */
 
 
-// dDAE_2.171 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
+// dDAE_2.173 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
 // Applichiamo una classe .is-light ai pulsanti con background chiaro, così CSS forza icone scure.
 function __parseRGBA__(s){
   try{
@@ -3054,7 +3053,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.171: fallback visualizzazione Pulizie
+  // dDAE_2.173: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -4029,7 +4028,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.171)
+// STATISTICHE (dDAE_2.173)
 // =========================
 
 function computeStatGen(){
@@ -5721,7 +5720,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.171 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.173 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -6028,27 +6027,45 @@ async function loadServiziForOspite(ospite){
   const ospiteId = guestIdOf(ospite) || state.guestEditId;
   if (!ospiteId) return;
 
-  // evita reload inutili
-  if (state.guestServicesLoadedFor === ospiteId) {
-    // aggiorna comunque UI (per cambio modalità)
+  // evita richieste duplicate contemporanee ma NON bloccare i retry
+  if (state.guestServicesLoadingFor === ospiteId) return;
+
+  // se abbiamo già caricato di recente, riusa (ma in view aprendo la lista vogliamo dati freschi)
+  const loadedSame = (state.guestServicesLoadedFor === ospiteId);
+  const loadedAt = state.guestServicesLoadedAt || 0;
+  const ageMs = Date.now() - loadedAt;
+
+  const mode = String(state.guestMode || "").toLowerCase();
+  const allowReuse = loadedSame && ageMs < 4000; // riuso ultra-breve per evitare doppie chiamate sul cambio modalità
+
+  if (allowReuse){
     try { applyServiziTotalsToUI(ospite); } catch (_) {}
     return;
   }
 
-  state.guestServicesLoadedFor = ospiteId;
+  state.guestServicesLoadingFor = ospiteId;
 
-  let items = [];
+  let items = null;
   try{
     const res = await api("servizi", { method: "GET", params: { ospite_id: ospiteId }, showLoader: false });
     items = normalizeServiziResponse(res);
   }catch(_){
-    items = [];
+    items = null; // forza retry al prossimo tentativo
   }
 
-  state.guestServicesItems = Array.isArray(items) ? items : [];
-  state.guestServicesComputedTotal = serviziComputeTotal(state.guestServicesItems);
+  // Solo se abbiamo ottenuto una risposta valida aggiorniamo 'loadedFor'
+  if (items !== null){
+    state.guestServicesItems = Array.isArray(items) ? items : [];
+    state.guestServicesComputedTotal = serviziComputeTotal(state.guestServicesItems);
+    state.guestServicesLoadedFor = ospiteId;
+    state.guestServicesLoadedAt = Date.now();
+    try { applyServiziTotalsToUI(ospite); } catch (_) {}
+  } else {
+    // non segnare come caricato → al prossimo tap riprova
+    try { state.guestServicesLoadedFor = null; } catch (_) {}
+  }
 
-  try { applyServiziTotalsToUI(ospite); } catch (_) {}
+  state.guestServicesLoadingFor = null;
 }
 
 function applyServiziTotalsToUI(ospite){
@@ -6201,6 +6218,9 @@ function initServiziUI(){
     if (willShow){
       try { renderServiziList(); } catch (_) {}
     }
+    if (willShow){
+      try{ setTimeout(()=>{ try{ wrap.scrollIntoView({ behavior: 'smooth', block: 'start' }); }catch(_){ try{ wrap.scrollIntoView(true); }catch(__){} } }, 50); }catch(_){ }
+    }
   });
 
   // fallback toggle (iOS): assicura apertura lista in sola lettura
@@ -6214,6 +6234,7 @@ function initServiziUI(){
       const willShow = !!wrap.hidden;
       wrap.hidden = !willShow;
       if (willShow){ try { renderServiziList(); } catch (_) {} }
+      if (willShow){ try{ setTimeout(()=>{ try{ wrap.scrollIntoView({ behavior: 'smooth', block: 'start' }); }catch(_){ try{ wrap.scrollIntoView(true); }catch(__){} } }, 50); }catch(_){ } }
     };
     try{
       pillView.addEventListener("click", toggle, { passive:false });
@@ -6471,7 +6492,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.171: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.173: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -8144,7 +8165,7 @@ function refreshFloatingLabels(){
 
 
 /* =========================
-   Piscina (dDAE_2.171)
+   Piscina (dDAE_2.173)
 ========================= */
 const PISCINA_ACTION = "piscina";
 
@@ -8848,7 +8869,7 @@ try{
   let __laundryRefreshT = null;
   let __savingHours = false;
   let __pendingHours = false;
-  // dDAE_2.171: salvataggio PULIZIE per-stanza (evita generazione righe/report inutili)
+  // dDAE_2.173: salvataggio PULIZIE per-stanza (evita generazione righe/report inutili)
   // Mantiene UI fluida: nessun "blink" dei numeri durante autosave / refresh.
   let __dirtyLaundryRooms = new Set();   // stanze modificate (solo queste vengono salvate)
   let __dirtyLaundryCells = new Set();   // celle modificate (solo queste ricevono bordo rosso post-save)
@@ -9704,7 +9725,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.171) =====
+// ===== CALENDARIO (dDAE_2.173) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -10109,7 +10130,7 @@ function __fitCalendarioMonthLandscape(){
 
     const isLandscape = (window.matchMedia && window.matchMedia("(orientation: landscape)").matches);
 
-    // dDAE_2.171: in vista mese su iPad landscape usa tutta la larghezza disponibile (margine 10px L/R)
+    // dDAE_2.173: in vista mese su iPad landscape usa tutta la larghezza disponibile (margine 10px L/R)
     try{ document.body.classList.toggle("cal-month-landscape", !!isLandscape); }catch(_){}
 
     const grid = document.getElementById("calGridMonth");
@@ -10568,7 +10589,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.171)
+   Lavanderia (dDAE_2.173)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -10964,7 +10985,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.171: renderSpese allineato al backend ---
+// --- FIX dDAE_2.173: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -11060,7 +11081,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.171: delete reale ospiti ---
+// --- FIX dDAE_2.173: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -11096,7 +11117,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.171: mostra nome ospite ---
+// --- FIX dDAE_2.173: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -11380,7 +11401,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.171
+   Build: dDAE_2.173
 ========================= */
 
 state.orepulizia = state.orepulizia || {

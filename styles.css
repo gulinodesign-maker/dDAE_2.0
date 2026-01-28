@@ -7166,3 +7166,28 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 .guest-form-card.is-edit #servicesPillView{ display:none !important; }
 #servicesPillView{ cursor: pointer; }
 
+
+
+/* ===== dDAE_2.173 – Servizi popup polish + dropdown UX ===== */
+.services-modal-card{
+  width: min(380px, 92vw) !important;
+  border-radius: 18px !important;
+  padding: 54px 16px 14px !important; /* spazio per la X */
+}
+.services-modal-body{
+  display:flex;
+  flex-direction:column;
+  gap: 12px;
+}
+.services-modal-actions{
+  margin-top: 4px !important;
+}
+.services-modal-actions .btn{
+  opacity: 0.80 !important;
+}
+.services-modal-close{
+  opacity: 0.95;
+}
+.services-list-wrap{
+  scroll-margin-top: 14px;
+}
