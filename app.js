@@ -1,9 +1,9 @@
 /* global API_BASE_URL, API_KEY */
 
 /**
- * Build: dDAE_2.174
+ * Build: dDAE_2.175
  */
-const BUILD_VERSION = "dDAE_2.174";
+const BUILD_VERSION = "dDAE_2.175";
 
 /* Audio SFX (iOS-friendly, no assets) */
 const AUDIO_PREF_KEY = "ddae_audio_enabled";
@@ -6020,6 +6020,21 @@ function renderServiziList(){
   });
 
   body.innerHTML = "";
+
+  const mode = String(state.guestMode || "").toLowerCase();
+  const isEdit = (mode === "edit");
+
+  const currentId = isEdit ? (state.guestEditId || "") : (guestIdOf(state.guestViewItem) || "");
+  const isLoading = (String(state.guestServicesLoadingFor || "") === String(currentId || "")) && !(state.guestServicesItems || []).length;
+
+  if (isLoading){
+    const loading = document.createElement("div");
+    loading.className = "service-item";
+    loading.innerHTML = '<div class="meta"><div class="name">Caricamento…</div><div class="desc">—</div></div><div class="amt"> </div>';
+    body.appendChild(loading);
+    return;
+  }
+
   if (!items.length){
     const empty = document.createElement("div");
     empty.className = "service-item";
@@ -6028,22 +6043,78 @@ function renderServiziList(){
     return;
   }
 
-  items.forEach(s => {
+  items.forEach((s, i) => {
+    const idxAll = (state.guestServicesItems || []).indexOf(s);
+    const delKey = (idxAll >= 0 ? idxAll : i);
     const name = String(s.servizio ?? s.name ?? "").trim() || "Servizio";
     const desc = String(s.descrizione ?? s.desc ?? "").trim() || "";
     const qty = parseFloat(s.qty ?? 1) || 1;
     const amt = parseFloat(s.importo ?? s.amount ?? 0) || 0;
     const row = document.createElement("div");
     row.className = "service-item";
+
+    const rightParts = [];
+    rightParts.push(`<div class="amt">${formatEUR(qty * amt)}</div>`);
+    if (isEdit){
+      rightParts.push(`<button type="button" class="service-del-dot" data-svc-del="${delKey}" aria-label="Elimina servizio"><span>×</span></button>`);
+    }
+
     row.innerHTML = `
       <div class="meta">
         <div class="name">${escapeHtml(name)}${(qty && qty !== 1) ? ` <span style="opacity:.8;font-weight:800">×${qty}</span>` : ""}</div>
         ${desc ? `<div class="desc">${escapeHtml(desc)}</div>` : `<div class="desc">—</div>`}
       </div>
-      <div class="amt">${formatEUR(qty * amt)}</div>
+      <div style="display:flex;align-items:center;gap:10px;flex:0 0 auto;">
+        ${rightParts.join("")}
+      </div>
     `;
+
+    if (isEdit){
+      const btn = row.querySelector('[data-svc-del="'+delKey+'"]');
+if (btn){
+        bindFastTap(btn, ()=>{
+          deleteServizioFromCurrentGuest(delKey);
+        });
+      }
+    }
+
     body.appendChild(row);
   });
+
+}
+
+
+
+async function deleteServizioFromCurrentGuest(serviceIdx){
+  try{
+    if (String(state.guestMode || "").toLowerCase() !== "edit") return;
+    const ospiteId = state.guestEditId;
+    if (!ospiteId) return;
+
+    const arr = Array.isArray(state.guestServicesItems) ? state.guestServicesItems : [];
+    if (!arr.length) return;
+    if (serviceIdx < 0 || serviceIdx >= arr.length) return;
+
+    // Rimuovi subito in UI
+    arr.splice(serviceIdx, 1);
+    state.guestServicesItems = arr;
+    state.guestServicesComputedTotal = serviziComputeTotal(arr);
+    try{ state.guestServicesManualOverride = false; }catch(_){ }
+    try{ applyServiziTotalsToUI({ servizi_totale: state.guestServicesComputedTotal }); }catch(_){ }
+    try{ renderServiziList(); }catch(_){ }
+
+    // Persisti (POST: backend cancella le righe del foglio per ospite e reinserisce le restanti)
+    try{
+      await persistServiziForCurrentGuest();
+      try{ toast("Servizio eliminato"); }catch(_){ }
+    }catch(err){
+      // In caso di errore, ricarica dal backend per riallineare
+      try{ state.guestServicesLoadedFor = null; state.guestServicesLoadedAt = 0; }catch(_){ }
+      try{ await loadServiziForOspite({ id: ospiteId }); }catch(_){ }
+      try{ renderServiziList(); }catch(_){ }
+      try{ toast("Errore eliminazione servizio"); }catch(_){ }
+    }
+  }catch(_){}
 }
 
 async function loadServiziForOspite(ospite){
@@ -6257,38 +6328,50 @@ function initServiziUI(){
 
   if (modal) modal.addEventListener("click", (e)=>{ if (e.target === modal) closeModal(); });
 
-  if (pillView) bindFastTap(pillView, async () => {
-    // (handler definito in bindFastTap)
-
-    // solo in view
-    if (String(state.guestMode || "").toLowerCase() !== "view") return;
+  if (pillView) bindFastTap(pillView, () => {
+    // Apertura istantanea dropdown Servizi (view + edit)
+    const mode = String(state.guestMode || "").toLowerCase();
+    const isView = (mode === "view");
+    const isEdit = (mode === "edit");
+    if (!isView && !isEdit) return;
     if (!wrap) return;
-
-    // ensure loaded
-    try { await loadServiziForOspite(state.guestViewItem); } catch (_) {}
 
     const willShow = !!wrap.hidden;
     wrap.hidden = !willShow;
+
     if (willShow){
       try { renderServiziList(); } catch (_) {}
-    }
-    if (willShow){
-      try{ setTimeout(()=>{ try{ wrap.scrollIntoView({ behavior: 'smooth', block: 'start' }); }catch(_){ try{ wrap.scrollIntoView(true); }catch(__){} } }, 50); }catch(_){ }
+      // carica in background e re-render
+      const target = isView ? state.guestViewItem : { id: state.guestEditId };
+      try{
+        loadServiziForOspite(target).then(()=>{ try{ renderServiziList(); }catch(_){ } });
+      }catch(_){}
     }
   });
 
-  // fallback toggle (iOS): assicura apertura lista in sola lettura
+  // fallback toggle (iOS): assicura apertura lista in sola lettura / modifica
+  // (senza attese: apertura immediata, fetch in background)
+    // fallback toggle (iOS): assicura apertura lista in sola lettura
   if (pillView){
-    const toggle = async (e)=>{
+    const toggle = (e)=>{
       try{ e && e.preventDefault && e.preventDefault(); }catch(_){}
       try{ e && e.stopPropagation && e.stopPropagation(); }catch(_){}
-      if (String(state.guestMode || "").toLowerCase() !== "view") return;
+      const mode = String(state.guestMode || "").toLowerCase();
+      const isView = (mode === "view");
+      const isEdit = (mode === "edit");
+      if (!isView && !isEdit) return;
       if (!wrap) return;
-      try { await loadServiziForOspite(state.guestViewItem); } catch (_) {}
+
       const willShow = !!wrap.hidden;
       wrap.hidden = !willShow;
-      if (willShow){ try { renderServiziList(); } catch (_) {} }
-      if (willShow){ try{ setTimeout(()=>{ try{ wrap.scrollIntoView({ behavior: 'smooth', block: 'start' }); }catch(_){ try{ wrap.scrollIntoView(true); }catch(__){} } }, 50); }catch(_){ } }
+
+      if (willShow){
+        try { renderServiziList(); } catch (_) {}
+        const target = isView ? state.guestViewItem : { id: state.guestEditId };
+        try{
+          loadServiziForOspite(target).then(()=>{ try{ renderServiziList(); }catch(_){ } });
+        }catch(_){}
+      }
     };
     try{
       pillView.addEventListener("click", toggle, { passive:false });

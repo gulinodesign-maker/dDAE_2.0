@@ -7055,9 +7055,6 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 .guest-form-card.is-view #servicesPillEdit{
   display:none !important;
 }
-.guest-form-card.is-edit #servicesPillView{
-  display:none !important;
-}
 #page-ospite .pay-pill-plus span.plus{
   font-size: 22px;
   font-weight: 950;
@@ -7112,7 +7109,37 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 .service-item .meta{ min-width:0; flex: 1 1 auto; }
 .service-item .name{ font-weight: 900; }
 .service-item .desc{ opacity: 0.85; font-size: 13px; margin-top: 2px; word-break: break-word; }
-.service-item .amt{ font-weight: 950; white-space: nowrap; margin-left: 10px; }
+.service-item .amt{ font-weight: 950; white-space: nowrap; margin-left: 10px; 
+/* dDAE_2.175 — Modifica ospite: pill Servizi sopra '+' (stack verticale) */
+.guest-form-card.is-edit #servicesRow .paywrap{
+  display:flex;
+  flex-direction:column;
+  align-items:flex-end;
+  justify-content:flex-start;
+  gap: 8px;
+}
+
+/* dDAE_2.175 — Modifica ospite: delete servizio (pallino bianco con X rossa) */
+.service-del-dot{
+  width: 28px;
+  height: 28px;
+  border-radius: 999px;
+  background: #ffffff;
+  border: 1px solid rgba(15,23,42,0.16);
+  display:flex;
+  align-items:center;
+  justify-content:center;
+  flex: 0 0 auto;
+  padding: 0;
+}
+.service-del-dot span{
+  color: #e11d48; /* rosso */
+  font-weight: 950;
+  font-size: 16px;
+  line-height: 1;
+}
+
+}
 
 /* Servizi: modal aggiunta (scheda modifica ospite) */
 .services-modal-card{
@@ -7176,7 +7203,6 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 /* Servizi: pill visibile per modalità */
 .guest-form-card.is-view #servicesPillEdit{ display:none !important; }
 .guest-form-card.is-create #servicesPillEdit{ display:none !important; }
-.guest-form-card.is-edit #servicesPillView{ display:none !important; }
 #servicesPillView{ cursor: pointer; }
 
 
