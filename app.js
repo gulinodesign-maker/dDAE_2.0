@@ -1,9 +1,9 @@
 /* global API_BASE_URL, API_KEY */
 
 /**
- * Build: incrementa questa stringa alla prossima modifica (es. 1.001)
+ * Build: dDAE_2.174
  */
-const BUILD_VERSION = "dDAE_2.173";
+const BUILD_VERSION = "dDAE_2.174";
 
 /* Audio SFX (iOS-friendly, no assets) */
 const AUDIO_PREF_KEY = "ddae_audio_enabled";
@@ -5418,7 +5418,17 @@ function enterGuestEditMode(ospite){
   state.guestMode = "edit";
   try{ updateGuestFormModeClass(); }catch(_){ }
   state.guestEditId = ospite?.id ?? null;
-  state.guestEditCreatedAt = (ospite?.created_at ?? ospite?.createdAt ?? null);
+  
+
+  // Servizi: reset stato e carica elenco dal foglio (per mostrare subito importo servizi)
+  try{
+    state.guestServicesManualOverride = false;
+    state.guestServicesLoadedFor = null;
+    state.guestServicesLoadedAt = 0;
+    state.guestServicesItems = [];
+    state.guestServicesComputedTotal = 0;
+  }catch(_){ }
+state.guestEditCreatedAt = (ospite?.created_at ?? ospite?.createdAt ?? null);
 
   const title = document.getElementById("ospiteFormTitle");
   if (title) title.textContent = "Modifica ospite";
@@ -5445,6 +5455,9 @@ function enterGuestEditMode(ospite){
   setColC(state.guestColC);
 refreshFloatingLabels();
   try { updateGuestRemaining(); } catch (_) {}
+
+  // Servizi: carica sempre (anche se l'ospite non ha servizi_totale valorizzato)
+  try{ loadServiziForOspite(ospite); }catch(_){ }
 
 
   // deposit type (se disponibile)
@@ -5933,7 +5946,17 @@ function enterGuestViewMode(ospite){
   try{ updateGuestFormModeClass(); }catch(_){ }
   state.guestViewItem = ospite || null;
 
-  const title = document.getElementById("ospiteFormTitle");
+  
+  // Servizi: carica sempre elenco e totale (anche se non ci sono multi-prenotazioni)
+  try{
+    state.guestServicesManualOverride = false;
+    state.guestServicesLoadedFor = null;
+    state.guestServicesLoadedAt = 0;
+    state.guestServicesItems = [];
+    state.guestServicesComputedTotal = 0;
+    loadServiziForOspite(ospite);
+  }catch(_){ }
+const title = document.getElementById("ospiteFormTitle");
   if (title) title.textContent = "Scheda ospite";
 
   setGuestFormViewOnly(true, ospite);
@@ -6040,6 +6063,7 @@ async function loadServiziForOspite(ospite){
 
   if (allowReuse){
     try { applyServiziTotalsToUI(ospite); } catch (_) {}
+    try { __syncServiziToCurrentGuest(ospiteId); } catch (_) {}
     return;
   }
 
@@ -6091,6 +6115,30 @@ function applyServiziTotalsToUI(ospite){
   try { renderServiziList(); } catch (_) {}
 }
 
+function __syncServiziToCurrentGuest(ospiteId){
+  const id = String(ospiteId||"").trim();
+  if (!id) return;
+  const computed = (state.guestServicesComputedTotal || 0);
+  const preview = serviziPreviewText(state.guestServicesItems || []);
+  // aggiorna oggetto ospite in view
+  try{
+    if (state.guestViewItem && String(state.guestViewItem.id||"") === id){
+      state.guestViewItem.servizi_totale = computed;
+      state.guestViewItem.servizi_preview = preview;
+    }
+  }catch(_){}
+  // aggiorna lista ospiti in memoria (se presente)
+  try{
+    if (Array.isArray(state.guests)){
+      const g = state.guests.find(x => String(x?.id||"") === id);
+      if (g){
+        g.servizi_totale = computed;
+        g.servizi_preview = preview;
+      }
+    }
+  }catch(_){}
+}
+
 async function persistServiziForCurrentGuest(){
   const ospiteId = state.guestEditId;
   if (!ospiteId) return;
@@ -6107,7 +6155,13 @@ async function persistServiziForCurrentGuest(){
 
   try{
     await api("servizi", { method: "POST", body: { ospite_id: ospiteId, servizi: items } });
-  }catch(_){}
+  
+
+    // dopo persistenza: forza reload dal backend e sincronizza il totale in UI (anche in sola lettura)
+    try{ state.guestServicesLoadedFor = null; state.guestServicesLoadedAt = 0; }catch(_){ }
+    try{ await loadServiziForOspite({ id: ospiteId }); }catch(_){ }
+    try{ __syncServiziToCurrentGuest(ospiteId); }catch(_){ }
+}catch(_){}
 }
 
 function serviziAddLocal({ servizio, descrizione, importo }){

@@ -7066,6 +7066,18 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 }
 
 
+
+/* FIX iOS: assicurare tap affidabile sui pulsanti Servizi */
+#page-ospite #servicesPillView,
+#page-ospite #servicesPillEdit{
+  position: relative;
+  z-index: 5;
+  pointer-events: auto;
+}
+#page-ospite #servicesRow .paywrap{
+  position: relative;
+  z-index: 4;
+}
 /* Servizi: dropdown elenco (scheda ospite in lettura) */
 .services-list-wrap{ margin-top: 10px; }
 .services-list-card{
@@ -7137,12 +7149,12 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 .services-modal-actions .btn{ flex: 1 1 0; }
 
 /* Scheda nuovo ospite: centra i campi importi */
-/* FIX iOS: forza centratura effettiva dei tab importi in Nuovo ospite (solo prenotazione + booking) */
-/* NOTE: #page-ospite .field.two-col ha specificità alta (ID) → qui usiamo selector più specifico + !important */
+/* FIX iOS: centratura VISIBILE dei tab importi (solo prenotazione + booking) */
 #page-ospite .guest-form-card.is-create .total-row,
 #page-ospite .guest-form-card.is-create .booking-row{
   display:flex !important;
   justify-content:center !important;
+  align-items:stretch !important;
 }
 #page-ospite .guest-form-card.is-create .total-row .subfield.paywrap,
 #page-ospite .guest-form-card.is-create .booking-row .subfield.paywrap{
@@ -7150,11 +7162,12 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 }
 #page-ospite .guest-form-card.is-create .total-row .subfield.field.float,
 #page-ospite .guest-form-card.is-create .booking-row .subfield.field.float{
-  width: min(420px, 92%) !important;
+  flex: 0 0 auto !important;
+  width: min(360px, 86vw) !important;
+  max-width: min(360px, 86vw) !important;
   margin-left:auto !important;
   margin-right:auto !important;
 }
-
 
 
 .guest-form-card.is-view .booking-row{ display:none !important; }
