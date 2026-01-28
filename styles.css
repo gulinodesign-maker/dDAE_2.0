@@ -49,7 +49,7 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.178");
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.179");
   background-repeat: no-repeat;
   background-position: center;
   background-size: cover;
@@ -928,7 +928,7 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.178");
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.179");
   background-repeat: no-repeat;
   background-position: center;
   background-size: cover;
@@ -2903,6 +2903,44 @@ body[data-page="ospiti"] .guest-card .actions {
   background-image: none;
   border-color: rgba(15,23,42,0.16);
 }
+
+/* === Calendario (mese): barra prenotazione accorpata (span) === */
+#page-calendario .calendar-event-bar{
+  background: rgba(255,255,255,0.44);
+  border-color: rgba(15,23,42,0.22);
+  border-radius: 16px;
+  box-shadow: 0 8px 18px rgba(15,23,42,0.18);
+  overflow: hidden;
+  z-index: 2;
+}
+#page-calendario .calendar-event-bar::before{
+  opacity: .94;
+}
+#page-calendario .calendar-event-bar .cal-cell-inner{
+  flex-direction: row;
+  align-items: center;
+  justify-content: flex-start;
+  padding: 8px 10px;
+  gap: 10px;
+}
+#page-calendario .calendar-event-bar .cal-initials{
+  color: rgba(255,255,255,0.98);
+}
+#page-calendario .calendar-event-bar .cal-flags{
+  pointer-events: auto;
+}
+#page-calendario .calendar-event-bar .cal-flag{
+  cursor: pointer;
+  pointer-events: auto;
+}
+
+/* Usa la palette p1..p8 come colore base della barra (mappata alle stanze) */
+#page-calendario .calendar-event-bar.room-1{ --room-bg: var(--p1); }
+#page-calendario .calendar-event-bar.room-2{ --room-bg: var(--p2); }
+#page-calendario .calendar-event-bar.room-3{ --room-bg: var(--p3); }
+#page-calendario .calendar-event-bar.room-4{ --room-bg: var(--p4); }
+#page-calendario .calendar-event-bar.room-5{ --room-bg: var(--p5); }
+#page-calendario .calendar-event-bar.room-6{ --room-bg: var(--p6); }
 #page-calendario .cal-initials{
   text-shadow: none;
   color: rgba(15,23,42,0.86);
@@ -7065,7 +7103,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 
 
 
-/* dDAE_2.178 — Servizi: in edit mostra sia "Servizi" che "+" in colonna (Servizi sopra +), centrati e con stessa pill */
+/* dDAE_2.179 — Servizi: in edit mostra sia "Servizi" che "+" in colonna (Servizi sopra +), centrati e con stessa pill */
 #page-ospite #servicesRow .subfield.paywrap{
   flex-direction: column;
   gap: 10px;
@@ -7079,7 +7117,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   pointer-events: none;
 }
 
-/* dDAE_2.178 — Servizi: delete (pallino bianco con X rossa) solo in modalità edit */
+/* dDAE_2.179 — Servizi: delete (pallino bianco con X rossa) solo in modalità edit */
 #servicesListWrap[data-mode="edit"] .svc-right{
   display:flex;
   align-items:center;

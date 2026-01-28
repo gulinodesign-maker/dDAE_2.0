@@ -1,9 +1,9 @@
 /* global API_BASE_URL, API_KEY */
 
 /**
- * Build: dDAE_2.178
+ * Build: dDAE_2.179
  */
-const BUILD_VERSION = "dDAE_2.178";
+const BUILD_VERSION = "dDAE_2.179";
 
 /* Audio SFX (iOS-friendly, no assets) */
 const AUDIO_PREF_KEY = "ddae_audio_enabled";
@@ -10585,50 +10585,82 @@ function renderCalendarioMonth(){
       const d = days[i];
       const dIso = isoDate(d);
 
-      const cell = document.createElement("button");
-      cell.type = "button";
-      cell.className = `cal-cell room-${r}`;
-      cell.setAttribute("aria-label", `Stanza ${r}, ${weekdayShortIT(d)} ${d.getDate()}`);
-      cell.dataset.date = dIso;
-      cell.dataset.room = String(r);
-
       const info = occ.get(`${dIso}:${r}`);
-      if (!info) {
-        cell.addEventListener("click", (ev)=>{
-          try { ev.preventDefault(); } catch (_) {}
-          try { ev.stopPropagation(); } catch (_) {}
-          try{
-            const prev = grid.querySelector(".cal-cell.empty-selected");
-            if (prev && prev !== cell) prev.classList.remove("empty-selected");
-            cell.classList.toggle("empty-selected");
-          }catch(_){}
-        });
-      }
 
+      // Prenotazione: renderizza una sola "barra" che copre i giorni consecutivi (span)
       if (info) {
-        cell.classList.add("has-booking");
-        if (info.lastDay) cell.classList.add("last-day");
+        let span = 1;
+        for (let j = i + 1; j < daysCount; j++) {
+          const d2Iso = isoDate(days[j]);
+          const info2 = occ.get(`${d2Iso}:${r}`);
+          if (info2 && String(info2.guestId) === String(info.guestId)) span++;
+          else break;
+        }
+
+        const endIdx = i + span - 1;
+        const endInfo = occ.get(`${isoDate(days[endIdx])}:${r}`);
+
+        const cell = document.createElement("button");
+        cell.type = "button";
+        cell.className = `cal-cell room-${r} has-booking calendar-event-bar`;
+        cell.style.gridColumn = `span ${span}`;
+        cell.setAttribute("aria-label", `Stanza ${r}, ${weekdayShortIT(d)} ${d.getDate()} - ${days[endIdx].getDate()}`);
+        cell.dataset.date = dIso;
+        cell.dataset.room = String(r);
+        cell.dataset.span = String(span);
+
+        if (endInfo && endInfo.lastDay) cell.classList.add("last-day");
+
+        const openGuest = () => {
+          const ospite = findCalendarGuestById(info.guestId);
+          if (!ospite) return;
+          enterGuestViewMode(ospite);
+          showPage("ospite");
+        };
 
         try{
           const flags = document.createElement("div");
           flags.className = "cal-flags";
 
+          const bindFlag = (el) => {
+            try{
+              el.tabIndex = 0;
+              el.setAttribute("role", "button");
+              el.addEventListener("click", (ev)=>{
+                try { ev.preventDefault(); } catch (_) {}
+                try { ev.stopPropagation(); } catch (_) {}
+                openGuest();
+              });
+              el.addEventListener("keydown", (ev)=>{
+                const k = ev && ev.key;
+                if (k === "Enter" || k === " ") {
+                  try { ev.preventDefault(); } catch (_) {}
+                  try { ev.stopPropagation(); } catch (_) {}
+                  openGuest();
+                }
+              });
+            }catch(_){}
+          };
+
           if (info.mOn){
             const f = document.createElement("span");
             f.className = "cal-flag cal-flag-m";
             f.textContent = "m";
+            bindFlag(f);
             flags.appendChild(f);
           }
           if (info.cOn){
             const f = document.createElement("span");
             f.className = "cal-flag cal-flag-c";
             f.textContent = "c";
+            bindFlag(f);
             flags.appendChild(f);
           }
           if (info.gOn){
             const f = document.createElement("span");
             f.className = "cal-flag cal-flag-g";
             f.textContent = "g";
+            bindFlag(f);
             flags.appendChild(f);
           }
 
@@ -10659,13 +10691,33 @@ function renderCalendarioMonth(){
           try{ const prev = grid.querySelector(".cal-cell.empty-selected"); if (prev) prev.classList.remove("empty-selected"); }catch(_){}
           try { ev.preventDefault(); } catch (_) {}
           try { ev.stopPropagation(); } catch (_) {}
-
-          const ospite = findCalendarGuestById(info.guestId);
-          if (!ospite) return;
-          enterGuestViewMode(ospite);
-          showPage("ospite");
+          openGuest();
         });
+
+        frag.appendChild(cell);
+
+        // Salta i giorni coperti dalla barra
+        i += (span - 1);
+        continue;
       }
+
+      // Casella vuota
+      const cell = document.createElement("button");
+      cell.type = "button";
+      cell.className = `cal-cell room-${r}`;
+      cell.setAttribute("aria-label", `Stanza ${r}, ${weekdayShortIT(d)} ${d.getDate()}`);
+      cell.dataset.date = dIso;
+      cell.dataset.room = String(r);
+
+      cell.addEventListener("click", (ev)=>{
+        try { ev.preventDefault(); } catch (_) {}
+        try { ev.stopPropagation(); } catch (_) {}
+        try{
+          const prev = grid.querySelector(".cal-cell.empty-selected");
+          if (prev && prev !== cell) prev.classList.remove("empty-selected");
+          cell.classList.toggle("empty-selected");
+        }catch(_){}
+      });
 
       frag.appendChild(cell);
     }
