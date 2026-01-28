@@ -1,9 +1,9 @@
 /* global API_BASE_URL, API_KEY */
 
 /**
- * Build: dDAE_2.186
+ * Build: dDAE_2.187
  */
-const BUILD_VERSION = "dDAE_2.186";
+const BUILD_VERSION = "dDAE_2.187";
 
 /* Audio SFX (iOS-friendly, no assets) */
 const AUDIO_PREF_KEY = "ddae_audio_enabled";
@@ -244,7 +244,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.186)
+// AUTH + SESSION (dDAE_2.187)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -695,7 +695,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.186 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.187 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2528,7 +2528,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.186 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.187 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2710,7 +2710,7 @@ function setSpeseView(view, { render=false } = {}){
 /* NAV pages (5 pagine interne: home + 4 funzioni) */
 
 
-// dDAE_2.186 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
+// dDAE_2.187 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
 // Applichiamo una classe .is-light ai pulsanti con background chiaro, così CSS forza icone scure.
 function __parseRGBA__(s){
   try{
@@ -2990,8 +2990,9 @@ state.page = page;
     Promise.all([
       ensurePeriodData({ showLoader:true }),
       loadOspiti({ ...(state.period || {}), force:false }),
+      cachedGet("servizi", {}, { showLoader:false, ttlMs: 2*60*1000, swrMs: 10*60*1000, force:false }),
     ])
-      .then(()=>{ if (state.navId !== _nav || state.page !== "statgen") return; renderStatGen(); })
+      .then(([, , servizi])=>{ if (state.navId !== _nav || state.page !== "statgen") return; try{ state.servizi = normalizeServiziResponse(servizi); }catch(_){ state.servizi = []; } renderStatGen(); })
       .catch(e=>toast(e.message));
   }
 
@@ -3000,8 +3001,9 @@ state.page = page;
     Promise.all([
       ensurePeriodData({ showLoader:true }),
       loadOspiti({ ...(state.period || {}), force:false }),
+      cachedGet("servizi", {}, { showLoader:false, ttlMs: 2*60*1000, swrMs: 10*60*1000, force:false }),
     ])
-      .then(()=>{ if (state.navId !== _nav || state.page !== "statmensili") return; renderStatMensili(); })
+      .then(([, , servizi])=>{ if (state.navId !== _nav || state.page !== "statmensili") return; try{ state.servizi = normalizeServiziResponse(servizi); }catch(_){ state.servizi = []; } renderStatMensili(); })
       .catch(e=>toast(e.message));
   }
 
@@ -3054,7 +3056,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.186: fallback visualizzazione Pulizie
+  // dDAE_2.187: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -4029,7 +4031,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.186)
+// STATISTICHE (dDAE_2.187)
 // =========================
 
 function computeStatGen(){
@@ -4061,7 +4063,13 @@ function computeStatGen(){
   let conRicevuta = 0;
   let senzaRicevuta = 0;
 
+
+  // Servizi (foglio "servizi"): somma importi (importo * qty) per gli ospiti del periodo
+  const servizi = Array.isArray(state.servizi) ? state.servizi : [];
+  const guestIdsSet = new Set();
   for (const g of guests){
+    const _gid = guestIdOf(g) ?? g?.id ?? g?.ID ?? g?.Id ?? "";
+    if (_gid !== null && _gid !== undefined && String(_gid).trim() !== "") guestIdsSet.add(String(_gid));
     const pren = money(g?.importo_prenotazione ?? g?.importo_prenota ?? g?.importoPrenotazione ?? g?.importoPrenota ?? 0);
     fatturato += pren;
 
@@ -4083,6 +4091,29 @@ function computeStatGen(){
       else senzaRicevuta += saldo;
     }
   }
+
+  // Aggiungi servizi al fatturato totale
+  try{
+    let sumServizi = 0;
+    for (const s of (servizi || [])){
+      if (!s) continue;
+      const del = s.isDeleted ?? s.is_deleted ?? s.deleted;
+      if (String(del) === "1" || del === true) continue;
+      const ospiteId = s.ospite_id ?? s.ospiteId ?? s.guest_id ?? s.guestId ?? "";
+      if (ospiteId === null || ospiteId === undefined || String(ospiteId).trim() === "") continue;
+      if (!guestIdsSet.has(String(ospiteId))) continue;
+
+      const qtyRaw = money(s.qty ?? 1);
+      const qty = (isFinite(qtyRaw) && qtyRaw > 0) ? qtyRaw : 1;
+      const amt = money(s.importo ?? s.amount ?? 0);
+      if (!isFinite(amt) || amt === 0) continue;
+
+      sumServizi += (qty * amt);
+    }
+    if (isFinite(sumServizi) && sumServizi !== 0){
+      fatturato += sumServizi;
+    }
+  }catch(_){ }
 
   let speseTot = 0;
 
@@ -4241,6 +4272,7 @@ const __MONTHS_IT = [
 
 function computeStatMensili(){
   const guests = Array.isArray(state.guests) ? state.guests : [];
+  const servizi = Array.isArray(state.servizi) ? state.servizi : [];
   const byMonth = new Array(12).fill(0);
 
   const money = (v) => {
@@ -4257,6 +4289,9 @@ function computeStatMensili(){
     const n = Number(s);
     return isFinite(n) ? n : 0;
   };
+
+  // Mappa ospite_id -> mese (basato su check-in/check-out)
+  const guestMonthById = {};
 
   for (const gg of guests){
     let iso = "";
@@ -4279,15 +4314,45 @@ function computeStatMensili(){
     const mm = parseInt(iso.slice(5,7), 10);
     if (!Number.isFinite(mm) || mm < 1 || mm > 12) continue;
 
-    // Fatturati mensili = somma di tutte le voci "importo prenotazione" (stessa regola del fatturato totale)
-    const pren = money(gg?.importo_prenotazione ?? gg?.importo_prenota ?? gg?.importoPrenotazione ?? gg?.importoPrenota ?? 0);
-    if (!isFinite(pren) || pren === 0) continue;
+    const gid = guestIdOf(gg) ?? gg?.id ?? gg?.ID ?? gg?.Id ?? "";
+    if (gid !== null && gid !== undefined && String(gid).trim() !== "") {
+      guestMonthById[String(gid)] = mm;
+    }
 
-    byMonth[mm - 1] += pren;
+    // Base: importo prenotazione
+    const pren = money(gg?.importo_prenotazione ?? gg?.importo_prenota ?? gg?.importoPrenotazione ?? gg?.importoPrenota ?? 0);
+    if (isFinite(pren) && pren !== 0) byMonth[mm - 1] += pren;
+  }
+
+  // Aggiungi servizi al mese dell'ospite (ospite_id -> mese)
+  for (const s of (servizi || [])){
+    if (!s) continue;
+    const del = s.isDeleted ?? s.is_deleted ?? s.deleted;
+    if (String(del) === "1" || del === true) continue;
+
+    const ospiteId = s.ospite_id ?? s.ospiteId ?? s.guest_id ?? s.guestId ?? "";
+    if (ospiteId === null || ospiteId === undefined || String(ospiteId).trim() === "") continue;
+    const mm = guestMonthById[String(ospiteId)];
+    if (!Number.isFinite(mm) || mm < 1 || mm > 12) continue;
+
+    const qtyRaw = money(s.qty ?? 1);
+    const qty = (isFinite(qtyRaw) && qtyRaw > 0) ? qtyRaw : 1;
+    const amt = money(s.importo ?? s.amount ?? 0);
+    if (!isFinite(amt) || amt === 0) continue;
+
+    byMonth[mm - 1] += (qty * amt);
+  }
+
+  // Normalizza a 2 decimali
+  for (let i = 0; i < byMonth.length; i++){
+    const v = byMonth[i];
+    byMonth[i] = isFinite(v) ? (Math.round(v * 100) / 100) : 0;
   }
 
   return { byMonth };
 }
+
+
 
 function renderStatMensili(){
   const wrap = document.getElementById("smList");
@@ -5751,7 +5816,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.186 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.187 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -6787,7 +6852,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.186: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.187: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -8460,7 +8525,7 @@ function refreshFloatingLabels(){
 
 
 /* =========================
-   Piscina (dDAE_2.186)
+   Piscina (dDAE_2.187)
 ========================= */
 const PISCINA_ACTION = "piscina";
 
@@ -9164,7 +9229,7 @@ try{
   let __laundryRefreshT = null;
   let __savingHours = false;
   let __pendingHours = false;
-  // dDAE_2.186: salvataggio PULIZIE per-stanza (evita generazione righe/report inutili)
+  // dDAE_2.187: salvataggio PULIZIE per-stanza (evita generazione righe/report inutili)
   // Mantiene UI fluida: nessun "blink" dei numeri durante autosave / refresh.
   let __dirtyLaundryRooms = new Set();   // stanze modificate (solo queste vengono salvate)
   let __dirtyLaundryCells = new Set();   // celle modificate (solo queste ricevono bordo rosso post-save)
@@ -10020,7 +10085,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.186) =====
+// ===== CALENDARIO (dDAE_2.187) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -10425,7 +10490,7 @@ function __fitCalendarioMonthLandscape(){
 
     const isLandscape = (window.matchMedia && window.matchMedia("(orientation: landscape)").matches);
 
-    // dDAE_2.186: in vista mese su iPad landscape usa tutta la larghezza disponibile (margine 10px L/R)
+    // dDAE_2.187: in vista mese su iPad landscape usa tutta la larghezza disponibile (margine 10px L/R)
     try{ document.body.classList.toggle("cal-month-landscape", !!isLandscape); }catch(_){}
 
     const grid = document.getElementById("calGridMonth");
@@ -10933,7 +10998,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.186)
+   Lavanderia (dDAE_2.187)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -11329,7 +11394,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.186: renderSpese allineato al backend ---
+// --- FIX dDAE_2.187: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -11425,7 +11490,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.186: delete reale ospiti ---
+// --- FIX dDAE_2.187: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -11461,7 +11526,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.186: mostra nome ospite ---
+// --- FIX dDAE_2.187: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -11745,7 +11810,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.186
+   Build: dDAE_2.187
 ========================= */
 
 state.orepulizia = state.orepulizia || {
