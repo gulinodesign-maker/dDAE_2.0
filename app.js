@@ -1,9 +1,9 @@
 /* global API_BASE_URL, API_KEY */
 
 /**
- * Build: dDAE_2.180
+ * Build: dDAE_2.181
  */
-const BUILD_VERSION = "dDAE_2.180";
+const BUILD_VERSION = "dDAE_2.181";
 
 /* Audio SFX (iOS-friendly, no assets) */
 const AUDIO_PREF_KEY = "ddae_audio_enabled";
@@ -10240,6 +10240,28 @@ function renderCalendario(){
   return renderCalendarioWeek();
 }
 
+
+function __fitCalendarLabels(container){
+  try{
+    if (!container) return;
+    const labels = container.querySelectorAll(".cal-cell.has-booking .cal-initials");
+    for (const el of labels){
+      const full = (el.dataset && el.dataset.fullname) ? String(el.dataset.fullname) : String(el.textContent||"");
+      const ini = (el.dataset && el.dataset.initials) ? String(el.dataset.initials) : "";
+      if (full) el.textContent = full;
+      try{ el.classList.remove("is-initials"); }catch(_){}
+      // Se il testo non entra (overflow), usa le iniziali
+      try{
+        const overflow = (el.scrollWidth - el.clientWidth) > 2;
+        if (overflow && ini){
+          el.textContent = ini;
+          try{ el.classList.add("is-initials"); }catch(_){}
+        }
+      }catch(_){}
+    }
+  }catch(_){}
+}
+
 function renderCalendarioWeek(){
   const grid = document.getElementById("calGrid");
   try{ if (grid) grid.classList.toggle("is-loading", !!(state.calendar && state.calendar.loading)); }catch(_){ }
@@ -10364,11 +10386,14 @@ function renderCalendarioWeek(){
 
         const ini = document.createElement("div");
         ini.className = "cal-initials";
-        const __ini = (info.initials && String(info.initials).trim()) ? String(info.initials).trim() : ((()=>{ const __g = findCalendarGuestById(info.guestId); return initialsFromName(__g?.nome || __g?.name || __g?.Nome || __g?.NOME || __g?.guestName || ""); })());
-        ini.textContent = __ini;
+        const __g = findCalendarGuestById(info.guestId);
+        const __full = collapseSpaces(String((__g?.nome || __g?.name || __g?.Nome || __g?.NOME || __g?.guestName || "")).trim());
+        const __ini = (info.initials && String(info.initials).trim()) ? String(info.initials).trim() : initialsFromName(__full);
+        ini.dataset.fullname = __full || __ini;
+        ini.dataset.initials = __ini || "";
+        ini.textContent = ini.dataset.fullname;
         inner.appendChild(ini);
-
-        const dots = document.createElement("div");
+const dots = document.createElement("div");
         dots.className = "cal-dots";
         const arr = info.dots.slice(0, 4); // 2x2
         for (const t of arr) {
@@ -10400,6 +10425,7 @@ function renderCalendarioWeek(){
     }
   }
   grid.appendChild(frag);
+  try{ requestAnimationFrame(()=>{ __fitCalendarLabels(grid); }); }catch(_){ }
 }
 
 
@@ -10669,10 +10695,14 @@ const openGuest = () => {
 
         const ini = document.createElement("div");
         ini.className = "cal-initials";
-        ini.textContent = info.initials;
+        const __g = findCalendarGuestById(info.guestId);
+        const __full = collapseSpaces(String((__g?.nome || __g?.name || __g?.Nome || __g?.NOME || __g?.guestName || "")).trim());
+        const __ini = (info.initials && String(info.initials).trim()) ? String(info.initials).trim() : initialsFromName(__full);
+        ini.dataset.fullname = __full || __ini;
+        ini.dataset.initials = __ini || "";
+        ini.textContent = ini.dataset.fullname;
         inner.appendChild(ini);
-
-        const dots = document.createElement("div");
+const dots = document.createElement("div");
         dots.className = "cal-dots";
         const arr = info.dots.slice(0, 4);
         for (const t of arr) {
@@ -10721,6 +10751,7 @@ const openGuest = () => {
   }
 
   grid.appendChild(frag);
+  try{ requestAnimationFrame(()=>{ __fitCalendarLabels(grid); }); }catch(_){ }
 
   // In landscape (solo vista mese) ridimensiona la griglia per rientrare nello schermo
   try{ requestAnimationFrame(()=>{ try{ __fitCalendarioMonthLandscape(); }catch(_){ } }); }catch(_){ }

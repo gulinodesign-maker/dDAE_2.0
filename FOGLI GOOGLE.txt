@@ -1,0 +1,43 @@
+impostazioni
+id | user_id | key | value | type | unit | descrizione | operatore_1 | operatore_2 | operatore_3 | createdAt | updatedAt
+
+utenti
+id | username | password_hash | ruolo | attivo | nome | telefono | email | last_login | createdAt | updatedAt | tenant_id
+
+ospiti
+id | user_id | anno | nome | adulti | bambini_u10 | altri | check_in | check_out | importo_prenotazione | importo_booking | acconto_importo | acconto_tipo | saldo_pagato | saldo_tipo | matrimonio | gruppo_g | col_c | ps_registrato | istat_registrato | stanze | acconto_ricevuta | saldo_ricevuta | createdAt | updatedAt | driveFolderId |driveFolderUrl
+
+stanze
+id | user_id | anno | ospite_id | stanza_num | letto_m | letto_s | culla | note | createdAt | updatedAt
+
+spesa
+id | user_id | anno | dataSpesa | categoria | motivazione | importoLordo | aliquotaIva | imponibile | iva | ivaDetraibile | note | isDeleted | createdAt | updatedAt
+
+motivazioni
+id | user_id | anno | motivazione | attiva | createdAt | updatedAt
+
+pulizie
+id | user_id | anno | data | stanza | MAT | SIN | FED | TDO | TFA | TBI | TAP | TPI | createdAt | updatedAt
+
+lavanderia
+id | user_id | anno | startDate | endDate | MAT | SIN | FED | TDO | TFA | TBI | TAP | TPI | createdAt | updatedAt
+
+operatori
+id | user_id | anno | data | operatore | ore | benzina_euro | note | createdAt | updatedAt
+
+colazione
+id | user_id |anno | prodotto |	qty | checked |	saved |	isDeleted | createdAt |	updatedAt
+
+prodotti_pulizia
+id | user_id |anno | prodotto |	qty | checked |	saved |	isDeleted | createdAt |	updatedAt
+
+
+piscina
+id | user_id | anno | timestamp_report | origine | cloro_attivo_libero | cloro_attivo_combinato | ph | temp_acqua | createdAt | updatedAt
+
+
+servizi
+id | user_id |anno | ospite_id | servizio | descrizione | importo | qty | isDeleted | createdAt | updatedAt
+							
+							
+							
