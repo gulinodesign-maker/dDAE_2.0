@@ -1,9 +1,9 @@
 /* global API_BASE_URL, API_KEY */
 
 /**
- * Build: dDAE_2.177
+ * Build: dDAE_2.178
  */
-const BUILD_VERSION = "dDAE_2.177";
+const BUILD_VERSION = "dDAE_2.178";
 
 /* Audio SFX (iOS-friendly, no assets) */
 const AUDIO_PREF_KEY = "ddae_audio_enabled";
@@ -753,6 +753,7 @@ guestMarriage: false,
   guestServicesComputedTotal: 0,
   guestServicesManualOverride: false,
   guestServicesLoadedFor: null,
+  guestServicesCacheById: {},
 
 
   // Lavanderia (resoconti settimanali)
@@ -5420,16 +5421,31 @@ function enterGuestEditMode(ospite){
   state.guestEditId = ospite?.id ?? null;
   
 
-  // Servizi: reset stato e carica elenco dal foglio (per mostrare subito importo servizi)
+  // Servizi: prepara cache locale per apertura istantanea (layout invariato)
   try{
     state.guestServicesManualOverride = false;
-    state.guestServicesLoadedFor = null;
-    state.guestServicesLoadedAt = 0;
-    state.guestServicesItems = [];
-    state.guestServicesComputedTotal = 0;
+    const ospiteId = guestIdOf(ospite) || (ospite?.id ?? null);
+    const key = ospiteId ? String(ospiteId) : "";
+    const cache = (key && state.guestServicesCacheById) ? state.guestServicesCacheById[key] : null;
+
+    state.guestServicesLoadingFor = null;
+
+    if (cache && Array.isArray(cache.items)){
+      state.guestServicesItems = cache.items.slice();
+      state.guestServicesComputedTotal = isFinite(cache.total) ? cache.total : serviziComputeTotal(state.guestServicesItems);
+      state.guestServicesLoadedFor = ospiteId;
+      state.guestServicesLoadedAt = cache.loadedAt || 0;
+    } else {
+      state.guestServicesLoadedFor = null;
+      state.guestServicesLoadedAt = 0;
+      state.guestServicesItems = [];
+      state.guestServicesComputedTotal = 0;
+    }
   }catch(_){ }
-  // Precarica servizi in background per apertura istantanea del menu
+  // Precarica servizi in background (UI apre subito)
   try{ setTimeout(() => { try{ loadServiziForOspite(ospite); }catch(_){} }, 0); }catch(_){}
+
+
 state.guestEditCreatedAt = (ospite?.created_at ?? ospite?.createdAt ?? null);
 
   const title = document.getElementById("ospiteFormTitle");
@@ -5898,6 +5914,42 @@ function updateGuestFormModeClass(){
   }catch(_){}
 }
 
+function __placeServicesPillForView(isView){
+  try{
+    const pill = document.getElementById("servicesPillView");
+    if (!pill) return;
+
+    // Anchor: ricorda la posizione originale (layout modifica invariato)
+    let anchor = document.getElementById("servicesPillViewAnchor");
+    if (!anchor){
+      anchor = document.createElement("span");
+      anchor.id = "servicesPillViewAnchor";
+      anchor.hidden = true;
+      try{
+        if (pill.parentNode) pill.parentNode.insertBefore(anchor, pill);
+      }catch(_){}
+    }
+
+    const servicesRow = document.getElementById("servicesRow");
+    const targetWrap = servicesRow ? servicesRow.querySelector(".paywrap") : null;
+
+    if (isView){
+      if (targetWrap && pill.parentNode !== targetWrap){
+        // accanto a "Importo servizi"
+        try{ targetWrap.insertBefore(pill, targetWrap.firstChild); }catch(_){}
+      }
+      try{ pill.hidden = false; }catch(_){}
+    } else {
+      // ripristina accanto a "Importo booking"
+      if (anchor && anchor.parentNode){
+        try{ anchor.parentNode.insertBefore(pill, anchor.nextSibling); }catch(_){}
+      }
+    }
+  }catch(_){}
+}
+
+
+
 function setGuestFormViewOnly(isView, ospite){
   try{ updateGuestFormModeClass(); }catch(_){ }
   const card = document.querySelector("#page-ospite .guest-form-card");
@@ -5932,6 +5984,10 @@ function setGuestFormViewOnly(isView, ospite){
     // Importo booking: non deve comparire in sola lettura
     hideRowByInputId("guestBooking", !!isView);
   }catch(_){ }
+
+  // Servizi: in sola lettura mostra il tasto accanto a "Importo servizi" (layout modifica invariato)
+  try{ __placeServicesPillForView(!!isView); }catch(_){ }
+
   // Servizi: chiudi lista quando non in view
   try{
     const wrap = document.getElementById("servicesListWrap");
@@ -5952,12 +6008,26 @@ function enterGuestViewMode(ospite){
   // Servizi: carica sempre elenco e totale (anche se non ci sono multi-prenotazioni)
   try{
     state.guestServicesManualOverride = false;
-    state.guestServicesLoadedFor = null;
-    state.guestServicesLoadedAt = 0;
-    state.guestServicesItems = [];
-    state.guestServicesComputedTotal = 0;
+    const ospiteId = guestIdOf(ospite) || (ospite?.id ?? null);
+    const key = ospiteId ? String(ospiteId) : "";
+    const cache = (key && state.guestServicesCacheById) ? state.guestServicesCacheById[key] : null;
+
+    state.guestServicesLoadingFor = null;
+
+    if (cache && Array.isArray(cache.items)){
+      state.guestServicesItems = cache.items.slice();
+      state.guestServicesComputedTotal = isFinite(cache.total) ? cache.total : serviziComputeTotal(state.guestServicesItems);
+      state.guestServicesLoadedFor = ospiteId;
+      state.guestServicesLoadedAt = cache.loadedAt || 0;
+    } else {
+      state.guestServicesLoadedFor = null;
+      state.guestServicesLoadedAt = 0;
+      state.guestServicesItems = [];
+      state.guestServicesComputedTotal = 0;
+    }
     loadServiziForOspite(ospite);
   }catch(_){ }
+
 const title = document.getElementById("ospiteFormTitle");
   if (title) title.textContent = "Scheda ospite";
 
@@ -6026,10 +6096,16 @@ function renderServiziList(){
   });
 
   body.innerHTML = "";
+
+  const currentId = (mode === "view") ? guestIdOf(state.guestViewItem) : state.guestEditId;
+  const isLoading = !!currentId && String(state.guestServicesLoadingFor || "") === String(currentId);
+
   if (!items.length){
     const empty = document.createElement("div");
     empty.className = "service-item";
-    empty.innerHTML = '<div class="meta"><div class="name">Nessun servizio</div><div class="desc">—</div></div><div class="amt">€0,00</div>';
+    const msg = isLoading ? "Caricamento..." : "Nessun servizio";
+    const amt = isLoading ? "…" : "€0,00";
+    empty.innerHTML = `<div class="meta"><div class="name">${msg}</div><div class="desc">—</div></div><div class="amt">${amt}</div>`;
     body.appendChild(empty);
     return;
   }
@@ -6153,6 +6229,24 @@ async function loadServiziForOspite(ospite){
   const ospiteId = guestIdOf(ospite) || state.guestEditId;
   if (!ospiteId) return;
 
+  // Cache immediata: l'elenco può aprirsi istantaneamente anche prima della risposta API
+  try{
+    const key = String(ospiteId);
+    const cache = state.guestServicesCacheById ? state.guestServicesCacheById[key] : null;
+    if (cache && Array.isArray(cache.items)){
+      const needApply = (state.guestServicesLoadedFor !== ospiteId);
+      if (needApply){
+        state.guestServicesItems = cache.items.slice();
+        state.guestServicesComputedTotal = isFinite(cache.total) ? cache.total : serviziComputeTotal(state.guestServicesItems);
+        state.guestServicesLoadedFor = ospiteId;
+        state.guestServicesLoadedAt = cache.loadedAt || 0;
+        try { applyServiziTotalsToUI(ospite); } catch (_) {}
+        try { __syncServiziToCurrentGuest(ospiteId); } catch (_) {}
+      }
+    }
+  }catch(_){}
+
+
   // evita richieste duplicate contemporanee ma NON bloccare i retry
   if (state.guestServicesLoadingFor === ospiteId) return;
 
@@ -6186,6 +6280,15 @@ async function loadServiziForOspite(ospite){
     state.guestServicesComputedTotal = serviziComputeTotal(state.guestServicesItems);
     state.guestServicesLoadedFor = ospiteId;
     state.guestServicesLoadedAt = Date.now();
+    try{
+      const key = String(ospiteId);
+      if (!state.guestServicesCacheById) state.guestServicesCacheById = {};
+      state.guestServicesCacheById[key] = {
+        items: (state.guestServicesItems || []).slice(),
+        total: (state.guestServicesComputedTotal || 0),
+        loadedAt: (state.guestServicesLoadedAt || Date.now())
+      };
+    }catch(_){}
     try { applyServiziTotalsToUI(ospite); } catch (_) {}
   } else {
     // non segnare come caricato → al prossimo tap riprova
@@ -6402,18 +6505,26 @@ function initServiziUI(){
   // "Servizi" (tasto): apre/chiude elenco istantaneamente sia in VIEW sia in EDIT
   if (pillView) bindFastTap(pillView, toggleList);
 
-  // fallback toggle (iOS): assicura apertura elenco anche se fastTap non intercetta
+  // fallback toggle (iOS): assicura apertura elenco ISTANTANEA (touchstart/pointerdown)
   if (pillView){
+    let last = 0;
     const toggle = (e)=>{
+      const now = Date.now();
+      if (now - last < 250) return;
+      last = now;
       try{ e && e.preventDefault && e.preventDefault(); }catch(_){}
       try{ e && e.stopPropagation && e.stopPropagation(); }catch(_){}
       toggleList();
     };
     try{
+      pillView.addEventListener("touchstart", toggle, { passive:false });
+      pillView.addEventListener("pointerdown", toggle, { passive:false });
+      pillView.addEventListener("mousedown", toggle, { passive:false });
       pillView.addEventListener("click", toggle, { passive:false });
       pillView.addEventListener("touchend", toggle, { passive:false });
     }catch(_){}
   }
+
 }
 
 

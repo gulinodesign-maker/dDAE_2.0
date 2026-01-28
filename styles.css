@@ -49,7 +49,7 @@ html,body{ margin:0; padding:0; overflow-x:hidden; font-family: system-ui, -appl
 body{
   min-height: 100vh;
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.177");
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.178");
   background-repeat: no-repeat;
   background-position: center;
   background-size: cover;
@@ -928,7 +928,7 @@ input[type="date"]{
 /* HOME più accattivante (sempre minimal: solo icone + build) */
 body[data-page="home"]{
   background-image:
-    url("./assets/bg-daedalium.jpeg?v=dDAE_2.177");
+    url("./assets/bg-daedalium.jpeg?v=dDAE_2.178");
   background-repeat: no-repeat;
   background-position: center;
   background-size: cover;
@@ -7065,7 +7065,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 
 
 
-/* dDAE_2.177 — Servizi: in edit mostra sia "Servizi" che "+" in colonna (Servizi sopra +), centrati e con stessa pill */
+/* dDAE_2.178 — Servizi: in edit mostra sia "Servizi" che "+" in colonna (Servizi sopra +), centrati e con stessa pill */
 #page-ospite #servicesRow .subfield.paywrap{
   flex-direction: column;
   gap: 10px;
@@ -7079,7 +7079,7 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   pointer-events: none;
 }
 
-/* dDAE_2.177 — Servizi: delete (pallino bianco con X rossa) solo in modalità edit */
+/* dDAE_2.178 — Servizi: delete (pallino bianco con X rossa) solo in modalità edit */
 #servicesListWrap[data-mode="edit"] .svc-right{
   display:flex;
   align-items:center;
