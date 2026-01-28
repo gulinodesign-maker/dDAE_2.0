@@ -2872,12 +2872,12 @@ state.page = page;
     pulizieTopTools.hidden = (page !== "pulizie");
   }
 
-
   // Top tools (Lavanderia) — genera report accanto al tasto Home
   const lavanderiaTopTools = $("#lavanderiaTopTools");
   if (lavanderiaTopTools){
     lavanderiaTopTools.hidden = (page !== "lavanderia");
   }
+
 
   // Top tools (Ospiti) — nuovo ospite + calendario accanto al tasto Home
   const ospitiTopTools = $("#ospitiTopTools");
@@ -3196,24 +3196,45 @@ if (goCalendarioTopOspiti){
   // OSPITE: topbar — torna alla lista ospiti (guest list)
   const guestBackTop = $("#guestBackTop");
   if (guestBackTop){
-    const goGuestList = async () => {
+    const goGuestBack = () => {
+      // Se stai modificando un ospite: torna alla scheda in sola lettura dello stesso record
       try{
-        // In Modifica ospite: torna alla scheda in sola lettura dello stesso ospite
-        if (state.page === "ospite" && state.guestMode === "edit" && state.guestEditId){
-          const id = String(state.guestEditId);
-          const fromState = (state.guestEditOriginal && (String(state.guestEditOriginal.id||"")===id)) ? state.guestEditOriginal : null;
-          const g1 = fromState || (Array.isArray(state.guests) ? state.guests : []).find(o=>String(o.id||"")===id) || (Array.isArray(state.ospiti) ? state.ospiti : []).find(o=>String(o.id||"")===id);
-          if (g1){
-            try{ enterGuestViewMode(g1); }catch(_){ }
+        if (state.page === "ospite" && String(state.guestMode || "") === "edit"){
+          const src = state.guestEditSourceItem || null;
+          if (src){
+            try{ enterGuestViewMode(src); }catch(_){ }
+            try{ showPage("ospite"); }catch(_){ }
+            return;
+          }
+
+          // fallback: prova a recuperare il record da multi-booking o lista ospiti
+          const id = String(state.guestEditId || "").trim();
+          let found = null;
+          if (id){
+            try{
+              const arr = Array.isArray(state.guestGroupBookings) ? state.guestGroupBookings : [];
+              found = arr.find(x => String(guestIdOf(x) || x?.id || "") === id) || null;
+            }catch(_){ }
+            if (!found){
+              try{
+                const arr2 = Array.isArray(state.ospiti) ? state.ospiti : [];
+                found = arr2.find(x => String(x?.id || "") === id) || null;
+              }catch(_){ }
+            }
+          }
+          if (found){
+            try{ enterGuestViewMode(found); }catch(_){ }
             try{ showPage("ospite"); }catch(_){ }
             return;
           }
         }
       }catch(_){ }
+
+      // Default: torna alla lista ospiti
       try{ state.guestGroupBookings = null; state.guestGroupActiveId = null; state.guestGroupKey = null; clearGuestMulti(); }catch(_){ }
       showPage("ospiti");
     };
-    bindFastTap(guestBackTop, goGuestList);
+    bindFastTap(guestBackTop, goGuestBack);
     guestBackTop.addEventListener("click", (e) => { try{ e.preventDefault(); }catch(_){ } });
   }
 // HOME: icona Colazione
@@ -3811,32 +3832,43 @@ async function saveSpesa(){
     } catch (_) {}
   }
 
-  await api("spese", { method:"POST", body:{ dataSpesa, categoria, motivazione, importoLordo, note: "" } });
+  // Salva spesa
+  const res = await api("spese", { method:"POST", body:{ dataSpesa, categoria, motivazione, importoLordo, note: "" } });
+
+  // UX: ritorno IMMEDIATO alla lista spese (senza attendere refresh dati)
+  try { setSpeseView("list"); } catch (_) {}
+  try { showPage("spese"); } catch (_) {}
+
+  // Aggiornamento ottimistico: mostra subito il nuovo record in lista
+  try{
+    const newId = (res && (res.id || res.spesaId || (res.data && (res.data.id || res.data.spesaId)))) || ("tmp-" + Date.now());
+    const newItem = { id: newId, dataSpesa, categoria, motivazione, importoLordo };
+    if (Array.isArray(state.spese)) state.spese = [newItem, ...state.spese];
+    else state.spese = [newItem];
+    if (state.page === "spese" && state.speseView === "list") {
+      try{ renderSpese(); }catch(_){ }
+    }
+  }catch(_){ }
+
   toast("Salvato");
   resetInserisci();
 
-  // Dopo salvataggio: torna SUBITO alla lista spese
-  try { setSpeseView("list"); } catch (_) {}
-  try { showPage("spese"); } catch (_) {}
-  try { if (state.page === "spese") renderSpese(); } catch(_) {}
-
-  // aggiorna dati in background (non blocca il ritorno alla lista)
+  // refresh dati in background (non blocca il ritorno alla lista)
   try {
     invalidateApiCache("spese|");
     invalidateApiCache("report|");
-    setTimeout(() => {
-      ensurePeriodData({ showLoader:false, force:true })
-        .then(() => {
-          if (state.page === "spese") renderSpese();
+    ensurePeriodData({ showLoader:false, force:true })
+      .then(() => {
+        try{
+          if (state.page === "spese" && state.speseView === "list") renderSpese();
           if (state.page === "riepilogo") renderRiepilogo();
           if (state.page === "grafico") renderGrafico();
-        })
-        .catch(()=>{});
-    }, 0);
+        }catch(_){ }
+      })
+      .catch(()=>{});
   } catch(_) {}
 
 }
-
 
 /* 2) SPESE */
 function renderSpese(){
@@ -5417,7 +5449,6 @@ function enterGuestCreateMode(){
   state.guestMode = "create";
   try{ updateGuestFormModeClass(); }catch(_){ }
   state.guestEditId = null;
-  state.guestEditOriginal = null;
   state.guestEditCreatedAt = null;
 
   const title = document.getElementById("ospiteFormTitle");
@@ -5490,6 +5521,10 @@ function enterGuestEditMode(ospite){
 
   state.guestViewItem = null;
 
+  // Snapshot del record originale: serve per tornare alla scheda in sola lettura
+  // dalla modalità "modifica" senza dipendere dai campi eventualmente alterati.
+  try{ state.guestEditSourceItem = ospite ? JSON.parse(JSON.stringify(ospite)) : null; }catch(_){ state.guestEditSourceItem = ospite || null; }
+
   // ✅ FIX dDAE: evita "leak" delle stanze tra prenotazioni multiple (multi booking).
   // Quando si passa da un gruppo all'altro, se il nuovo record non ha 'stanze' valorizzate,
   // lo stato precedente poteva rimanere e finire dentro il nuovo salvataggio.
@@ -5509,7 +5544,6 @@ function enterGuestEditMode(ospite){
   state.guestMode = "edit";
   try{ updateGuestFormModeClass(); }catch(_){ }
   state.guestEditId = ospite?.id ?? null;
-  try{ state.guestEditOriginal = JSON.parse(JSON.stringify(ospite||{})); }catch(_){ state.guestEditOriginal = ospite || null; }
   
 
   // Servizi: prepara cache locale per apertura istantanea (layout invariato)
@@ -10072,6 +10106,7 @@ if (cleanResetAll){
 
 // --- Lavanderia ---
   const btnLaundryGenerate = document.getElementById("btnLaundryGenerate");
+  const btnLaundryGenerateTop = document.getElementById("btnLaundryGenerateTop");
   try{
     const fromEl = document.getElementById("laundryFrom");
     const toEl   = document.getElementById("laundryTo");
@@ -10090,9 +10125,9 @@ if (btnLaundryGenerate){
         try{ toast(e.message || "Errore"); }catch(_){}
       }
     });
+  }
 
-  // Topbar: genera report lavanderia
-  const btnLaundryGenerateTop = document.getElementById("btnLaundryGenerateTop");
+  // Topbar (Lavanderia): Genera report accanto al tasto Home
   if (btnLaundryGenerateTop){
     bindFastTap(btnLaundryGenerateTop, async () => {
       try{
@@ -10100,10 +10135,9 @@ if (btnLaundryGenerate){
         await createLavanderiaReport_();
       }catch(e){
         console.error(e);
-        try{ toast(e.message || "Errore"); }catch(_){}
+        try{ toast(e.message || "Errore"); }catch(_){ }
       }
     });
-  }
   }
 if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie){
     bindFastTap(btnOrePuliziaFromPulizie, () => {
