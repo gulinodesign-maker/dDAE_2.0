@@ -1,9 +1,9 @@
 /* global API_BASE_URL, API_KEY */
 
 /**
- * Build: dDAE_2.179
+ * Build: dDAE_2.180
  */
-const BUILD_VERSION = "dDAE_2.179";
+const BUILD_VERSION = "dDAE_2.180";
 
 /* Audio SFX (iOS-friendly, no assets) */
 const AUDIO_PREF_KEY = "ddae_audio_enabled";
@@ -10332,8 +10332,7 @@ function renderCalendarioWeek(){
       }
       if (info) {
         cell.classList.add("has-booking");
-if (info.lastDay) cell.classList.add("last-day");
-        // Flags m/c/g negli angoli (flat)
+// Flags m/c/g negli angoli (flat)
         try{
           const flags = document.createElement("div");
           flags.className = "cal-flags";
@@ -10365,7 +10364,8 @@ if (info.lastDay) cell.classList.add("last-day");
 
         const ini = document.createElement("div");
         ini.className = "cal-initials";
-        ini.textContent = info.initials;
+        const __ini = (info.initials && String(info.initials).trim()) ? String(info.initials).trim() : ((()=>{ const __g = findCalendarGuestById(info.guestId); return initialsFromName(__g?.nome || __g?.name || __g?.Nome || __g?.NOME || __g?.guestName || ""); })());
+        ini.textContent = __ini;
         inner.appendChild(ini);
 
         const dots = document.createElement("div");
@@ -10608,10 +10608,7 @@ function renderCalendarioMonth(){
         cell.dataset.date = dIso;
         cell.dataset.room = String(r);
         cell.dataset.span = String(span);
-
-        if (endInfo && endInfo.lastDay) cell.classList.add("last-day");
-
-        const openGuest = () => {
+const openGuest = () => {
           const ospite = findCalendarGuestById(info.guestId);
           if (!ospite) return;
           enterGuestViewMode(ospite);
@@ -10765,7 +10762,7 @@ function buildMonthOccupancy(monthStart, daysCount){
     roomsArr = Array.from(new Set((roomsArr||[]).map(n=>parseInt(n,10)).filter(n=>isFinite(n) && n>=1 && n<=6))).sort((a,b)=>a-b);
     if (!roomsArr.length) continue;
 
-    const initials = initialsFromName(g.nome || g.name || "");
+    const initials = initialsFromName(g.nome || g.name || g.Nome || g.NOME || g.guestName || g.fullName || g.full_name || "");
 
     const mOn = !!(g.matrimonio);
     const gOn = truthy(g.g ?? g.flag_g ?? g.gruppo_g ?? g.group ?? g.g_flag);
@@ -10818,7 +10815,7 @@ function buildWeekOccupancy(weekStart){
     roomsArr = Array.from(new Set((roomsArr||[]).map(n=>parseInt(n,10)).filter(n=>isFinite(n) && n>=1 && n<=6))).sort((a,b)=>a-b);
     if (!roomsArr.length) continue;
 
-    const initials = initialsFromName(g.nome || g.name || "");
+    const initials = initialsFromName(g.nome || g.name || g.Nome || g.NOME || g.guestName || g.fullName || g.full_name || "");
 
     const mOn = !!(g.matrimonio);
     const gOn = truthy(g.g ?? g.flag_g ?? g.gruppo_g ?? g.group ?? g.g_flag);
