@@ -1,9 +1,14 @@
+
+// dDAE_2.190 — iOS BFCache: rebind tappable Home icons
+try{
+  window.addEventListener("pageshow", () => { try{ bindHomeStrongTap(); }catch(_){ } }, { passive:true });
+}catch(_){ }
 /* global API_BASE_URL, API_KEY */
 
 /**
- * Build: dDAE_2.188
+ * Build: dDAE_2.190
  */
-const BUILD_VERSION = "dDAE_2.188";
+const BUILD_VERSION = "dDAE_2.190";
 
 /* Audio SFX (iOS-friendly, no assets) */
 const AUDIO_PREF_KEY = "ddae_audio_enabled";
@@ -244,7 +249,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.188)
+// AUTH + SESSION (dDAE_2.190)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -695,7 +700,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.188 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.190 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2528,7 +2533,47 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.188 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.190 — iOS hardening: Home icons always tappable (fallback binding) */
+function bindHomeStrongTap(){
+  // evita doppio binding
+  try{
+    if (bindHomeStrongTap.__bound) return;
+    bindHomeStrongTap.__bound = true;
+  }catch(_){ }
+
+  const go = (id, page, { before } = {}) => {
+    const el = document.getElementById(id);
+    if (!el) return;
+
+    const handler = (e) => {
+      try{ e && e.preventDefault && e.preventDefault(); }catch(_){}
+      try{ e && e.stopPropagation && e.stopPropagation(); }catch(_){}
+      try{ hideLauncher(); }catch(_){}
+
+      try{ if (typeof before === "function") before(); }catch(_){}
+      try{ showPage(page); }catch(_){}
+    };
+
+    // per evitare che un overlay "invisibile" o una mancata emissione di click blocchi il tap,
+    // ascolta anche gli eventi touch/pointer in anticipo.
+    const opts = { passive:false };
+    try{ el.addEventListener("pointerdown", handler, opts); }catch(_){ try{ el.addEventListener("pointerdown", handler); }catch(__){} }
+    try{ el.addEventListener("touchstart", handler, opts); }catch(_){ try{ el.addEventListener("touchstart", handler); }catch(__){} }
+    try{ el.addEventListener("click", handler, opts); }catch(_){ try{ el.addEventListener("click", handler); }catch(__){} }
+  };
+
+  go("goOspite", "ospiti");
+  go("goOspiti", "ospiti");
+  go("goCalendario", "calendario");
+  go("goTassaSoggiorno", "tassa");
+  go("goPulizie", "pulizie");
+  go("goLavanderia", "lavanderia");
+  go("goStatistiche", "statistiche");
+  go("openLauncher", "spese", { before: ()=>{ try{ setSpeseView("list"); }catch(_){} } });
+}
+
+
+/* dDAE_2.190 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2710,7 +2755,7 @@ function setSpeseView(view, { render=false } = {}){
 /* NAV pages (5 pagine interne: home + 4 funzioni) */
 
 
-// dDAE_2.188 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
+// dDAE_2.190 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
 // Applichiamo una classe .is-light ai pulsanti con background chiaro, così CSS forza icone scure.
 function __parseRGBA__(s){
   try{
@@ -3062,7 +3107,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.188: fallback visualizzazione Pulizie
+  // dDAE_2.190: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3128,6 +3173,8 @@ function setupHeader(){
 function setupHome(){
   bindLauncherDelegation();
   bindHomeDelegation();
+  // iOS hardening: fallback binding for Home icons
+  try{ bindHomeStrongTap(); }catch(_){ }
   // stampa build
   const build = $("#buildText");
   if (build) build.textContent = `${BUILD_VERSION}`;
@@ -4087,7 +4134,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.188)
+// STATISTICHE (dDAE_2.190)
 // =========================
 
 function computeStatGen(){
@@ -4183,6 +4230,12 @@ function computeStatGen(){
   }catch(_){
     speseTot = 0;
   }
+
+
+  // dDAE_2.190+ — Giacenza in cassa = (con ricevuta + senza ricevuta) - spese totali
+  try{
+    giacenza = (money(conRicevuta) + money(senzaRicevuta)) - money(speseTot);
+  }catch(_){ }
 
   let ivaSpese = 0;
   if (!isFinite(ivaSpese) || ivaSpese === 0){
@@ -5876,7 +5929,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.188 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.190 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -6912,7 +6965,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.188: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.190: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -8585,7 +8638,7 @@ function refreshFloatingLabels(){
 
 
 /* =========================
-   Piscina (dDAE_2.188)
+   Piscina (dDAE_2.190)
 ========================= */
 const PISCINA_ACTION = "piscina";
 
@@ -9289,7 +9342,7 @@ try{
   let __laundryRefreshT = null;
   let __savingHours = false;
   let __pendingHours = false;
-  // dDAE_2.188: salvataggio PULIZIE per-stanza (evita generazione righe/report inutili)
+  // dDAE_2.190: salvataggio PULIZIE per-stanza (evita generazione righe/report inutili)
   // Mantiene UI fluida: nessun "blink" dei numeri durante autosave / refresh.
   let __dirtyLaundryRooms = new Set();   // stanze modificate (solo queste vengono salvate)
   let __dirtyLaundryCells = new Set();   // celle modificate (solo queste ricevono bordo rosso post-save)
@@ -10159,7 +10212,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.188) =====
+// ===== CALENDARIO (dDAE_2.190) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -10564,7 +10617,7 @@ function __fitCalendarioMonthLandscape(){
 
     const isLandscape = (window.matchMedia && window.matchMedia("(orientation: landscape)").matches);
 
-    // dDAE_2.188: in vista mese su iPad landscape usa tutta la larghezza disponibile (margine 10px L/R)
+    // dDAE_2.190: in vista mese su iPad landscape usa tutta la larghezza disponibile (margine 10px L/R)
     try{ document.body.classList.toggle("cal-month-landscape", !!isLandscape); }catch(_){}
 
     const grid = document.getElementById("calGridMonth");
@@ -11072,7 +11125,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.188)
+   Lavanderia (dDAE_2.190)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -11468,7 +11521,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.188: renderSpese allineato al backend ---
+// --- FIX dDAE_2.190: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -11564,7 +11617,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.188: delete reale ospiti ---
+// --- FIX dDAE_2.190: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -11600,7 +11653,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.188: mostra nome ospite ---
+// --- FIX dDAE_2.190: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -11884,7 +11937,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.188
+   Build: dDAE_2.190
 ========================= */
 
 state.orepulizia = state.orepulizia || {
