@@ -1,14 +1,14 @@
 
-// dDAE_2.193 — iOS BFCache: rebind tappable Home icons
+// dDAE_2.198 — iOS BFCache: rebind tappable Home icons
 try{
   window.addEventListener("pageshow", () => { try{ bindHomeStrongTap(); }catch(_){ } }, { passive:true });
 }catch(_){ }
 /* global API_BASE_URL, API_KEY */
 
 /**
- * Build: dDAE_2.193
+ * Build: dDAE_2.198
  */
-const BUILD_VERSION = "dDAE_2.193";
+const BUILD_VERSION = "dDAE_2.198";
 
 /* Audio SFX (iOS-friendly, no assets) */
 const AUDIO_PREF_KEY = "ddae_audio_enabled";
@@ -249,7 +249,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.193)
+// AUTH + SESSION (dDAE_2.198)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -700,7 +700,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.193 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.198 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2533,7 +2533,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.193 — iOS hardening: Home icons always tappable (fallback binding) */
+/* dDAE_2.198 — iOS hardening: Home icons always tappable (fallback binding) */
 function bindHomeStrongTap(){
   // evita doppio binding
   try{
@@ -2573,7 +2573,7 @@ function bindHomeStrongTap(){
 }
 
 
-/* dDAE_2.193 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.198 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2755,7 +2755,7 @@ function setSpeseView(view, { render=false } = {}){
 /* NAV pages (5 pagine interne: home + 4 funzioni) */
 
 
-// dDAE_2.193 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
+// dDAE_2.198 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
 // Applichiamo una classe .is-light ai pulsanti con background chiaro, così CSS forza icone scure.
 function __parseRGBA__(s){
   try{
@@ -2842,6 +2842,11 @@ state.page = page;
   document.querySelectorAll(".page").forEach(s => s.hidden = true);
   const el = $(`#page-${page}`);
   if (el) el.hidden = false;
+
+  // Init pagine dinamiche (listener)
+  if (page === "tassa"){
+    try{ setTimeout(() => { try{ initTassaPage(); }catch(_){} }, 0); }catch(_){ }
+  }
 
   // Impostazioni: aggiorna tabs (account + anno)
   if (page === "impostazioni"){
@@ -3107,7 +3112,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.193: fallback visualizzazione Pulizie
+  // dDAE_2.198: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -4134,7 +4139,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.193)
+// STATISTICHE (dDAE_2.198)
 // =========================
 
 function computeStatGen(){
@@ -4232,7 +4237,7 @@ function computeStatGen(){
   }
 
 
-  // dDAE_2.193+ — Giacenza in cassa = (con ricevuta + senza ricevuta) - spese totali
+  // dDAE_2.198+ — Giacenza in cassa = (con ricevuta + senza ricevuta) - spese totali
   try{
     giacenza = (money(conRicevuta) + money(senzaRicevuta)) - money(speseTot);
   }catch(_){ }
@@ -5929,7 +5934,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.193 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.198 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -6965,7 +6970,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.193: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.198: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -7671,8 +7676,22 @@ function renderGuestCards(){
     const first = (group.bookings && group.bookings.length) ? group.bookings[0] : null;
     if (!first) return;
 
+    // Evidenzia checkout oggi con pagamento in sospeso (rimanenza > 0)
+    const __today = todayISO();
+    const __hasCheckoutPending = (group.bookings || []).some(b => {
+      const outISO = __parseDateFlexibleToISO(b?.check_out || b?.checkOut);
+      if (!outISO || outISO !== __today) return false;
+      const total = money(b?.importo_prenotazione ?? b?.importo_prenota ?? b?.total ?? 0);
+      const services = money(b?.servizi_totale ?? b?.serviziTotal ?? b?.importo_servizi ?? 0);
+      const dep = money(b?.acconto_importo ?? b?.accontoImporto ?? b?.deposit ?? 0);
+      const saldo = money(b?.saldo_pagato ?? b?.saldoPagato ?? b?.saldo ?? 0);
+      const remaining = (total + services) - dep - saldo;
+      return isFinite(remaining) && remaining > 0.0001;
+    });
+
     const card = document.createElement("div");
     card.className = "guest-card";
+    if (__hasCheckoutPending) card.classList.add("checkout-pending");
 
     const nome = escapeHtml(group.nome || "Ospite");
 
@@ -8638,7 +8657,7 @@ function refreshFloatingLabels(){
 
 
 /* =========================
-   Piscina (dDAE_2.193)
+   Piscina (dDAE_2.198)
 ========================= */
 const PISCINA_ACTION = "piscina";
 
@@ -9342,7 +9361,7 @@ try{
   let __laundryRefreshT = null;
   let __savingHours = false;
   let __pendingHours = false;
-  // dDAE_2.193: salvataggio PULIZIE per-stanza (evita generazione righe/report inutili)
+  // dDAE_2.198: salvataggio PULIZIE per-stanza (evita generazione righe/report inutili)
   // Mantiene UI fluida: nessun "blink" dei numeri durante autosave / refresh.
   let __dirtyLaundryRooms = new Set();   // stanze modificate (solo queste vengono salvate)
   let __dirtyLaundryCells = new Set();   // celle modificate (solo queste ricevono bordo rosso post-save)
@@ -10212,7 +10231,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.193) =====
+// ===== CALENDARIO (dDAE_2.198) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -10447,7 +10466,7 @@ function renderCalendario(){
 }
 
 
-/* dDAE_2.193 — Calendario: blocca SOLO la colonna numeri stanze durante lo scroll orizzontale (fix iOS) */
+/* dDAE_2.198 — Calendario: blocca SOLO la colonna numeri stanze durante lo scroll orizzontale (fix iOS) */
 function ensureCalRoomFreezeBound(){
   const wrap = document.querySelector("#page-calendario .cal-grid-wrap");
   if (!wrap) return;
@@ -10678,7 +10697,7 @@ function __fitCalendarioMonthLandscape(){
 
     const isLandscape = (window.matchMedia && window.matchMedia("(orientation: landscape)").matches);
 
-    // dDAE_2.193: in vista mese su iPad landscape usa tutta la larghezza disponibile (margine 10px L/R)
+    // dDAE_2.198: in vista mese su iPad landscape usa tutta la larghezza disponibile (margine 10px L/R)
     try{ document.body.classList.toggle("cal-month-landscape", !!isLandscape); }catch(_){}
 
     const grid = document.getElementById("calGridMonth");
@@ -11186,7 +11205,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.193)
+   Lavanderia (dDAE_2.198)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -11582,7 +11601,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.193: renderSpese allineato al backend ---
+// --- FIX dDAE_2.198: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -11678,7 +11697,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.193: delete reale ospiti ---
+// --- FIX dDAE_2.198: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -11714,7 +11733,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.193: mostra nome ospite ---
+// --- FIX dDAE_2.198: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -11799,12 +11818,14 @@ function resetTassaUI(){
   ids.forEach(id => { const el = $("#"+id); if (el) el.textContent = "—"; });
 }
 
-async function calcTassa(fromOverride, toOverride){
+async function calcTassa(fromOverride, toOverride, opts){
+  opts = opts || {};
+  const includeUntagged = !!opts.includeUntagged;
   const fromEl = $("#taxFrom");
   const toEl = $("#taxTo");
   const from = (fromOverride || (fromEl ? fromEl.value : "")) || "";
   const to   = (toOverride   || (toEl ? toEl.value : ""))   || "";
-if (!from || !to){
+  if (!from || !to){
     toast("Seleziona un periodo (Da/A)");
     resetTassaUI();
     return;
@@ -11818,45 +11839,38 @@ if (!from || !to){
   // Prende i dati SOLO dalle prenotazioni (foglio ospiti)
   const ospiti = await api("ospiti", { method:"GET" }) || [];
 
-  let payingPres = 0;
-  let kidsPres = 0;
-  let reducedPres = 0;
+  let schede = 0;
+  let adultsTot = 0;
+  let taxableDaysTot = 0;
+  let totalAmt = 0;
 
   for (const o of ospiti){
     const inISO  = __parseDateFlexibleToISO(o.check_in || o.checkIn);
     const outISO = __parseDateFlexibleToISO(o.check_out || o.checkOut);
     if (!inISO || !outISO) continue;
-
-    // Tassa: considera SOLO prenotazioni con registrazioni PS + ISTAT
-    const psReg = truthy(o.ps_registrato ?? o.psRegistrato);
-    const istatReg = truthy(o.istat_registrato ?? o.istatRegistrato);
-    if (!(psReg && istatReg)) continue;
-
+    // Tassa: per default considera SOLO prenotazioni con registrazioni PS o ISTAT
+    if (!includeUntagged){
+      const psReg = truthy(o.ps_registrato ?? o.psRegistrato);
+      const istatReg = truthy(o.istat_registrato ?? o.istatRegistrato);
+      if (!(psReg || istatReg)) continue;
+    }
     const nights = __overlapNights(inISO, outISO, from, to);
     if (!nights) continue;
 
-    const adults = Number(o.adulti || 0) || 0;
-    const kids   = Number(o.bambini_u10 || 0) || 0;
-
-    // Ridotti: campo futuro (se presente). Esempi supportati: ridotti, anziani, ridotti_n
-    const red = Number(o.ridotti ?? o.anziani ?? o.ridotti_n ?? 0) || 0;
-
-    const redClamped = Math.max(0, Math.min(adults, red));
-    const fullAdults = Math.max(0, adults - redClamped);
-
-    payingPres  += fullAdults * nights;
-    reducedPres += redClamped * nights;
-    kidsPres    += kids * nights;
+    // Somma SOLO il totale tassa della scheda (pill), con la stessa logica della pill
+    const tt = calcTouristTax(o, nights);
+    schede += 1;
+    adultsTot += Number(tt?.adults || 0) || 0;
+    taxableDaysTot += Number(tt?.taxableDays || 0) || 0;
+    totalAmt += Number(tt?.total || 0) || 0;
   }
 
-  const rate = (state.settings && state.settings.loaded) ? (getSettingNumber("tassa_soggiorno", (typeof TOURIST_TAX_EUR_PPN !== "undefined" ? TOURIST_TAX_EUR_PPN : 0)) || 0) : (Number(typeof TOURIST_TAX_EUR_PPN !== "undefined" ? TOURIST_TAX_EUR_PPN : 0) || 0);
-  const redFactor = Number(typeof TOURIST_TAX_REDUCED_FACTOR !== "undefined" ? TOURIST_TAX_REDUCED_FACTOR : 1) || 1;
-
-  const payingAmt  = payingPres * rate;
-  const reducedAmt = reducedPres * rate * redFactor;
+  const rate = (state.settings && state.settings.loaded)
+    ? (getSettingNumber("tassa_soggiorno", (typeof TOURIST_TAX_EUR_PPN !== "undefined" ? TOURIST_TAX_EUR_PPN : 0)) || 0)
+    : (Number(typeof TOURIST_TAX_EUR_PPN !== "undefined" ? TOURIST_TAX_EUR_PPN : 0) || 0);
 
   // salva per report
-  state._taxLast = { from, to, payingPres, kidsPres, reducedPres, rate, redFactor, payingAmt, reducedAmt, totalAmt: (payingAmt + reducedAmt) };
+  state._taxLast = { from, to, schede, adultsTot, taxableDaysTot, rate, totalAmt, mode: (includeUntagged ? "stima" : "taggate") };
 
   // UI: mostra solo dopo click Calcola
   const res = $("#taxResults");
@@ -11864,15 +11878,16 @@ if (!from || !to){
   const rb = $("#taxReportBtn");
   if (rb) rb.disabled = false;
 
-  const pc = $("#taxPayingCount"); if (pc) pc.textContent = String(payingPres);
-  const pa = $("#taxPayingAmount"); if (pa) pa.textContent = formatEUR(payingAmt);
+  const pc = $("#taxPayingCount"); if (pc) pc.textContent = String(schede);
+  const pa = $("#taxPayingAmount"); if (pa) pa.textContent = formatEUR(totalAmt);
 
-  const kc = $("#taxKidsCount"); if (kc) kc.textContent = String(kidsPres);
-  const ka = $("#taxKidsAmount"); if (ka) ka.textContent = "—"; // non pagano
+  const kc = $("#taxKidsCount"); if (kc) kc.textContent = "0";
+  const ka = $("#taxKidsAmount"); if (ka) ka.textContent = "—"; // non applicabile
 
-  const rc = $("#taxReducedCount"); if (rc) rc.textContent = String(reducedPres);
-  const ra = $("#taxReducedAmount"); if (ra) ra.textContent = formatEUR(reducedAmt);
+  const rc = $("#taxReducedCount"); if (rc) rc.textContent = "0";
+  const ra = $("#taxReducedAmount"); if (ra) ra.textContent = "—"; // non applicabile
 }
+
 
 
 function buildTaxReportText(){
@@ -11882,20 +11897,17 @@ function buildTaxReportText(){
   lines.push("Report tassa di soggiorno");
   lines.push(`Periodo: ${t.from} → ${t.to}`);
   lines.push("");
-  lines.push(`Presenze paganti: ${t.payingPres}`);
-  lines.push(`Importo paganti: ${formatEUR(t.payingAmt)}`);
-  lines.push("");
-  lines.push(`Presenze ridotte: ${t.reducedPres}`);
-  lines.push(`Importo ridotti: ${formatEUR(t.reducedAmt)}`);
-  lines.push("");
-  lines.push(`Bambini (<10): ${t.kidsPres} (esenti)`);
+  lines.push(`Schede incluse: ${t.schede} (${t.mode === "stima" ? "tutte (anche non taggate)" : "solo taggate (PS o ISTAT)"})`);
+  lines.push(`Adulti tassabili (somma): ${t.adultsTot}`);
+  lines.push(`Giorni tassabili (somma, max 3/notte per scheda): ${t.taxableDaysTot}`);
   lines.push("");
   lines.push(`Tariffa: ${formatEUR(t.rate)} / persona / notte`);
-  if (t.redFactor !== 1) lines.push(`Fattore ridotti: ${String(t.redFactor)}`);
   lines.push("");
   lines.push(`TOTALE: ${formatEUR(t.totalAmt)}`);
   return lines.join("\n");
+
 }
+
 
 function openTaxReportModal(text){
   const modal = document.getElementById("taxReportModal");
@@ -11950,8 +11962,14 @@ function openTaxReportModal(text){
 
 
 function initTassaPage(){
-  if (__tassaBound) return;
-  __tassaBound = true;
+  // idempotent: può essere richiamata più volte (es. restore iOS/refresh)
+  const bindOnce = (el, fn) => {
+    if (!el) return false;
+    try{ if (el.dataset && el.dataset.fastTapBound === "1") return true; }catch(_){ }
+    try{ bindFastTap(el, fn); }catch(_){ try{ el.addEventListener("click", fn); }catch(__){} }
+    try{ if (el.dataset) el.dataset.fastTapBound = "1"; }catch(_){ }
+    return true;
+  };
 
   const setYearLabel = () => {
     const y = (new Date()).getFullYear();
@@ -11967,9 +11985,18 @@ function initTassaPage(){
 
   const yearBtn = $("#taxYearBtn");
   if (yearBtn){
-    bindFastTap(yearBtn, async () => {
+    bindOnce(yearBtn, async () => {
       const y = setYearLabel();
       await doCalcRange(`${y}-01-01`, `${y}-12-31`);
+    });
+  }
+
+  const estBtn = $("#taxEstimateBtn");
+  if (estBtn){
+    bindOnce(estBtn, async () => {
+      const y = setYearLabel();
+      try { await calcTassa(`${y}-01-01`, `${y}-12-31`, { includeUntagged: true }); }
+      catch (err) { toast(String(err && err.message || err || "Errore")); resetTassaUI(); }
     });
   }
 
@@ -11979,7 +12006,7 @@ function initTassaPage(){
   const q4 = $("#taxQ4Btn");
   const quarterBind = (btn, fromMMDD, toMMDD) => {
     if (!btn) return;
-    bindFastTap(btn, async () => {
+    bindOnce(btn, async () => {
       const y = setYearLabel();
       await doCalcRange(`${y}-${fromMMDD}`, `${y}-${toMMDD}`);
     });
@@ -12003,7 +12030,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.193
+   Build: dDAE_2.198
 ========================= */
 
 state.orepulizia = state.orepulizia || {
@@ -12275,4 +12302,3 @@ async function initOrePuliziaPage(){
 
   __renderOrePuliziaCalendar_();
 }
-
