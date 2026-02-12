@@ -1,14 +1,14 @@
 
-// dDAE_2.201 — iOS BFCache: rebind tappable Home icons
+// dDAE_2.202 — iOS BFCache: rebind tappable Home icons
 try{
   window.addEventListener("pageshow", () => { try{ bindHomeStrongTap(); }catch(_){ } }, { passive:true });
 }catch(_){ }
 /* global API_BASE_URL, API_KEY */
 
 /**
- * Build: dDAE_2.201
+ * Build: dDAE_2.202
  */
-const BUILD_VERSION = "dDAE_2.201";
+const BUILD_VERSION = "dDAE_2.202";
 
 // Utility: parse importi (usato anche in guest list)
 function money(v){
@@ -262,7 +262,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.201)
+// AUTH + SESSION (dDAE_2.202)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -713,7 +713,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.201 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.202 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2546,7 +2546,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.201 — iOS hardening: Home icons always tappable (fallback binding) */
+/* dDAE_2.202 — iOS hardening: Home icons always tappable (fallback binding) */
 function bindHomeStrongTap(){
   // evita doppio binding
   try{
@@ -2586,7 +2586,7 @@ function bindHomeStrongTap(){
 }
 
 
-/* dDAE_2.201 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.202 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2768,7 +2768,7 @@ function setSpeseView(view, { render=false } = {}){
 /* NAV pages (5 pagine interne: home + 4 funzioni) */
 
 
-// dDAE_2.201 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
+// dDAE_2.202 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
 // Applichiamo una classe .is-light ai pulsanti con background chiaro, così CSS forza icone scure.
 function __parseRGBA__(s){
   try{
@@ -3125,7 +3125,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.201: fallback visualizzazione Pulizie
+  // dDAE_2.202: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -4152,7 +4152,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.201)
+// STATISTICHE (dDAE_2.202)
 // =========================
 
 function computeStatGen(){
@@ -4250,7 +4250,7 @@ function computeStatGen(){
   }
 
 
-  // dDAE_2.201+ — Giacenza in cassa = (con ricevuta + senza ricevuta) - spese totali
+  // dDAE_2.202+ — Giacenza in cassa = (con ricevuta + senza ricevuta) - spese totali
   try{
     giacenza = (money(conRicevuta) + money(senzaRicevuta)) - money(speseTot);
   }catch(_){ }
@@ -5946,7 +5946,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.201 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.202 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -6985,7 +6985,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.201: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.202: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -8680,7 +8680,7 @@ function refreshFloatingLabels(){
 
 
 /* =========================
-   Piscina (dDAE_2.201)
+   Piscina (dDAE_2.202)
 ========================= */
 const PISCINA_ACTION = "piscina";
 
@@ -9356,7 +9356,15 @@ try{
   }
 
   // avvio: ripristina sezione se il SW ha forzato un reload su iOS
-  const targetPage = (__restore && __restore.page) ? __restore.page : "home";
+  // Avvio: sempre HOME quando l'utente è autenticato (ignora l'ultima pagina visitata)
+  try{ sessionStorage.removeItem(__RESTORE_KEY); }catch(_){ }
+  try{
+    localStorage.removeItem(__RESTORE_KEY);
+    localStorage.removeItem(__LAST_PAGE_KEY);
+  }catch(_){ }
+  try{ __writeHashPage("home"); }catch(_){ }
+
+  const targetPage = (state.session && state.session.user_id) ? "home" : "auth";
   showPage(targetPage);
   if (__restore) setTimeout(() => { try { __applyUiState(__restore); } catch(_) {} }, 0);
 
@@ -9384,7 +9392,7 @@ try{
   let __laundryRefreshT = null;
   let __savingHours = false;
   let __pendingHours = false;
-  // dDAE_2.201: salvataggio PULIZIE per-stanza (evita generazione righe/report inutili)
+  // dDAE_2.202: salvataggio PULIZIE per-stanza (evita generazione righe/report inutili)
   // Mantiene UI fluida: nessun "blink" dei numeri durante autosave / refresh.
   let __dirtyLaundryRooms = new Set();   // stanze modificate (solo queste vengono salvate)
   let __dirtyLaundryCells = new Set();   // celle modificate (solo queste ricevono bordo rosso post-save)
@@ -10254,7 +10262,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.201) =====
+// ===== CALENDARIO (dDAE_2.202) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -10489,7 +10497,7 @@ function renderCalendario(){
 }
 
 
-/* dDAE_2.201 — Calendario: blocca SOLO la colonna numeri stanze durante lo scroll orizzontale (fix iOS) */
+/* dDAE_2.202 — Calendario: blocca SOLO la colonna numeri stanze durante lo scroll orizzontale (fix iOS) */
 function ensureCalRoomFreezeBound(){
   const wrap = document.querySelector("#page-calendario .cal-grid-wrap");
   if (!wrap) return;
@@ -10720,7 +10728,7 @@ function __fitCalendarioMonthLandscape(){
 
     const isLandscape = (window.matchMedia && window.matchMedia("(orientation: landscape)").matches);
 
-    // dDAE_2.201: in vista mese su iPad landscape usa tutta la larghezza disponibile (margine 10px L/R)
+    // dDAE_2.202: in vista mese su iPad landscape usa tutta la larghezza disponibile (margine 10px L/R)
     try{ document.body.classList.toggle("cal-month-landscape", !!isLandscape); }catch(_){}
 
     const grid = document.getElementById("calGridMonth");
@@ -11228,7 +11236,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.201)
+   Lavanderia (dDAE_2.202)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -11624,7 +11632,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.201: renderSpese allineato al backend ---
+// --- FIX dDAE_2.202: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -11720,7 +11728,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.201: delete reale ospiti ---
+// --- FIX dDAE_2.202: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -11756,7 +11764,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.201: mostra nome ospite ---
+// --- FIX dDAE_2.202: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -12053,7 +12061,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.201
+   Build: dDAE_2.202
 ========================= */
 
 state.orepulizia = state.orepulizia || {

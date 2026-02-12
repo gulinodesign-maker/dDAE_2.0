@@ -7370,3 +7370,11 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 .services-list-wrap{
   scroll-margin-top: 14px;
 }
+
+
+/* dDAE UI: center specific labels (guest card) */
+.label-center-display{
+  display:block;
+  width:100%;
+  text-align:center;
+}

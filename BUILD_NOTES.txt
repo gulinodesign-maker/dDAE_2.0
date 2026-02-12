@@ -1,2 +1,4 @@
-Build: dDAE_2.201
-Apps Script updated: YES (ospiti: telefono, email)
+dDAE_2.202
+- Ospiti: label 'Stanze' centrata
+- Avvio: sempre Home
+- Apps Script: invariato
