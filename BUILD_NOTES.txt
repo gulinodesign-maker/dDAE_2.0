@@ -1,4 +1,4 @@
-dDAE_2.202
+dDAE_2.203
 - Ospiti: label 'Stanze' centrata
 - Avvio: sempre Home
 - Apps Script: invariato
