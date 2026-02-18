@@ -1,14 +1,14 @@
 
-// dDAE_2.203 — iOS BFCache: rebind tappable Home icons
+// dDAE_2.204 — iOS BFCache: rebind tappable Home icons
 try{
   window.addEventListener("pageshow", () => { try{ bindHomeStrongTap(); }catch(_){ } }, { passive:true });
 }catch(_){ }
 /* global API_BASE_URL, API_KEY */
 
 /**
- * Build: dDAE_2.203
+ * Build: dDAE_2.204
  */
-const BUILD_VERSION = "dDAE_2.203";
+const BUILD_VERSION = "dDAE_2.204";
 
 // Utility: parse importi (usato anche in guest list)
 function money(v){
@@ -262,7 +262,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.203)
+// AUTH + SESSION (dDAE_2.204)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -713,7 +713,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.203 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.204 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2546,7 +2546,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.203 — iOS hardening: Home icons always tappable (fallback binding) */
+/* dDAE_2.204 — iOS hardening: Home icons always tappable (fallback binding) */
 function bindHomeStrongTap(){
   // evita doppio binding
   try{
@@ -2586,7 +2586,7 @@ function bindHomeStrongTap(){
 }
 
 
-/* dDAE_2.203 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.204 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2768,7 +2768,7 @@ function setSpeseView(view, { render=false } = {}){
 /* NAV pages (5 pagine interne: home + 4 funzioni) */
 
 
-// dDAE_2.203 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
+// dDAE_2.204 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
 // Applichiamo una classe .is-light ai pulsanti con background chiaro, così CSS forza icone scure.
 function __parseRGBA__(s){
   try{
@@ -3125,7 +3125,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.203: fallback visualizzazione Pulizie
+  // dDAE_2.204: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -4152,7 +4152,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.203)
+// STATISTICHE (dDAE_2.204)
 // =========================
 
 function computeStatGen(){
@@ -4250,7 +4250,7 @@ function computeStatGen(){
   }
 
 
-  // dDAE_2.203+ — Giacenza in cassa = (con ricevuta + senza ricevuta) - spese totali
+  // dDAE_2.204+ — Giacenza in cassa = (con ricevuta + senza ricevuta) - spese totali
   try{
     giacenza = (money(conRicevuta) + money(senzaRicevuta)) - money(speseTot);
   }catch(_){ }
@@ -5946,7 +5946,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.203 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.204 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -6985,7 +6985,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.203: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.204: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -8680,7 +8680,7 @@ function refreshFloatingLabels(){
 
 
 /* =========================
-   Piscina (dDAE_2.203)
+   Piscina (dDAE_2.204)
 ========================= */
 const PISCINA_ACTION = "piscina";
 
@@ -9392,7 +9392,7 @@ try{
   let __laundryRefreshT = null;
   let __savingHours = false;
   let __pendingHours = false;
-  // dDAE_2.203: salvataggio PULIZIE per-stanza (evita generazione righe/report inutili)
+  // dDAE_2.204: salvataggio PULIZIE per-stanza (evita generazione righe/report inutili)
   // Mantiene UI fluida: nessun "blink" dei numeri durante autosave / refresh.
   let __dirtyLaundryRooms = new Set();   // stanze modificate (solo queste vengono salvate)
   let __dirtyLaundryCells = new Set();   // celle modificate (solo queste ricevono bordo rosso post-save)
@@ -10262,7 +10262,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.203) =====
+// ===== CALENDARIO (dDAE_2.204) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -10497,7 +10497,7 @@ function renderCalendario(){
 }
 
 
-/* dDAE_2.203 — Calendario: blocca SOLO la colonna numeri stanze durante lo scroll orizzontale (fix iOS) */
+/* dDAE_2.204 — Calendario: blocca SOLO la colonna numeri stanze durante lo scroll orizzontale (fix iOS) */
 function ensureCalRoomFreezeBound(){
   const wrap = document.querySelector("#page-calendario .cal-grid-wrap");
   if (!wrap) return;
@@ -10728,7 +10728,7 @@ function __fitCalendarioMonthLandscape(){
 
     const isLandscape = (window.matchMedia && window.matchMedia("(orientation: landscape)").matches);
 
-    // dDAE_2.203: in vista mese su iPad landscape usa tutta la larghezza disponibile (margine 10px L/R)
+    // dDAE_2.204: in vista mese su iPad landscape usa tutta la larghezza disponibile (margine 10px L/R)
     try{ document.body.classList.toggle("cal-month-landscape", !!isLandscape); }catch(_){}
 
     const grid = document.getElementById("calGridMonth");
@@ -11236,7 +11236,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.203)
+   Lavanderia (dDAE_2.204)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -11632,7 +11632,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.203: renderSpese allineato al backend ---
+// --- FIX dDAE_2.204: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -11728,7 +11728,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.203: delete reale ospiti ---
+// --- FIX dDAE_2.204: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -11764,7 +11764,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.203: mostra nome ospite ---
+// --- FIX dDAE_2.204: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -11872,6 +11872,7 @@ async function calcTassa(fromOverride, toOverride, opts){
 
   let schede = 0;
   let adultsTot = 0;
+  let kidsTot = 0;
   let taxableDaysTot = 0;
   let totalAmt = 0;
 
@@ -11892,6 +11893,10 @@ async function calcTassa(fromOverride, toOverride, opts){
     const tt = calcTouristTax(o, nights);
     schede += 1;
     adultsTot += Number(tt?.adults || 0) || 0;
+
+    const kidsRaw = (o.bambini_u10 ?? o.bambiniU10 ?? o.kids_u10 ?? o.kidsU10 ?? o.bambini ?? o.kids ?? 0);
+    kidsTot += Math.max(0, parseInt(kidsRaw, 10) || 0);
+
     taxableDaysTot += Number(tt?.taxableDays || 0) || 0;
     totalAmt += Number(tt?.total || 0) || 0;
   }
@@ -11901,7 +11906,7 @@ async function calcTassa(fromOverride, toOverride, opts){
     : (Number(typeof TOURIST_TAX_EUR_PPN !== "undefined" ? TOURIST_TAX_EUR_PPN : 0) || 0);
 
   // salva per report
-  state._taxLast = { from, to, schede, adultsTot, taxableDaysTot, rate, totalAmt, mode: (includeUntagged ? "stima" : "taggate") };
+  state._taxLast = { from, to, schede, adultsTot, kidsTot, taxableDaysTot, rate, totalAmt, mode: (includeUntagged ? "stima" : "taggate") };
 
   // UI: mostra solo dopo click Calcola
   const res = $("#taxResults");
@@ -11909,10 +11914,10 @@ async function calcTassa(fromOverride, toOverride, opts){
   const rb = $("#taxReportBtn");
   if (rb) rb.disabled = false;
 
-  const pc = $("#taxPayingCount"); if (pc) pc.textContent = String(schede);
+  const pc = $("#taxPayingCount"); if (pc) pc.textContent = String(adultsTot);
   const pa = $("#taxPayingAmount"); if (pa) pa.textContent = formatEUR(totalAmt);
 
-  const kc = $("#taxKidsCount"); if (kc) kc.textContent = "0";
+  const kc = $("#taxKidsCount"); if (kc) kc.textContent = String(kidsTot);
   const ka = $("#taxKidsAmount"); if (ka) ka.textContent = "—"; // non applicabile
 
   const rc = $("#taxReducedCount"); if (rc) rc.textContent = "0";
@@ -11929,7 +11934,8 @@ function buildTaxReportText(){
   lines.push(`Periodo: ${t.from} → ${t.to}`);
   lines.push("");
   lines.push(`Schede incluse: ${t.schede} (${t.mode === "stima" ? "tutte (anche non taggate)" : "solo taggate (PS o ISTAT)"})`);
-  lines.push(`Adulti tassabili (somma): ${t.adultsTot}`);
+  lines.push(`Adulti (somma): ${t.adultsTot}`);
+  lines.push(`Bambini <10 (somma): ${t.kidsTot || 0}`);
   lines.push(`Giorni tassabili (somma, max 3/notte per scheda): ${t.taxableDaysTot}`);
   lines.push("");
   lines.push(`Tariffa: ${formatEUR(t.rate)} / persona / notte`);
@@ -12061,7 +12067,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.203
+   Build: dDAE_2.204
 ========================= */
 
 state.orepulizia = state.orepulizia || {
