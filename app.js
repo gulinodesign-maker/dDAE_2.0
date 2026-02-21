@@ -1,14 +1,14 @@
 
-// dDAE_2.205 — iOS BFCache: rebind tappable Home icons
+// dDAE_2.206 — iOS BFCache: rebind tappable Home icons
 try{
   window.addEventListener("pageshow", () => { try{ bindHomeStrongTap(); }catch(_){ } }, { passive:true });
 }catch(_){ }
 /* global API_BASE_URL, API_KEY */
 
 /**
- * Build: dDAE_2.205
+ * Build: dDAE_2.206
  */
-const BUILD_VERSION = "dDAE_2.205";
+const BUILD_VERSION = "dDAE_2.206";
 
 // Utility: parse importi (usato anche in guest list)
 function money(v){
@@ -262,7 +262,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.205)
+// AUTH + SESSION (dDAE_2.206)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -713,7 +713,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.205 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.206 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -2546,7 +2546,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.205 — iOS hardening: Home icons always tappable (fallback binding) */
+/* dDAE_2.206 — iOS hardening: Home icons always tappable (fallback binding) */
 function bindHomeStrongTap(){
   // evita doppio binding
   try{
@@ -2586,7 +2586,7 @@ function bindHomeStrongTap(){
 }
 
 
-/* dDAE_2.205 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.206 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2768,7 +2768,7 @@ function setSpeseView(view, { render=false } = {}){
 /* NAV pages (5 pagine interne: home + 4 funzioni) */
 
 
-// dDAE_2.205 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
+// dDAE_2.206 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
 // Applichiamo una classe .is-light ai pulsanti con background chiaro, così CSS forza icone scure.
 function __parseRGBA__(s){
   try{
@@ -3057,7 +3057,7 @@ state.page = page;
   if (page === "statgen") {
     const _nav = navId;
     Promise.all([
-      ensurePeriodData({ showLoader:true }),
+      ensureStatsAllData({ showLoader:true }),
       loadOspiti({ ...(state.period || {}), force:false }),
       cachedGet("servizi", {}, { showLoader:false, ttlMs: 2*60*1000, swrMs: 10*60*1000, force:false }),
     ])
@@ -3068,7 +3068,7 @@ state.page = page;
   if (page === "statmensili") {
     const _nav = navId;
     Promise.all([
-      ensurePeriodData({ showLoader:true }),
+      ensureStatsAllData({ showLoader:true }),
       loadOspiti({ ...(state.period || {}), force:false }),
       cachedGet("servizi", {}, { showLoader:false, ttlMs: 2*60*1000, swrMs: 10*60*1000, force:false }),
     ])
@@ -3079,7 +3079,7 @@ state.page = page;
 
   if (page === "statspese") {
     const _nav = navId;
-    ensurePeriodData({ showLoader:true })
+    ensureStatsAllData({ showLoader:true })
       .then(()=>{ if (state.navId !== _nav || state.page !== "statspese") return; renderStatSpese(); })
       .catch(e=>toast(e.message));
   }
@@ -3087,7 +3087,7 @@ state.page = page;
   if (page === "statprenotazioni") {
     const _nav = navId;
     Promise.all([
-      ensurePeriodData({ showLoader:true }),
+      ensureStatsAllData({ showLoader:true }),
       loadOspiti({ ...(state.period || {}), force:false }),
     ])
       .then(()=>{ if (state.navId !== _nav || state.page !== "statprenotazioni") return; renderStatPrenotazioni(); })
@@ -3098,7 +3098,7 @@ state.page = page;
   if (page === "statazienda") {
     const _nav = navId;
     Promise.all([
-      ensurePeriodData({ showLoader:true }),
+      ensureStatsAllData({ showLoader:true }),
       loadOspiti({ ...(state.period || {}), force:false }),
     ])
       .then(()=>{ if (state.navId !== _nav || state.page !== "statazienda") return; renderStatAzienda(); })
@@ -3125,7 +3125,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.205: fallback visualizzazione Pulizie
+  // dDAE_2.206: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3209,7 +3209,7 @@ function setupHome(){
       const next = (state.speseView === "insights") ? "list" : "insights";
       if (next === "insights"){
         try{
-          await ensurePeriodData({ showLoader:true });
+          await ensureStatsAllData({ showLoader:true });
           setSpeseView("insights", { render:true });
         }catch(e){ toast(e.message); }
       } else {
@@ -3831,6 +3831,88 @@ async function ensurePeriodData({ showLoader=true, force=false } = {}){
   __lsSet(lsSpeseKey, state.spese);
 }
 
+
+// =========================
+// STATISTICHE: dati NON filtrati dai periodi di "Spese"
+// (carica tutte le spese dell'anno esercizio, indipendente da state.period)
+// =========================
+function __getExerciseYearRangeISO(){
+  const y = Number(state.exerciseYear || new Date().getFullYear());
+  const yy = String(isFinite(y) ? y : new Date().getFullYear());
+  return { from: `${yy}-01-01`, to: `${yy}-12-31` };
+}
+
+async function ensureStatsAllData({ showLoader=true, force=false } = {}){
+  const { from, to } = __getExerciseYearRangeISO();
+  const uid = (state && state.session && state.session.user_id) ? String(state.session.user_id) : "";
+  const anno = (state && state.exerciseYear) ? String(state.exerciseYear) : "";
+  const key = `${uid}|${anno}|ALL|${from}|${to}`;
+
+  if (!force && state._statsDataKey === key && Array.isArray(state.speseAll) && state.reportAll) {
+    return;
+  }
+
+  const lsSpeseKey = `speseALL|${uid}|${anno}|${from}|${to}`;
+  const lsReportKey = `reportALL|${uid}|${anno}|${from}|${to}`;
+  const hitS = !force ? __lsGet(lsSpeseKey) : null;
+  const hitR = !force ? __lsGet(lsReportKey) : null;
+  const hasLocal = !!((hitS && hitS.data) || (hitR && hitR.data));
+
+  if (!force) {
+    if (hitS && Array.isArray(hitS.data)) {
+      state.speseAll = hitS.data;
+      state.reportAll = buildReportFromSpese(state.speseAll);
+    } else if (hitR && hitR.data) {
+      state.reportAll = hitR.data;
+    }
+    if (hasLocal) state._statsDataKey = key;
+  }
+
+  const fetchAll = () => Promise.all([
+    cachedGet("spese", { from, to }, { showLoader: showLoader && !hasLocal, ttlMs: 2*60*1000, swrMs: 10*60*1000, force }),
+  ]);
+
+  if (hasLocal && !force) {
+    fetchAll()
+      .then(([spese]) => {
+        const uidNow = (state && state.session && state.session.user_id) ? String(state.session.user_id) : "";
+        const annoNow = (state && state.exerciseYear) ? String(state.exerciseYear) : "";
+        const kNow = `${uidNow}|${annoNow}|ALL|${from}|${to}`;
+        if (kNow !== key) return;
+        state.speseAll = Array.isArray(spese) ? spese : [];
+        state.reportAll = buildReportFromSpese(state.speseAll);
+        state._statsDataKey = key;
+        __lsSet(lsReportKey, state.reportAll);
+        __lsSet(lsSpeseKey, state.speseAll);
+
+        try{
+          if (state.page === "statgen") renderStatGen();
+          if (state.page === "statmensili") renderStatMensili();
+          if (state.page === "statspese") renderStatSpese();
+          if (state.page === "statprenotazioni") renderStatPrenotazioni();
+          if (state.page === "statazienda") renderStatAzienda();
+          if (state.page === "statamministratore") renderStatAmministratore();
+        }catch(_){ }
+      })
+      .catch(() => {});
+    return;
+  }
+
+  const [spese] = await fetchAll();
+  state.speseAll = Array.isArray(spese) ? spese : [];
+  state.reportAll = buildReportFromSpese(state.speseAll);
+  state._statsDataKey = key;
+  __lsSet(lsReportKey, state.reportAll);
+  __lsSet(lsSpeseKey, state.speseAll);
+}
+
+function __getStatsReport(){
+  return (state && state.reportAll) ? state.reportAll : state.report;
+}
+function __getStatsSpese(){
+  return Array.isArray(state && state.speseAll) ? state.speseAll : (Array.isArray(state && state.spese) ? state.spese : []);
+}
+
 // Compat: vecchi call-site
 async function loadData({ showLoader=true } = {}){
   return ensurePeriodData({ showLoader });
@@ -3948,7 +4030,7 @@ function renderSpese(){
   if (!list) return;
   list.innerHTML = "";
 
-  const items = Array.isArray(state.spese) ? state.spese : [];
+  const items = __getStatsSpese();
   if (!items.length){
     list.innerHTML = '<div style="font-size:13px; opacity:.75; padding:8px 2px;">Nessuna spesa nel periodo.</div>';
     return;
@@ -4159,12 +4241,12 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.205)
+// STATISTICHE (dDAE_2.206)
 // =========================
 
 function computeStatGen(){
   const guests = Array.isArray(state.guests) ? state.guests : [];
-  const report = state.report || null;
+  const report = __getStatsReport() || null;
 
   const money = (v) => {
     if (v === null || v === undefined) return 0;
@@ -4246,7 +4328,7 @@ function computeStatGen(){
   let speseTot = 0;
 
   try{
-    const items = Array.isArray(state.spese) ? state.spese : [];
+    const items = __getStatsSpese();
     let sum = 0;
     for (const it of items){
       sum += money(it?.importoLordo ?? it?.lordo ?? 0);
@@ -4257,7 +4339,7 @@ function computeStatGen(){
   }
 
 
-  // dDAE_2.205+ — Giacenza in cassa = (con ricevuta + senza ricevuta) - spese totali
+  // dDAE_2.206+ — Giacenza in cassa = (con ricevuta + senza ricevuta) - spese totali
   try{
     giacenza = (money(conRicevuta) + money(senzaRicevuta)) - money(speseTot);
   }catch(_){ }
@@ -4269,7 +4351,7 @@ function computeStatGen(){
 
   if (!isFinite(ivaSpese) || ivaSpese === 0){
     try{
-      const items = Array.isArray(state.spese) ? state.spese : [];
+      const items = __getStatsSpese();
       let sum = 0;
       for (const s of items){
         // Se c'e' gia' un campo iva, usa quello
@@ -5177,7 +5259,7 @@ function saveIrapModal(){
 }
 
 function computeStatSpese(){
-  const items = Array.isArray(state.spese) ? state.spese : [];
+  const items = __getStatsSpese();
   const acc = { CONTANTI:0, TASSA_SOGGIORNO:0, IVA_22:0, IVA_10:0, IVA_4:0 };
 
   const money = (v) => {
@@ -5953,7 +6035,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.205 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.206 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -6992,7 +7074,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.205: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.206: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -8687,7 +8769,7 @@ function refreshFloatingLabels(){
 
 
 /* =========================
-   Piscina (dDAE_2.205)
+   Piscina (dDAE_2.206)
 ========================= */
 const PISCINA_ACTION = "piscina";
 
@@ -9399,7 +9481,7 @@ try{
   let __laundryRefreshT = null;
   let __savingHours = false;
   let __pendingHours = false;
-  // dDAE_2.205: salvataggio PULIZIE per-stanza (evita generazione righe/report inutili)
+  // dDAE_2.206: salvataggio PULIZIE per-stanza (evita generazione righe/report inutili)
   // Mantiene UI fluida: nessun "blink" dei numeri durante autosave / refresh.
   let __dirtyLaundryRooms = new Set();   // stanze modificate (solo queste vengono salvate)
   let __dirtyLaundryCells = new Set();   // celle modificate (solo queste ricevono bordo rosso post-save)
@@ -10269,7 +10351,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.205) =====
+// ===== CALENDARIO (dDAE_2.206) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -10504,7 +10586,7 @@ function renderCalendario(){
 }
 
 
-/* dDAE_2.205 — Calendario: blocca SOLO la colonna numeri stanze durante lo scroll orizzontale (fix iOS) */
+/* dDAE_2.206 — Calendario: blocca SOLO la colonna numeri stanze durante lo scroll orizzontale (fix iOS) */
 function ensureCalRoomFreezeBound(){
   const wrap = document.querySelector("#page-calendario .cal-grid-wrap");
   if (!wrap) return;
@@ -10735,7 +10817,7 @@ function __fitCalendarioMonthLandscape(){
 
     const isLandscape = (window.matchMedia && window.matchMedia("(orientation: landscape)").matches);
 
-    // dDAE_2.205: in vista mese su iPad landscape usa tutta la larghezza disponibile (margine 10px L/R)
+    // dDAE_2.206: in vista mese su iPad landscape usa tutta la larghezza disponibile (margine 10px L/R)
     try{ document.body.classList.toggle("cal-month-landscape", !!isLandscape); }catch(_){}
 
     const grid = document.getElementById("calGridMonth");
@@ -11243,7 +11325,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.205)
+   Lavanderia (dDAE_2.206)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -11639,7 +11721,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.205: renderSpese allineato al backend ---
+// --- FIX dDAE_2.206: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -11735,7 +11817,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.205: delete reale ospiti ---
+// --- FIX dDAE_2.206: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -11771,7 +11853,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.205: mostra nome ospite ---
+// --- FIX dDAE_2.206: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -12074,7 +12156,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.205
+   Build: dDAE_2.206
 ========================= */
 
 state.orepulizia = state.orepulizia || {
