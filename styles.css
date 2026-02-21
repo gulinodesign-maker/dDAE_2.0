@@ -127,7 +127,7 @@ body{
 }
 .topbar .icon-btn .ui-ico,
 .topbar .icon-btn .ui-ico *{
-  stroke: var(--ico-sky) !important;
+  stroke: var(--ico-color, var(--ico-sky)) !important;
   fill: none !important;
 }
 .topbar .hamburger{
@@ -5215,7 +5215,7 @@ grid-template-rows: 34px repeat(7, 54px);
   height: 22px;
   stroke-width: 2.2;
 }
-.ui-ico.ink-blue{ stroke: var(--ico-sky) !important; }
+.ui-ico.ink-blue{ stroke: var(--ico-color, var(--ico-sky)) !important; }
 .ui-ico.ink-orange{ stroke: var(--ico-orange) !important; }
 
 /* Pulizie: nav giorno sempre centrata */
