@@ -4784,6 +4784,20 @@ grid-template-rows: 34px repeat(7, 54px);
 }
 
 /* Risultati: solo dopo Calcola, stack verticale */
+.tax-total{
+  margin-top: 14px;
+  border-radius: 18px;
+  padding: 10px 12px;
+  border: 1px solid rgba(15,23,42,0.10);
+  background: #ffffff;
+  display:flex;
+  align-items:center;
+  justify-content:space-between;
+  gap: 12px;
+}
+.tax-total-label{ font-weight: 850; color: rgba(15,23,42,0.70); }
+.tax-total-value{ font-weight: 980; color: var(--ico-blue-night); }
+
 .tax-results{ margin-top: 14px; display:flex; flex-direction:column; gap:12px; }
 
 .tax-result-card{ 

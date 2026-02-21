@@ -52,9 +52,9 @@ try{
 /* global API_BASE_URL, API_KEY */
 
 /**
- * Build: dDAE_2.212
+ * Build: dDAE_2.213
  */
-const BUILD_VERSION = "dDAE_2.212";
+const BUILD_VERSION = "dDAE_2.213";
 
 // Utility: parse importi (usato anche in guest list)
 function money(v){
@@ -12099,11 +12099,15 @@ function __overlapNights(checkInISO, checkOutISO, fromISO, toISO_inclusive){
 function resetTassaUI(){
   const res = $("#taxResults");
   if (res) res.hidden = true;
+  const tt = $("#taxTotalRow");
+  if (tt) tt.hidden = true;
   const rb = $("#taxReportBtn");
   if (rb) rb.disabled = true;
 
   const ids = ["taxPayingCount","taxPayingAmount","taxKidsCount","taxKidsAmount","taxReducedCount","taxReducedAmount"];
   ids.forEach(id => { const el = $("#"+id); if (el) el.textContent = "—"; });
+  const ta = $("#taxTotalAmount");
+  if (ta) ta.textContent = "—";
 }
 
 async function calcTassa(fromOverride, toOverride, opts){
@@ -12168,6 +12172,10 @@ async function calcTassa(fromOverride, toOverride, opts){
   // UI: mostra solo dopo click Calcola
   const res = $("#taxResults");
   if (res) res.hidden = false;
+  const ttRow = $("#taxTotalRow");
+  if (ttRow) ttRow.hidden = false;
+  const ttVal = $("#taxTotalAmount");
+  if (ttVal) ttVal.textContent = formatEUR(totalAmt);
   const rb = $("#taxReportBtn");
   if (rb) rb.disabled = false;
 
