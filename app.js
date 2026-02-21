@@ -1,14 +1,14 @@
 
-// dDAE_2.206 — iOS BFCache: rebind tappable Home icons
+// dDAE_2.208 — iOS BFCache: rebind tappable Home icons
 try{
   window.addEventListener("pageshow", () => { try{ bindHomeStrongTap(); }catch(_){ } }, { passive:true });
 }catch(_){ }
 /* global API_BASE_URL, API_KEY */
 
 /**
- * Build: dDAE_2.206
+ * Build: dDAE_2.208
  */
-const BUILD_VERSION = "dDAE_2.206";
+const BUILD_VERSION = "dDAE_2.208";
 
 // Utility: parse importi (usato anche in guest list)
 function money(v){
@@ -242,6 +242,7 @@ function applyRoleMode(){
     try{ const statMensiliTopTools = document.getElementById("statMensiliTopTools"); if (statMensiliTopTools) statMensiliTopTools.hidden = true; }catch(_){ }
     try{ const statSpeseTopTools = document.getElementById("statSpeseTopTools"); if (statSpeseTopTools) statSpeseTopTools.hidden = true; }catch(_){ }
     try{ const statPrenTopTools = document.getElementById("statPrenTopTools"); if (statPrenTopTools) statPrenTopTools.hidden = true; }catch(_){ }
+    try{ const statCancTopTools = document.getElementById("statCancTopTools"); if (statCancTopTools) statCancTopTools.hidden = true; }catch(_){ }
   }
 }
 
@@ -262,7 +263,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.206)
+// AUTH + SESSION (dDAE_2.208)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -713,7 +714,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.206 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_2.208 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -738,6 +739,7 @@ const state = {
   report: null,
   _dataKey: "",
   period: { from: "", to: "" },
+  deletedGuests: [],
   periodPreset: "this_month",
   page: "home",
   speseView: "list",
@@ -2546,7 +2548,7 @@ function bindFastTap(el, fn){
 }
 
 
-/* dDAE_2.206 — iOS hardening: Home icons always tappable (fallback binding) */
+/* dDAE_2.208 — iOS hardening: Home icons always tappable (fallback binding) */
 function bindHomeStrongTap(){
   // evita doppio binding
   try{
@@ -2586,7 +2588,7 @@ function bindHomeStrongTap(){
 }
 
 
-/* dDAE_2.206 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_2.208 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2706,6 +2708,8 @@ const lav = e.target.closest && e.target.closest("#goLavanderia") || e.target.cl
     if (s6){ hideLauncher(); showPage("statamministratore"); return; }
     const s7 = e.target.closest && e.target.closest("#goStatPiscina");
     if (s7){ hideLauncher(); showPage("statpiscina"); return; }
+    const s8 = e.target.closest && e.target.closest("#goStatCancellazioni");
+    if (s8){ hideLauncher(); showPage("statcancellazioni"); return; }
 });
 }
 
@@ -2768,7 +2772,7 @@ function setSpeseView(view, { render=false } = {}){
 /* NAV pages (5 pagine interne: home + 4 funzioni) */
 
 
-// dDAE_2.206 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
+// dDAE_2.208 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
 // Applichiamo una classe .is-light ai pulsanti con background chiaro, così CSS forza icone scure.
 function __parseRGBA__(s){
   try{
@@ -2988,6 +2992,12 @@ state.page = page;
 
 
 
+  const statCancTopTools = $("#statCancTopTools");
+  if (statCancTopTools){
+    statCancTopTools.hidden = (page !== "statcancellazioni");
+  }
+
+
   const statAziendaTopTools = $("#statAziendaTopTools");
   if (statAziendaTopTools){
     statAziendaTopTools.hidden = (page !== "statazienda");
@@ -3094,12 +3104,23 @@ state.page = page;
       .catch(e=>toast(e.message));
   }
 
-  
+  if (page === "statcancellazioni") {
+    const _nav = navId;
+    Promise.all([
+      ensureStatsAllData({ showLoader:true }),
+      loadOspiti({ ...(state.period || {}), force:false }),
+      loadOspitiEliminati({ ...(state.period || {}), force:false }),
+    ])
+      .then(()=>{ if (state.navId !== _nav || state.page !== "statcancellazioni") return; renderStatCancellazioni(); })
+      .catch(e=>toast(e.message));
+  }
+
   if (page === "statazienda") {
     const _nav = navId;
     Promise.all([
       ensureStatsAllData({ showLoader:true }),
       loadOspiti({ ...(state.period || {}), force:false }),
+      loadOspitiEliminati({ ...(state.period || {}), force:false }),
     ])
       .then(()=>{ if (state.navId !== _nav || state.page !== "statazienda") return; renderStatAzienda(); })
       .catch(e=>toast(e.message));
@@ -3125,7 +3146,7 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.206: fallback visualizzazione Pulizie
+  // dDAE_2.208: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
@@ -3381,6 +3402,8 @@ if (goCalendarioTopOspiti){
   if (s5){ bindFastTap(s5, () => { hideLauncher(); showPage("statazienda"); }); }
   const s6 = $("#goStatAmministratore");
   if (s6){ bindFastTap(s6, () => { hideLauncher(); showPage("statamministratore"); }); }
+  const s8 = $("#goStatCancellazioni");
+  if (s8){ bindFastTap(s8, () => { hideLauncher(); showPage("statcancellazioni"); }); }
 // STATGEN: topbar tools
   const btnBackStats = $("#btnBackStatistiche");
   if (btnBackStats){ bindFastTap(btnBackStats, () => { closeStatPieModal(); showPage("statistiche"); }); }
@@ -3418,7 +3441,9 @@ if (goCalendarioTopOspiti){
   if (btnBackStatsSpese){ bindFastTap(btnBackStatsSpese, () => { closeStatSpesePieModal(); showPage("statistiche"); }); }
   const btnBackStatsPren = $("#btnBackStatistichePrenotazioni");
   if (btnBackStatsPren){ bindFastTap(btnBackStatsPren, () => { showPage("statistiche"); }); }
-    const btnBackStatsAzienda = $("#btnBackStatisticheAzienda");
+  const btnBackStatsCanc = $("#btnBackStatisticheCancellazioni");
+  if (btnBackStatsCanc){ bindFastTap(btnBackStatsCanc, () => { showPage("statistiche"); }); }
+  const btnBackStatsAzienda = $("#btnBackStatisticheAzienda");
   if (btnBackStatsAzienda){ bindFastTap(btnBackStatsAzienda, () => { showPage("statistiche"); }); }
   const btnBackStatsAmm = $("#btnBackStatisticheAmministratore");
   if (btnBackStatsAmm){ bindFastTap(btnBackStatsAmm, () => { showPage("statistiche"); }); }
@@ -3906,6 +3931,45 @@ async function ensureStatsAllData({ showLoader=true, force=false } = {}){
   __lsSet(lsSpeseKey, state.speseAll);
 }
 
+
+function loadOspitiEliminati({ from="", to="", force=false } = {}){
+  const lsKey = `ospiti_eliminati|${from}|${to}`;
+  const hit = __lsGet(lsKey);
+  if (hit && Array.isArray(hit.data)){
+    state.deletedGuests = hit.data;
+  }
+
+  if (!force && hit && Array.isArray(hit.data) && hit.data.length){
+    // refresh in background
+    api("ospiti_eliminati", { method:"GET", params:{ from, to }, showLoader:false })
+      .then((rows)=>{
+        if (Array.isArray(rows)){
+          state.deletedGuests = rows;
+          __lsSet(lsKey, { data: rows, ts: Date.now() });
+        }
+      })
+      .catch(()=>{});
+    return Promise.resolve(state.deletedGuests);
+  }
+
+  return api("ospiti_eliminati", { method:"GET", params:{ from, to }, showLoader:false })
+    .then((rows)=>{
+      if (Array.isArray(rows)){
+        state.deletedGuests = rows;
+        __lsSet(lsKey, { data: rows, ts: Date.now() });
+        return rows;
+      }
+      state.deletedGuests = [];
+      __lsSet(lsKey, { data: [], ts: Date.now() });
+      return [];
+    })
+    .catch((e)=>{
+      state.deletedGuests = state.deletedGuests || [];
+      return state.deletedGuests;
+    });
+}
+
+
 function __getStatsReport(){
   return (state && state.reportAll) ? state.reportAll : state.report;
 }
@@ -4241,7 +4305,7 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.206)
+// STATISTICHE (dDAE_2.208)
 // =========================
 
 function computeStatGen(){
@@ -4339,7 +4403,7 @@ function computeStatGen(){
   }
 
 
-  // dDAE_2.206+ — Giacenza in cassa = (con ricevuta + senza ricevuta) - spese totali
+  // dDAE_2.208+ — Giacenza in cassa = (con ricevuta + senza ricevuta) - spese totali
   try{
     giacenza = (money(conRicevuta) + money(senzaRicevuta)) - money(speseTot);
   }catch(_){ }
@@ -5064,6 +5128,40 @@ function _euroSigned(n){
   if (!isFinite(v) || v === 0) return euro(0);
   if (v < 0) return "− " + euro(Math.abs(v));
   return "+ " + euro(v);
+}
+
+
+function renderStatCancellazioni(){
+  const root = document.getElementById("page-statcancellazioni");
+  if (!root) return;
+
+  const delRows = Array.isArray(state.deletedGuests) ? state.deletedGuests : [];
+  const cancRows = delRows.filter(r => String(r.delete_reason || "").toLowerCase() === "cancellazione" || String(r.delete_reason || "").trim() === "");
+  const cancN = cancRows.length;
+
+  const activeRows = Array.isArray(state.guests) ? state.guests : [];
+  const activeN = activeRows.length;
+
+  const total = activeN + cancN;
+  const pctCanc = total > 0 ? (cancN / total * 100) : 0;
+  const pctOk = 100 - pctCanc;
+
+  const elTot = document.getElementById("cancTot");
+  const elCanc = document.getElementById("cancN");
+  const elPct = document.getElementById("cancPct");
+  if (elTot) elTot.textContent = String(total);
+  if (elCanc) elCanc.textContent = String(cancN);
+  if (elPct) elPct.textContent = pctCanc.toFixed(1) + "%";
+
+  const segOk = document.getElementById("cancSegOk");
+  const segCanc = document.getElementById("cancSegCanc");
+  if (segOk) segOk.style.width = Math.max(0, Math.min(100, pctOk)).toFixed(2) + "%";
+  if (segCanc) segCanc.style.width = Math.max(0, Math.min(100, pctCanc)).toFixed(2) + "%";
+
+  const legOk = document.getElementById("cancLegOk");
+  const legCanc = document.getElementById("cancLegCanc");
+  if (legOk) legOk.textContent = `Attive: ${activeN} (${pctOk.toFixed(1)}%)`;
+  if (legCanc) legCanc.textContent = `Cancellate: ${cancN} (${pctCanc.toFixed(1)}%)`;
 }
 
 function renderStatAzienda(){
@@ -6035,7 +6133,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.206 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_2.208 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -7074,7 +7172,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.206: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_2.208: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -8769,7 +8867,7 @@ function refreshFloatingLabels(){
 
 
 /* =========================
-   Piscina (dDAE_2.206)
+   Piscina (dDAE_2.208)
 ========================= */
 const PISCINA_ACTION = "piscina";
 
@@ -9481,7 +9579,7 @@ try{
   let __laundryRefreshT = null;
   let __savingHours = false;
   let __pendingHours = false;
-  // dDAE_2.206: salvataggio PULIZIE per-stanza (evita generazione righe/report inutili)
+  // dDAE_2.208: salvataggio PULIZIE per-stanza (evita generazione righe/report inutili)
   // Mantiene UI fluida: nessun "blink" dei numeri durante autosave / refresh.
   let __dirtyLaundryRooms = new Set();   // stanze modificate (solo queste vengono salvate)
   let __dirtyLaundryCells = new Set();   // celle modificate (solo queste ricevono bordo rosso post-save)
@@ -10351,7 +10449,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.206) =====
+// ===== CALENDARIO (dDAE_2.208) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -10586,7 +10684,7 @@ function renderCalendario(){
 }
 
 
-/* dDAE_2.206 — Calendario: blocca SOLO la colonna numeri stanze durante lo scroll orizzontale (fix iOS) */
+/* dDAE_2.208 — Calendario: blocca SOLO la colonna numeri stanze durante lo scroll orizzontale (fix iOS) */
 function ensureCalRoomFreezeBound(){
   const wrap = document.querySelector("#page-calendario .cal-grid-wrap");
   if (!wrap) return;
@@ -10817,7 +10915,7 @@ function __fitCalendarioMonthLandscape(){
 
     const isLandscape = (window.matchMedia && window.matchMedia("(orientation: landscape)").matches);
 
-    // dDAE_2.206: in vista mese su iPad landscape usa tutta la larghezza disponibile (margine 10px L/R)
+    // dDAE_2.208: in vista mese su iPad landscape usa tutta la larghezza disponibile (margine 10px L/R)
     try{ document.body.classList.toggle("cal-month-landscape", !!isLandscape); }catch(_){}
 
     const grid = document.getElementById("calGridMonth");
@@ -11325,7 +11423,7 @@ function toRoman(n){
 
 
 /* =========================
-   Lavanderia (dDAE_2.206)
+   Lavanderia (dDAE_2.208)
 ========================= */
 const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
 const LAUNDRY_LABELS = {
@@ -11721,7 +11819,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.206: renderSpese allineato al backend ---
+// --- FIX dDAE_2.208: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -11817,7 +11915,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.206: delete reale ospiti ---
+// --- FIX dDAE_2.208: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -11853,7 +11951,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.206: mostra nome ospite ---
+// --- FIX dDAE_2.208: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -12156,7 +12254,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.206
+   Build: dDAE_2.208
 ========================= */
 
 state.orepulizia = state.orepulizia || {

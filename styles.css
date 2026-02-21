@@ -7378,3 +7378,43 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   width:100%;
   text-align:center;
 }
+
+
+/* ===== Statistiche: Cancellazioni (stacked percent bar) ===== */
+.canc-chart{
+  margin-top: 14px;
+  border: 1px solid var(--border);
+  border-radius: 22px;
+  background: rgba(255,255,255,0.60);
+  box-shadow: 0 10px 22px rgba(15,23,42,0.12);
+  padding: 14px 16px;
+}
+.stacked-bar{
+  height: 18px;
+  border-radius: 999px;
+  background: rgba(15,23,42,0.10);
+  overflow: hidden;
+  display: flex;
+}
+.stacked-bar .seg{
+  height: 100%;
+}
+.stacked-bar .seg-ok{
+  background: rgba(43,124,180,0.85);
+}
+.stacked-bar .seg-canc{
+  background: rgba(255,59,48,0.85);
+}
+.canc-legend{
+  margin-top: 10px;
+  display: flex;
+  flex-direction: column;
+  gap: 6px;
+  font-size: 12px;
+  opacity: 0.92;
+}
+.canc-leg{
+  display:flex;
+  justify-content:space-between;
+  gap: 10px;
+}
