@@ -4786,10 +4786,12 @@ grid-template-rows: 34px repeat(7, 54px);
 /* Risultati: solo dopo Calcola, stack verticale */
 .tax-total{
   margin-top: 14px;
-  border-radius: 18px;
-  padding: 10px 12px;
+  border-radius: 22px;
+  padding: 14px 14px;
+  min-height: 78px;
   border: 1px solid rgba(15,23,42,0.10);
   background: #ffffff;
+  box-shadow: 0 10px 26px rgba(15,23,42,0.10);
   display:flex;
   align-items:center;
   justify-content:space-between;
