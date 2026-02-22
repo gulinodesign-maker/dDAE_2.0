@@ -342,6 +342,22 @@ function loadExerciseYear(){
   return String(new Date().getFullYear());
 }
 
+
+function __ctxParams(){
+  const s = getSession && getSession();
+  const user_id = s && s.user_id ? String(s.user_id) : "";
+  const anno = (typeof getExerciseYear === "function") ? String(getExerciseYear() || "") : "";
+  return { user_id, anno };
+}
+
+function __withCtxParams(params){
+  const p = Object.assign({}, params || {});
+  const ctx = __ctxParams();
+  if (ctx.user_id && !("user_id" in p) && !("userId" in p)) p.user_id = ctx.user_id;
+  if (ctx.anno && !("anno" in p) && !("year" in p)) p.anno = ctx.anno;
+  return p;
+}
+
 function saveExerciseYear(year){
   try{ localStorage.setItem(__YEAR_KEY, String(year || "")); } catch(_){ }
 }
@@ -3832,7 +3848,8 @@ async function load({ showLoader=true } = {}){
 
 async function loadOspiti({ from="", to="", force=false } = {}){
   // Prefill rapido da cache locale (poi refresh in background)
-  const lsKey = `ospiti|${from}|${to}`;
+    const ctx = __ctxParams();
+  const lsKey = `ospiti|${ctx.user_id}|${ctx.anno}|${from}|${to}`;
   const hit = __lsGet(lsKey);
   if (hit && Array.isArray(hit.data) && hit.data.length){
     state.guests = hit.data;
@@ -4028,7 +4045,8 @@ async function ensureStatsAllData({ showLoader=true, force=false } = {}){
 
 
 function loadOspitiEliminati({ from="", to="", force=false } = {}){
-  const lsKey = `ospiti_eliminati|${from}|${to}`;
+    const ctx = __ctxParams();
+  const lsKey = `ospiti_eliminati|${ctx.user_id}|${ctx.anno}|${from}|${to}`;
   const hit = __lsGet(lsKey);
   if (hit && Array.isArray(hit.data)){
     state.deletedGuests = hit.data;
@@ -7318,7 +7336,7 @@ function setupOspite(){
         (async () => {
           try{
             for (const id of idsToDelete){
-              await api("ospiti", { method:"DELETE", params:{ id }});
+              await api("ospiti", { method:"DELETE", params: __withCtxParams({ id, delete_reason: "cancellazione" })});
             }
             toast("Ospite eliminato");
             invalidateApiCache("ospiti|");
