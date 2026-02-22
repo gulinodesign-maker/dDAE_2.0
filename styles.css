@@ -2116,7 +2116,7 @@ body[data-page="ospiti"] .guest-card .actions {
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:999}
 .modal-card{background:#fff;margin:12vh auto;padding:16px;border-radius:16px;width:min(420px,92vw)}
 
-/* dDAE_2.215 — Popup letti (Ospiti): bottoni opacità 80% */
+/* dDAE_2.216 — Popup letti (Ospiti): bottoni opacità 80% */
 #roomConfigModal .btn{
   -webkit-appearance: none;
   appearance: none;
@@ -3603,9 +3603,9 @@ border-color: rgba(255,255,255,.16);
 }
 
 #page-ospite .pay-pill .pay-cash.selected{
-  background: rgba(11,42,91,0.95);   /* verde */
-  border-color: rgba(52,199,89,0.60);
-  box-shadow: 0 0 0 4px rgba(52,199,89,0.16) !important;
+  background: #34c759 !important;
+  border-color: rgba(52,199,89,0.85) !important;
+  box-shadow: 0 0 0 4px rgba(52,199,89,0.20) !important;
 }
 #page-ospite .pay-pill .pay-elec.selected{
   background: rgba(50,173,230,0.95);  /* blu */
