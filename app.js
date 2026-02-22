@@ -52,9 +52,9 @@ try{
 /* global API_BASE_URL, API_KEY */
 
 /**
- * Build: dDAE_2.216
+ * Build: dDAE_2.217
  */
-const BUILD_VERSION = "dDAE_2.216";
+const BUILD_VERSION = "dDAE_2.217";
 
 // Utility: parse importi (usato anche in guest list)
 function money(v){
