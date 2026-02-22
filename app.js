@@ -52,9 +52,9 @@ try{
 /* global API_BASE_URL, API_KEY */
 
 /**
- * Build: dDAE_2.217
+ * Build: dDAE_2.218
  */
-const BUILD_VERSION = "dDAE_2.217";
+const BUILD_VERSION = "dDAE_2.218";
 
 // Utility: parse importi (usato anche in guest list)
 function money(v){
@@ -3609,6 +3609,31 @@ function parseDateTs(v){
 }
 
 function computeInsertionMap(guests){
+  const map = {};
+
+  // 1) Preferisci la colonna "seq" (ordine cronologico originale di inserimento)
+  //    - NON deve mai essere ricalcolata dal frontend
+  //    - ammette "buchi" se un record viene eliminato
+  const hasSeq = (guests || []).some(g => {
+    const v = g?.seq ?? g?.SEQ ?? g?.inserimento_seq ?? g?.insertion_seq;
+    const n = Number(v);
+    return Number.isFinite(n) && n > 0 && n < 1e18;
+  });
+
+  if (hasSeq){
+    for (const g of (guests || [])){
+      const id = guestIdOf(g);
+      if (!id) continue;
+      const v = g?.seq ?? g?.SEQ ?? g?.inserimento_seq ?? g?.insertion_seq;
+      const n = Number(v);
+      if (Number.isFinite(n) && n > 0 && n < 1e18){
+        map[id] = n;
+      }
+    }
+    return map;
+  }
+
+  // 2) Fallback legacy: calcolo basato su created_at/createdAt (NON stabile se mancano seq)
   const arr = (guests || []).map((g, idx) => {
     const id = guestIdOf(g);
     const c = g?.created_at ?? g?.createdAt ?? "";
@@ -3624,7 +3649,6 @@ function computeInsertionMap(guests){
     return a.idx - b.idx;
   });
 
-  const map = {};
   let n = 1;
   for (const x of arr){
     if (!x.id) continue;

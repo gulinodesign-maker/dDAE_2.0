@@ -2116,7 +2116,7 @@ body[data-page="ospiti"] .guest-card .actions {
 .modal{position:fixed;inset:0;background:rgba(0,0,0,.35);z-index:999}
 .modal-card{background:#fff;margin:12vh auto;padding:16px;border-radius:16px;width:min(420px,92vw)}
 
-/* dDAE_2.217 — Popup letti (Ospiti): bottoni opacità 80% */
+/* dDAE_2.218 — Popup letti (Ospiti): bottoni opacità 80% */
 #roomConfigModal .btn{
   -webkit-appearance: none;
   appearance: none;
@@ -5687,7 +5687,7 @@ grid-template-rows: 34px repeat(7, 54px);
 }
 
 /* ============================
-   dDAE_2.217 — FIX UI mirati (richiesta utente)
+   dDAE_2.218 — FIX UI mirati (richiesta utente)
    - Spese > Inserisci spesa: senza vetro sotto (elementi sullo sfondo)
    - Pulsante Salva: arancione 40% opacita
    - Popup tipologia letti: Annulla/Conferma identici, centrati; rosso/verde 80%
