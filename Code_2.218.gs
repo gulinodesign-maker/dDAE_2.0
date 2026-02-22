@@ -10,6 +10,7 @@
 const API_KEY = "daedalium2026";
 
 const SHEETS = {
+  OSPITI_ELIMINATI: "ospiti_eliminati",
   COLAZIONE: "colazione",
   PRODOTTI_PULIZIA: "prodotti_pulizia",
   IMPOSTAZIONI: "impostazioni",
@@ -91,6 +92,7 @@ function handleRequest_(e, method) {
     const needsUser = !(actionLc === "utenti" || actionLc === "ping");
     const needsAnno = [
       "ospiti",
+      "ospiti_eliminati",
       "stanze",
       "spese",
       "motivazioni",
@@ -140,6 +142,8 @@ function handleRequest_(e, method) {
         return handleUtenti_(e, method);
       case "ospiti":
         return handleOspiti_(e, method);
+      case "ospiti_eliminati":
+        return handleOspitiEliminati_(e, method);
       case "stanze":
         return handleStanze_(e, method);
       case "servizi":
@@ -633,23 +637,6 @@ function upsertById_(sh, obj, idField) {
   }
 
   if (foundRow === -1) {
-    // Sequenza cronologica stabile (colonna "seq"): non va mai ricompattata dopo eliminazioni.
-    // Se presente in header e non fornita dal client, assegna max(seq)+1.
-    const seqCol = headers.indexOf("seq");
-    if (seqCol >= 0) {
-      const cur = obj["seq"];
-      const curN = Number(cur);
-      const hasValid = Number.isFinite(curN) && curN > 0 && curN < 1e18;
-      if (!hasValid) {
-        let maxSeq = 0;
-        for (let r = 1; r < data.length; r++) {
-          const n = Number(data[r][seqCol]);
-          if (Number.isFinite(n) && n > maxSeq) maxSeq = n;
-        }
-        obj["seq"] = maxSeq + 1;
-      }
-    }
-
     sh.appendRow(buildRowFromHeaders_(headers, obj));
     return { mode: "append", id: idVal };
   }
@@ -822,6 +809,74 @@ function normalizeDateCell_(v) {
 /* =========================
    OSPITI
 ========================= */
+
+
+
+/* =========================
+   OSPITI ELIMINATI (ospiti_eliminati)
+   Foglio: ospiti_eliminati
+   Colonne attese (minime):
+   id_originale, account_id, id_archivio, deletedBy, createdAt_originale, anno,
+   deletedAt, delete_reason, nome, check_in, check_out, stanze,
+   importo_booking, importo_prenota, acconto_importo
+========================= */
+
+function handleOspitiEliminati_(e, method){
+  method = String(method || "GET").toUpperCase();
+  const sh = getSheet_(SHEETS.OSPITI_ELIMINATI);
+
+  if (method !== "GET") return jsonError_("Metodo non supportato (ospiti_eliminati)");
+
+  const rows = (readAll_(sh).rows || []);
+  const ctx = getCtx_(e);
+  const uid = String(ctx.user_id || "").trim();
+  const yr  = String(ctx.anno || "").trim();
+
+  // Range opzionale (usato dal frontend Stats)
+  const fromStr = String((e && e.parameter && (e.parameter.from || e.parameter.dateFrom)) || "").trim();
+  const toStr   = String((e && e.parameter && (e.parameter.to || e.parameter.dateTo)) || "").trim();
+
+  let fromT = null;
+  let toT = null;
+  if (fromStr){
+    const d = new Date(fromStr);
+    if (!isNaN(d.getTime())) fromT = d.getTime();
+  }
+  if (toStr){
+    // inclusivo: fine giornata
+    const d = new Date(toStr);
+    if (!isNaN(d.getTime())) toT = d.getTime() + (24*60*60*1000) - 1;
+  }
+
+  const out = rows.filter(r => {
+    if (!r) return false;
+
+    // tenant scoping: su questo foglio la chiave è account_id (fallback su user_id se presente)
+    if (uid){
+      const acc = String(r.account_id || r.accountId || r.user_id || r.userId || "").trim();
+      if (acc !== uid) return false;
+    }
+
+    if (yr){
+      const ry = String(r.anno || r.year || "").trim();
+      if (ry !== yr) return false;
+    }
+
+    // filtro opzionale sul timestamp di eliminazione
+    if (fromT !== null || toT !== null){
+      const ds = String(r.deletedAt || r.deleted_at || r.deleted_at_ts || "").trim();
+      const d = ds ? new Date(ds) : null;
+      const t = (d && !isNaN(d.getTime())) ? d.getTime() : null;
+      if (t === null) return false;
+      if (fromT !== null && t < fromT) return false;
+      if (toT !== null && t > toT) return false;
+    }
+
+    return true;
+  });
+
+  return jsonOk_(out);
+}
 
 function handleOspiti_(e, method) {
   const sh = getSheet_(SHEETS.OSPITI);
@@ -1324,7 +1379,7 @@ function handlePulizie_(e, method) {
       obj.createdAt = String(pick_(obj.createdAt, obj.created_at, nowIso));
       obj.updatedAt = nowIso;
 
-      // dDAE_2.218: se la stanza è TUTTA a zero, non creare/aggiornare righe inutili.
+      // dDAE_2.201: se la stanza è TUTTA a zero, non creare/aggiornare righe inutili.
       // Invece: elimina l'eventuale record esistente.
       if (isPulizieAllZero_(obj)){
         // Se tutti i valori sono 0: elimina il record.

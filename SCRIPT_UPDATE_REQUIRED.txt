@@ -1,0 +1,1 @@
+PUBBLICA IL NUOVO SCRIPT Apps Script: Code_2.218.gs (aggiornato per action 'ospiti_eliminati' / Statistiche → Cancellazioni).
