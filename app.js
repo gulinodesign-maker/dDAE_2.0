@@ -4340,6 +4340,88 @@ function drawPie(canvasId, slices, opts){
   ctx.fillText(centerFormatter(total), cx, cy+14);
 }
 
+
+function drawMonthlyPctBars(canvasId, pctValues, colors, opts){
+  const canvas = document.getElementById(canvasId);
+  if (!canvas) return;
+  opts = opts || {};
+  const cssW = Math.min(340, Math.floor(window.innerWidth * 0.86));
+  const cssH = 180;
+  const dpr = window.devicePixelRatio || 1;
+
+  canvas.style.width = cssW + "px";
+  canvas.style.height = cssH + "px";
+  canvas.width = Math.floor(cssW * dpr);
+  canvas.height = Math.floor(cssH * dpr);
+
+  const ctx = canvas.getContext("2d");
+  ctx.setTransform(dpr,0,0,dpr,0,0);
+  ctx.clearRect(0,0,cssW,cssH);
+
+  const vals = Array.isArray(pctValues) ? pctValues : [];
+  const v12 = new Array(12).fill(0).map((_,i)=>Math.max(0, Math.min(100, Number(vals[i]||0)||0)));
+  const cols = Array.isArray(colors) ? colors : [];
+  const padL = 22, padR = 10, padT = 12, padB = 26;
+
+  // background panel
+  ctx.fillStyle = "rgba(255,255,255,0.55)";
+  ctx.strokeStyle = "rgba(15,23,42,0.08)";
+  ctx.lineWidth = 1;
+  roundRect(ctx, 6, 6, cssW-12, cssH-12, 16);
+  ctx.fill();
+  ctx.stroke();
+
+  const chartW = cssW - padL - padR;
+  const chartH = cssH - padT - padB;
+
+  // baseline
+  ctx.beginPath();
+  ctx.moveTo(padL, padT + chartH);
+  ctx.lineTo(padL + chartW, padT + chartH);
+  ctx.strokeStyle = "rgba(15,23,42,0.12)";
+  ctx.lineWidth = 1;
+  ctx.stroke();
+
+  const barGap = 6;
+  const barW = Math.max(6, Math.floor((chartW - barGap*11) / 12));
+
+  for (let i=0;i<12;i++){
+    const x = padL + i*(barW + barGap);
+    const h = (v12[i] / 100) * chartH;
+    const y = padT + (chartH - h);
+
+    ctx.fillStyle = cols[i] || "#2b7cb4";
+    roundRect(ctx, x, y, barW, h, Math.min(10, barW/2));
+    ctx.fill();
+
+    // month label (1 letter)
+    ctx.fillStyle = "rgba(15,23,42,0.55)";
+    ctx.font = "700 10px system-ui";
+    ctx.textAlign = "center";
+    ctx.textBaseline = "alphabetic";
+    const label = (opts.labels && opts.labels[i]) ? String(opts.labels[i]) : String((__MONTHS_IT[i]||"").slice(0,1)).toUpperCase();
+    ctx.fillText(label, x + barW/2, padT + chartH + 18);
+  }
+
+  // 100% label
+  ctx.fillStyle = "rgba(15,23,42,0.55)";
+  ctx.font = "800 10px system-ui";
+  ctx.textAlign = "right";
+  ctx.fillText("100%", padL + chartW, padT + 10);
+}
+
+function roundRect(ctx, x, y, w, h, r){
+  const rr = Math.max(0, Math.min(r, Math.min(w,h)/2));
+  ctx.beginPath();
+  ctx.moveTo(x+rr, y);
+  ctx.arcTo(x+w, y, x+w, y+h, rr);
+  ctx.arcTo(x+w, y+h, x, y+h, rr);
+  ctx.arcTo(x, y+h, x, y, rr);
+  ctx.arcTo(x, y, x+w, y, rr);
+  ctx.closePath();
+}
+
+
 /* Helpers */
 function hexToRgba(hex, a){
   const h = (hex || "").replace("#","");
@@ -4682,7 +4764,106 @@ function computeStatMensili(){
     byMonth[i] = isFinite(v) ? (Math.round(v * 100) / 100) : 0;
   }
 
-  return { byMonth };
+  
+  // ===== Occupazione mensile (% room-nights) =====
+  // 100% = (giorni del mese) * (numero stanze totali)
+  // Numeratore = room-nights occupati (notti * stanze) calcolati dai soggiorni (check-in/check-out)
+  const occRoomNights = new Array(12).fill(0);
+
+  // Prova a ricavare numero stanze dalla tabella "stanze"; fallback 6 (esempio struttura)
+  const __getTotalRooms = () => {
+    try{
+      const rows = Array.isArray(state.stanzeRows) ? state.stanzeRows : [];
+      const set = new Set();
+      for (const r of rows){
+        const sn = r?.stanza_num ?? r?.stanzaNum ?? r?.room_number ?? r?.roomNumber ?? r?.stanza ?? r?.room ?? "";
+        const n = parseInt(String(sn).trim(),10);
+        if (Number.isFinite(n) && n > 0) set.add(n);
+      }
+      if (set.size > 0) return set.size;
+    }catch(_){}
+    return 6;
+  };
+
+  const totalRooms = __getTotalRooms();
+
+  // Mappa ospite_id -> numero stanze associate (da foglio stanze); fallback a campo "stanze" nell'ospite
+  const roomsCountByGuestId = {};
+  try{
+    const rows = Array.isArray(state.stanzeRows) ? state.stanzeRows : [];
+    const map = {};
+    for (const r of rows){
+      const gid = String(r?.ospite_id ?? r?.ospiteId ?? r?.guest_id ?? r?.guestId ?? "").trim();
+      if (!gid) continue;
+      const sn = String(r?.stanza_num ?? r?.stanzaNum ?? r?.room_number ?? r?.roomNumber ?? r?.stanza ?? r?.room ?? "").trim();
+      const n = parseInt(sn,10);
+      if (!Number.isFinite(n) || n<=0) continue;
+      if (!map[gid]) map[gid] = new Set();
+      map[gid].add(n);
+    }
+    for (const k in map){
+      roomsCountByGuestId[k] = map[k].size || 0;
+    }
+  }catch(_){}
+
+  const __nightsByMonthFromStay = (checkInISO, checkOutISO, roomsCount) => {
+    if (!checkInISO || !checkOutISO) return;
+    if (!/^\d{4}-\d{2}-\d{2}$/.test(checkInISO) || !/^\d{4}-\d{2}-\d{2}$/.test(checkOutISO)) return;
+    const ci = new Date(checkInISO + "T00:00:00Z");
+    const co = new Date(checkOutISO + "T00:00:00Z");
+    if (!isFinite(ci.getTime()) || !isFinite(co.getTime())) return;
+    if (co <= ci) return;
+
+    let d = new Date(ci.getTime());
+    const rooms = Math.max(1, Number(roomsCount||0) || 0);
+    while (d < co){
+      const m = d.getUTCMonth(); // 0..11
+      if (m>=0 && m<12) occRoomNights[m] += rooms;
+      d.setUTCDate(d.getUTCDate() + 1);
+    }
+  };
+
+  // Somma room-nights da soggiorni
+  for (const gg of guests){
+    const gid = String(guestIdOf(gg) ?? gg?.id ?? gg?.ID ?? gg?.Id ?? "").trim();
+    let roomsCount = 0;
+    if (gid && roomsCountByGuestId[gid]) roomsCount = roomsCountByGuestId[gid];
+    if (!roomsCount){
+      const raw = Number(gg?.stanze ?? gg?.rooms ?? gg?.roomCount ?? 0);
+      roomsCount = (isFinite(raw) && raw>0) ? Math.round(raw) : 0;
+    }
+    if (!roomsCount) roomsCount = 1;
+
+    let ciISO = "";
+    let coISO = "";
+    try{
+      ciISO = (typeof __parseDateFlexibleToISO === "function") ? __parseDateFlexibleToISO(gg?.check_in ?? gg?.checkIn ?? gg?.arrivo ?? gg?.data_arrivo ?? gg?.checkin ?? "") : "";
+    }catch(_){ ciISO=""; }
+    try{
+      coISO = (typeof __parseDateFlexibleToISO === "function") ? __parseDateFlexibleToISO(gg?.check_out ?? gg?.checkOut ?? gg?.partenza ?? gg?.data_partenza ?? "") : "";
+    }catch(_){ coISO=""; }
+
+    if (ciISO && coISO) __nightsByMonthFromStay(ciISO, coISO, roomsCount);
+  }
+
+  // Capacità per mese (usa anno corrente per i giorni del mese)
+  const now = new Date();
+  const y = now.getFullYear();
+  const capacityRoomNights = new Array(12).fill(0).map((_,i)=>{
+    const days = new Date(Date.UTC(y, i+1, 0)).getUTCDate(); // giorni nel mese
+    return days * totalRooms;
+  });
+
+  const occPctByMonth = new Array(12).fill(0).map((_,i)=>{
+    const cap = Number(capacityRoomNights[i]||0) || 0;
+    const occ = Number(occRoomNights[i]||0) || 0;
+    if (cap <= 0) return 0;
+    return Math.max(0, Math.min(100, (occ / cap) * 100));
+  });
+
+
+  return { byMonth, occPctByMonth };
+
 }
 
 
@@ -4697,6 +4878,7 @@ function renderStatMensili(){
   const months = s.byMonth || new Array(12).fill(0);
   const max = Math.max(0, ...months.map(v => Number(v || 0)));
   const colors = __mensiliPalette12();
+  const occPcts = (s.occPctByMonth && Array.isArray(s.occPctByMonth)) ? s.occPctByMonth : new Array(12).fill(0);
 
   wrap.innerHTML = "";
 
@@ -4708,14 +4890,20 @@ function renderStatMensili(){
     const row = document.createElement("div");
     row.className = "month-row";
     row.style.setProperty("--mcol", colors[i] || "#ff3b30");
+    const occ = Number(occPcts[i] || 0) || 0;
+    const occDisp = Math.round(Math.max(0, Math.min(100, occ)));
+
     row.innerHTML = `
-      <div class="month-head">
-        <div class="month-name">${escapeHtml(__MONTHS_IT[i] || ("Mese " + (i+1)))}</div>
-        <div class="month-val">${euro(val)}</div>
+      <div class="month-left">
+        <div class="month-head">
+          <div class="month-name">${escapeHtml(__MONTHS_IT[i] || ("Mese " + (i+1)))}</div>
+          <div class="month-val">${euro(val)}</div>
+        </div>
+        <div class="month-bar">
+          <div class="month-fill" style="width:0%"></div>
+        </div>
       </div>
-      <div class="month-bar">
-        <div class="month-fill" style="width:0%"></div>
-      </div>
+      <div class="month-occ">${occDisp}%</div>
     `;
 
     wrap.appendChild(row);
@@ -4864,6 +5052,9 @@ function openStatMensiliPieModal(){
   }));
 
   drawPie("statMensiliPieCanvas", slices);
+
+  const occPcts = (s.occPctByMonth && Array.isArray(s.occPctByMonth)) ? s.occPctByMonth : new Array(12).fill(0);
+  drawMonthlyPctBars("statMensiliOccCanvas", occPcts, colors, { labels: (__MONTHS_IT || []).map(m=>String(m||"").slice(0,1)) });
 
   const leg = document.getElementById("statMensiliPieLegend");
   if (leg){

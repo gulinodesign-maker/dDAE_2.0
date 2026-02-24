@@ -1,1 +1,1 @@
-PUBBLICA IL NUOVO SCRIPT Apps Script: Code_2.219.gs (aggiornato per action 'ospiti_eliminati' / Statistiche → Cancellazioni).
+NESSUN AGGIORNAMENTO Apps Script richiesto per questa build.

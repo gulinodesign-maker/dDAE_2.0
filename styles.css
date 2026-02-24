@@ -6117,6 +6117,21 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
 .stat-modal-close:active{ transform: scale(0.96); }
 
 /* ===== Statistiche: Fatturati mensili (progress) ===== */
+
+.month-left{
+  flex:1;
+  min-width:0;
+}
+
+.month-occ{
+  flex:0 0 clamp(120px, 24vw, 180px);
+  font-weight:950;
+  font-size: clamp(40px, 10vw, 64px);
+  line-height: 1;
+  white-space: nowrap;
+    text-align: right;
+color: var(--mcol,#ff3b30);
+}
 .month-stack{
   display:flex;
   flex-direction:column;
@@ -6128,6 +6143,10 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   appearance:none;
   border:0;
   width:100%;
+  display:flex;
+  align-items:center;
+  justify-content:flex-start;
+  gap:14px;
   text-align:left;
   padding:14px 16px;
   border-radius:22px;
@@ -7508,4 +7527,11 @@ body[data-page="inserisci"] #page-inserisci .card .hd{
   display:flex;
   justify-content:space-between;
   gap: 10px;
+}
+
+
+#statMensiliOccCanvas{
+  display:block;
+  width: min(340px, 86vw);
+  height: 180px;
 }
