@@ -1,5 +1,5 @@
 /* dDAE - Service Worker (PWA)
- * Build: dDAE_2.222
+ * Build: 2.307
  *
  * Obiettivi:
  * - cache name cambia ad ogni build
@@ -9,8 +9,8 @@
  * - fix iOS/Safari cache aggressiva (cache:"reload"/"no-store" + query ?v)
  */
 
-const BUILD = "dDAE_2.222";
-const CACHE_NAME = `dDAE-cache-${BUILD}`; // cambia ad ogni build // cambia ad ogni build
+const BUILD = "2.307";
+const CACHE_NAME = `dDAE-local-cache-${BUILD}`; // cambia ad ogni build // cambia ad ogni build
 
 // Asset principali (versionati per forzare il fetch anche con cache aggressiva iOS)
 const CORE_ASSETS = [
@@ -24,7 +24,7 @@ const CORE_ASSETS = [
 
   // Immagini / icone (alcune linkate con ?v=... da index.html)
   `./assets/logo.jpg?v=${BUILD}`,
-  `./assets/bg-daedalium.jpeg?v=${BUILD}`,
+  `./assets/bg-daedalium.png?v=${BUILD}`,
   "./assets/icons/icon-192.png",
   "./assets/icons/icon-512.png",
   `./assets/icons/icon-192.png?v=${BUILD}`,
@@ -76,13 +76,19 @@ self.addEventListener("message", (event) => {
 });
 
 function isApiRequest(url) {
-  // Evita cache per chiamate a Google Apps Script / Googleusercontent
+  // Evita cache per chiamate API (Apps Script + Firebase/Google APIs)
+  const h = url.hostname;
   return (
-    url.hostname.includes("script.google.com") ||
-    url.hostname.includes("script.googleusercontent.com")
+    h.includes("script.google.com") ||
+    h.includes("script.googleusercontent.com") ||
+    h === "firestore.googleapis.com" ||
+    h === "firebasestorage.googleapis.com" ||
+    h === "identitytoolkit.googleapis.com" ||
+    h === "securetoken.googleapis.com" ||
+    h === "firebase.googleapis.com" ||
+    h === "www.googleapis.com"
   );
 }
-
 
 
 async function networkFirstAsset(req){
@@ -181,6 +187,12 @@ self.addEventListener("fetch", (event) => {
   if (req.method !== "GET") return;
 
   const url = new URL(req.url);
+
+  // Non cache richieste cross-origin (es. Firebase/Google APIs/CDN)
+  if (url.origin !== self.location.origin) {
+    event.respondWith(fetch(req, { cache: "no-store" }));
+    return;
+  }
 
   // Non cache API
   if (isApiRequest(url)) {

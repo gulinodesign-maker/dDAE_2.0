@@ -22,39 +22,2757 @@ function _hashStr(str){
 
 function applyIconPalette(){
   try{
-    const grids = document.querySelectorAll(".home-grid");
-    grids.forEach(grid => {
-      const buttons = Array.from(grid.querySelectorAll(".home-main"));
-      if (!buttons.length) return;
-
-      const page = grid.closest(".page");
-      const key = (page && page.id) ? page.id : "grid";
-      const off = _hashStr(key) % ICON_PALETTE_ALT.length;
-
-      const colors = ICON_PALETTE_ALT.slice(off).concat(ICON_PALETTE_ALT.slice(0, off));
-
-      // Assegna colori in ordine "sparso" e alternato, evitando ripetizioni (entro 8 icone)
-      buttons.forEach((btn, i) => {
-        const c = colors[i % colors.length];
-        btn.style.setProperty("--ico-color", c);
-      });
+    const HOME_ICON_COLORS = {
+      goOspite: "#0B1F3A",
+      goCalendario: "#245EA8",
+      openLauncher: "#67BDEB",
+      goTassaSoggiorno: "#9DD8F7",
+      goPulizie: "#F29C50",
+      goLavanderia: "#F6B67A",
+      goOrePuliziaHome: "#C7B198",
+      goStatistiche: "#D9CCC0",
+      goProdotti: "#AFC9D8",
+      goDbImport: "#67BDEB",
+      goDbExport: "#245EA8"
+    };
+    const statsIconColors = {
+      goStatGen: "#245EA8",
+      goStatMensili: "#4D9CC5",
+      goStatSpese: "#F29C50",
+      goStatPrenotazioni: "#F6B67A",
+      goStatPiscina: "#C7B198",
+      goStatCancellazioni: "#D9CCC0"
+    };
+    document.querySelectorAll('#page-home .home-main').forEach((btn) => {
+      const c = HOME_ICON_COLORS[btn.id] || "#4D9CC5";
+      btn.style.setProperty('--ico-color', c);
+      const svg = btn.querySelector('svg.ui-ico');
+      if (svg){
+        svg.querySelectorAll('path, circle, rect, line, polyline, polygon, ellipse').forEach((node) => {
+          node.style.stroke = 'currentColor';
+          node.style.fill = 'none';
+        });
+      }
     });
-  }catch(_){
-    // no-op
-  }
+    document.querySelectorAll('#page-statistiche .home-main').forEach((btn) => {
+      const c = statsIconColors[btn.id] || "#4D9CC5";
+      btn.style.setProperty('--ico-color', c);
+    });
+  }catch(_){ }
 }
 
 
-// dDAE_2.212 — iOS BFCache: rebind tappable Home icons
+// dDAE_1.020 — iOS BFCache: rebind tappable Home icons
 try{
   window.addEventListener("pageshow", () => { try{ bindHomeStrongTap(); }catch(_){ } }, { passive:true });
 }catch(_){ }
 /* global API_BASE_URL, API_KEY */
 
 /**
- * Build: dDAE_2.222
+ * Build: 2.306
  */
-const BUILD_VERSION = "dDAE_2.222";
+const BUILD_VERSION = "2.306";
+
+// Local DB keys (local-first)
+const __DB_KEYS__ = {
+  admin: "dDAE_local_admin_db",
+  operator: "dDAE_local_operator_db"
+};
+
+
+// ===== Modalità LOCALE (IndexedDB) — build offline =====
+const __LOCAL_MODE__ = true;
+// Versione schema export/import (incrementare solo se cambia il formato datasets)
+const __LOCAL_SCHEMA_VERSION__ = 1;
+
+// IndexedDB: un unico store key-value con snapshot per tabella
+const __IDB_NAME__ = "dDAE_LOCAL_DB_v1";
+const __IDB_VER__ = 1;
+const __IDB_STORE__ = "kv";
+
+const __ALL_TABLES__ = [
+  "utenti",
+  "impostazioni",
+  "ospiti",
+  "stanze",
+  "servizi",
+  "spese",
+  "pulizie",
+  "lavanderia",
+  "operatori",
+  "motivazioni",
+  "colazione",
+  "prodotti_pulizia",
+  "ospiti_eliminati"
+];
+
+// Dataset Amministratore (completo)
+const __ADMIN_TABLES__ = __ALL_TABLES__.slice();
+
+// Dataset Operatore (subset)
+const __OP_TABLES__ = [
+  "utenti",
+  "impostazioni",
+  "ospiti",
+  "stanze",
+  "servizi",
+  "pulizie",
+  "lavanderia",
+  "operatori",
+  "colazione",
+  "prodotti_pulizia",
+];
+
+const __idbState = { p: null };
+
+function __idbOpen__(){
+  if (__idbState.p) return __idbState.p;
+  __idbState.p = new Promise((resolve, reject) => {
+    try{
+      const req = indexedDB.open(__IDB_NAME__, __IDB_VER__);
+      req.onupgradeneeded = () => {
+        const db = req.result;
+        if (!db.objectStoreNames.contains(__IDB_STORE__)){
+          db.createObjectStore(__IDB_STORE__, { keyPath: "k" });
+        }
+      };
+      req.onsuccess = () => resolve(req.result);
+      req.onerror = () => reject(req.error || new Error("IndexedDB error"));
+    }catch(e){ reject(e); }
+  });
+  return __idbState.p;
+}
+
+async function __kvGet__(k){
+  try{
+    const db = await __idbOpen__();
+    return await new Promise((resolve) => {
+      try{
+        const tx = db.transaction(__IDB_STORE__, "readonly");
+        const st = tx.objectStore(__IDB_STORE__);
+        const rq = st.get(k);
+        rq.onsuccess = () => resolve(rq.result ? rq.result.v : null);
+        rq.onerror = () => resolve(null);
+      }catch(_){ resolve(null); }
+    });
+  }catch(_){ return null; }
+}
+
+async function __kvSet__(k, v){
+  try{
+    const db = await __idbOpen__();
+    return await new Promise((resolve) => {
+      try{
+        const tx = db.transaction(__IDB_STORE__, "readwrite");
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+        tx.objectStore(__IDB_STORE__).put({ k, v });
+      }catch(_){ resolve(false); }
+    });
+  }catch(_){ return false; }
+}
+
+async function __kvDel__(k){
+  try{
+    const db = await __idbOpen__();
+    return await new Promise((resolve) => {
+      try{
+        const tx = db.transaction(__IDB_STORE__, "readwrite");
+        tx.oncomplete = () => resolve(true);
+        tx.onerror = () => resolve(false);
+        tx.objectStore(__IDB_STORE__).delete(k);
+      }catch(_){ resolve(false); }
+    });
+  }catch(_){ return false; }
+}
+
+function __tblKey__(name){
+  // "utenti" deve essere globale sul dispositivo (serve per login dopo logout)
+  try{ if (String(name||"").trim().toLowerCase() === "utenti") return `global:tbl:utenti`; }catch(_){ }
+  return `ctx:${__ctxUid__()}:${__ctxYear__()}:tbl:${name}`;
+}
+
+async function __tblGet__(name, fallback){
+  const v = await __kvGet__(__tblKey__(name));
+  if (v === null || v === undefined) return fallback;
+  return v;
+}
+
+async function __tblSet__(name, data){
+  return __kvSet__(__tblKey__(name), data);
+}
+
+async function __tblDel__(name){
+  return __kvDel__(__tblKey__(name));
+}
+
+function __nowIso__(){ return new Date().toISOString(); }
+
+function __normIsoDate__(s){
+  const v0 = String(s || "").trim();
+  if (!v0) return "";
+
+  // accetta YYYY-MM-DD
+  if (/^\d{4}-\d{2}-\d{2}$/.test(v0)) return v0;
+
+  // accetta DD/MM/YYYY o DD-MM-YYYY
+  let m = v0.match(/^(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})$/);
+  if (m){
+    const dd = String(m[1]).padStart(2,"0");
+    const mm = String(m[2]).padStart(2,"0");
+    const yy = String(m[3]);
+    return `${yy}-${mm}-${dd}`;
+  }
+
+  // seriale Excel (giorni) -> YYYY-MM-DD (soglia: > 20000 ~ 1954)
+  if (/^\d+(\.\d+)?$/.test(v0)){
+    const n = Number(v0);
+    if (isFinite(n) && n > 20000 && n < 90000){
+      try{
+        // Excel day 0: 1899-12-30 (compatibile con Sheets)
+        const base = new Date(Date.UTC(1899, 11, 30));
+        const d = new Date(base.getTime() + Math.round(n)*24*3600*1000);
+        const y = d.getUTCFullYear();
+        const mo = String(d.getUTCMonth()+1).padStart(2,"0");
+        const da = String(d.getUTCDate()).padStart(2,"0");
+        return `${y}-${mo}-${da}`;
+      }catch(_){}
+    }
+  }
+
+  // fallback: prova parse
+  try{
+    const d = new Date(v0);
+    if (!isNaN(d.getTime())){
+      const y = d.getFullYear();
+      const m2 = String(d.getMonth()+1).padStart(2,"0");
+      const da = String(d.getDate()).padStart(2,"0");
+      return `${y}-${m2}-${da}`;
+    }
+  }catch(_){}
+  return v0;
+}
+
+// =========================
+// Spese: data di riferimento = quella mostrata nella card (dataSpesa || data || data_spesa)
+// =========================
+function __spesaCardDateISO__(row){
+  try{
+    return __normIsoDate__((row && (row.dataSpesa || row.data || row.data_spesa)) || "");
+  }catch(_){
+    return "";
+  }
+}
+function __filterSpeseByCardDateRange__(rows, fromISO, toISO){
+  const list = Array.isArray(rows) ? rows : [];
+  const from = __normIsoDate__(fromISO);
+  const to = __normIsoDate__(toISO);
+  if (!from || !to) return list.slice();
+  return list.filter((r)=>{
+    const d = __spesaCardDateISO__(r);
+    if (!d) return false;
+    return d >= from && d <= to;
+  });
+}
+
+
+
+function __dateInRange__(d, from, to){
+  if (!d) return true;
+  const x = __normIsoDate__(d);
+  const a = from ? __normIsoDate__(from) : "";
+  const b = to ? __normIsoDate__(to) : "";
+  if (a && x < a) return false;
+  if (b && x > b) return false;
+  return true;
+}
+
+function __overlapRange__(start, end, from, to){
+  const s = __normIsoDate__(start);
+  const e = __normIsoDate__(end);
+  const a = from ? __normIsoDate__(from) : "";
+  const b = to ? __normIsoDate__(to) : "";
+  if (!a && !b) return true;
+  // overlap: e >= a && s <= b (se mancano, considera aperti)
+  if (a && e && e < a) return false;
+  if (b && s && s > b) return false;
+  return true;
+}
+
+function __normBool01(v){
+  if (v === true) return true;
+  if (v === false) return false;
+  const s = String(v ?? "").trim().toLowerCase();
+  return (s === "1" || s === "true" || s === "yes" || s === "y");
+}
+
+async function __localApiUtenti__(method, body){
+  const op = String(body?.op || "").trim();
+  const rows0 = await __tblGet__("utenti", []);
+  const rows = Array.isArray(rows0) ? rows0 : [];
+
+  const findUser = (username) => {
+    const u = String(username || "").trim();
+    return rows.find(r => String(r?.username || r?.user || "").trim() === u) || null;
+  };
+
+  const saveAll = async () => { await __tblSet__("utenti", rows); return true; };
+
+  const okLogin = (u) => {
+    const user_id = String(u?.id || u?.user_id || u?.userId || "").trim() || String(u?.username || "").trim();
+    const ruolo = String(u?.ruolo || u?.role || "").trim() || (String(u?.isOperatore||"")==="1" ? "operatore" : "amministratore");
+    return {
+      user_id,
+      username: String(u?.username || "").trim(),
+      ruolo
+    };
+  };
+
+  if (method === "POST" && op === "login"){
+    const username = String(body?.username || "").trim();
+    const password = String(body?.password || "").trim();
+    const u = findUser(username);
+    if (!u) throw new Error("Credenziali non valide");
+    if (String(u?.password || "").trim() !== password) throw new Error("Credenziali non valide");
+    return { user: okLogin(u) };
+  }
+
+  if (method === "POST" && op === "create"){
+    const username = String(body?.username || "").trim();
+    const password = String(body?.password || "").trim();
+    const roleIn = String(body?.role || body?.ruolo || "").trim().toLowerCase();
+    const ruolo = (roleIn.startsWith("op")) ? "operatore" : "admin";
+    if (!username || !password) throw new Error("Username e password obbligatori");
+    if (findUser(username)) throw new Error("Username già esistente");
+    const u = {
+      id: String(body?.id || "") || (typeof genId === "function" ? genId("u") : ("u-"+Date.now())),
+      username,
+      password,
+      ruolo,
+      createdAt: __nowIso__(),
+      updatedAt: __nowIso__(),
+    };
+    rows.push(u);
+    await saveAll();
+    return { user: okLogin(u) };
+  }
+
+  if (method === "POST" && op === "update"){
+    const username = String(body?.username || "").trim();
+    const password = String(body?.password || "").trim();
+    const u = findUser(username);
+    if (!u) throw new Error("Account non trovato");
+    if (String(u?.password || "").trim() !== password) throw new Error("Credenziali non valide");
+    const newPassword = String(body?.newPassword || "").trim();
+    if (newPassword) u.password = newPassword;
+    u.updatedAt = __nowIso__();
+    await saveAll();
+    return { user: okLogin(u) };
+  }
+
+  if (method === "POST" && op === "delete"){
+    const username = String(body?.username || "").trim();
+    const password = String(body?.password || "").trim();
+    const u = findUser(username);
+    if (!u) throw new Error("Account non trovato");
+    if (String(u?.password || "").trim() !== password) throw new Error("Credenziali non valide");
+    // elimina anche operatori legati (tenant__*) se l'utente è owner/admin? qui: elimina solo quell'account
+    const idx = rows.indexOf(u);
+    if (idx >= 0) rows.splice(idx, 1);
+    await saveAll();
+    return { ok: true };
+  }
+
+  if (method === "POST" && op === "create_operator"){
+    const ownerUsername = String(body?.username || "").trim();
+    const ownerPassword = String(body?.password || "").trim();
+    const owner = findUser(ownerUsername);
+    if (!owner) throw new Error("Owner non trovato");
+    if (String(owner?.password || "").trim() !== ownerPassword) throw new Error("Credenziali non valide");
+    if (String(owner?.ruolo || "").toLowerCase().includes("oper")) throw new Error("Owner non valido");
+
+    const operator_username = String(body?.operator_username || "").trim();
+    const operator_password = String(body?.operator_password || "").trim();
+    if (!operator_username || !operator_password) throw new Error("Credenziali operatore mancanti");
+    if (findUser(operator_username)) throw new Error("Operatore già esistente");
+
+    const u = {
+      id: (typeof genId === "function" ? genId("op") : ("op-"+Date.now())),
+      username: operator_username,
+      password: operator_password,
+      ruolo: "operatore",
+      createdAt: __nowIso__(),
+      updatedAt: __nowIso__(),
+    };
+    rows.push(u);
+    await saveAll();
+    return { ok: true };
+  }
+
+  if (method === "POST" && op === "update_operator"){
+    const ownerUsername = String(body?.username || "").trim();
+    const ownerPassword = String(body?.password || "").trim();
+    const owner = findUser(ownerUsername);
+    if (!owner) throw new Error("Owner non trovato");
+    if (String(owner?.password || "").trim() !== ownerPassword) throw new Error("Credenziali non valide");
+
+    const operator_username = String(body?.operator_username || "").trim();
+    const newPassword = String(body?.newPassword || "").trim();
+    const u = findUser(operator_username);
+    if (!u) throw new Error("Operatore non trovato");
+    if (!String(u?.ruolo || "").toLowerCase().includes("oper")) throw new Error("Account non è operatore");
+    if (!newPassword) throw new Error("Nuova password mancante");
+    u.password = newPassword;
+    u.updatedAt = __nowIso__();
+    await saveAll();
+    return { ok: true };
+  }
+
+  if (method === "POST" && op === "delete_operator"){
+    const ownerUsername = String(body?.username || "").trim();
+    const ownerPassword = String(body?.password || "").trim();
+    const owner = findUser(ownerUsername);
+    if (!owner) throw new Error("Owner non trovato");
+    if (String(owner?.password || "").trim() !== ownerPassword) throw new Error("Credenziali non valide");
+
+    const operator_username = String(body?.operator_username || "").trim();
+    const u = findUser(operator_username);
+    if (!u) throw new Error("Operatore non trovato");
+    if (!String(u?.ruolo || "").toLowerCase().includes("oper")) throw new Error("Account non è operatore");
+    const idx = rows.indexOf(u);
+    if (idx >= 0) rows.splice(idx, 1);
+    await saveAll();
+    return { ok: true };
+  }
+
+  // fallback: restituisce lista utenti (usata in alcune viste)
+  return rows;
+}
+
+async function __localApiImpostazioni__(method, body){
+  const rows0 = await __tblGet__("impostazioni", []);
+  let rows = Array.isArray(rows0) ? rows0 : [];
+
+  if (method === "GET"){
+    return { rows };
+  }
+
+  if (method === "POST"){
+    const now = __nowIso__();
+    const upsert = (nextRow) => {
+      const key = String(nextRow?.key || "").trim().toLowerCase();
+      if (!key) return;
+      const idx = rows.findIndex(r => String(r?.key || r?.Key || "").trim().toLowerCase() === key);
+      const prev = idx >= 0 ? rows[idx] : null;
+      const merged = Object.assign({}, prev || {}, nextRow || {});
+      merged.key = nextRow.key;
+      merged.createdAt = prev?.createdAt || nextRow.createdAt || now;
+      merged.updatedAt = now;
+      if (idx >= 0) rows[idx] = merged;
+      else rows.push(merged);
+    };
+
+    try{
+      if (Array.isArray(body?.operatori)){
+        const ops = body.operatori;
+        upsert({
+          key: "operatori",
+          operatore_1: String(ops[0] || "").trim(),
+          operatore_2: String(ops[1] || "").trim(),
+          operatore_3: String(ops[2] || "").trim(),
+          createdAt: now,
+        });
+      }
+    }catch(_){}
+
+    const valueKeys = ["tariffa_oraria","costo_benzina","tassa_soggiorno","tassa_soggiorno_max_notti","numero_stanze","app_language"];
+    valueKeys.forEach((k)=>{
+      if (!body || body[k] === undefined) return;
+      upsert({ key:k, value: String(body[k] ?? "").trim(), createdAt: now });
+    });
+
+    if (body && body.operatori_catalogo !== undefined){
+      const raw = typeof body.operatori_catalogo === "string"
+        ? body.operatori_catalogo
+        : JSON.stringify(body.operatori_catalogo ?? []);
+      upsert({ key:"operatori_catalogo", value: raw, createdAt: now });
+    }
+
+    if (body && body.channel_catalogo !== undefined){
+      const raw = typeof body.channel_catalogo === "string"
+        ? body.channel_catalogo
+        : JSON.stringify(body.channel_catalogo ?? []);
+      upsert({ key:"channel_catalogo", value: raw, createdAt: now });
+    }
+
+    if (body && body.laundry_catalogo !== undefined){
+      const raw = typeof body.laundry_catalogo === "string"
+        ? body.laundry_catalogo
+        : JSON.stringify(body.laundry_catalogo ?? []);
+      upsert({ key:"laundry_catalogo", value: raw, createdAt: now });
+    }
+
+    if (body && body.laundry_prices !== undefined){
+      const raw = typeof body.laundry_prices === "string"
+        ? body.laundry_prices
+        : JSON.stringify(body.laundry_prices ?? {});
+      upsert({ key:"laundry_prices", value: raw, createdAt: now });
+    }
+
+    await __tblSet__("impostazioni", rows);
+    return { rows };
+  }
+
+  return { rows };
+}
+
+async function __localApiSpesaList__(tableName, method, body){
+  const tName = String(tableName || "").trim() || "colazione";
+  const rows0 = await __tblGet__(tName, []);
+  const rows = Array.isArray(rows0) ? rows0 : [];
+
+  const save = async ()=>{ await __tblSet__(tName, rows); };
+
+  if (method === "GET"){
+    return rows;
+  }
+
+  if (method === "PUT"){
+    const id = String(body?.id || "").trim();
+    const it = rows.find(r => String(r?.id||"").trim() === id);
+    if (!it) return { ok:true };
+    Object.keys(body||{}).forEach((k)=>{
+      if (k === "id") return;
+      it[k] = body[k];
+    });
+    it.updatedAt = __nowIso__();
+    await save();
+    return { ok:true };
+  }
+
+  if (method === "POST"){
+    const op = String(body?.op || "").trim();
+    if (op === "create"){
+      const prodotto = String(body?.prodotto || "").trim().toUpperCase();
+      if (!prodotto) throw new Error("Prodotto mancante");
+      const exist = rows.find(r => String(r?.prodotto||"").trim().toUpperCase() === prodotto && !__normBool01(r?.isDeleted));
+      if (exist) return { ok:true };
+      const prefix = (tName === "prodotti_pulizia") ? "p" : "c";
+      rows.push({
+        id: (typeof genId === "function" ? genId(prefix) : (prefix+"-"+Date.now())),
+        prodotto,
+        qty: 0,
+        saved: 0,
+        checked: 0,
+        isDeleted: 0,
+        createdAt: __nowIso__(),
+        updatedAt: __nowIso__(),
+      });
+      await save();
+      return { ok:true };
+    }
+    if (op === "resetQty"){
+      rows.forEach(r => { if (!__normBool01(r?.isDeleted)) { r.qty = 0; r.saved = 0; r.checked = 0; r.updatedAt = __nowIso__(); } });
+      await save();
+      return { ok:true };
+    }
+    if (op === "save"){
+      rows.forEach(r => { if (!__normBool01(r?.isDeleted)) { const q = parseInt(String(r.qty||0),10); r.saved = (isNaN(q)?0:(q>0?1:0)); r.updatedAt = __nowIso__(); } });
+      await save();
+      return { ok:true };
+    }
+    return { ok:true };
+  }
+
+  return { ok:true };
+}
+
+async function __localApiColazione__(method, body){
+  return __localApiSpesaList__("colazione", method, body);
+}
+
+async function __localApiLavanderia__(method, params, body){
+  const list0 = await __tblGet__("lavanderia", []);
+  const list = Array.isArray(list0) ? list0 : [];
+
+  const save = async ()=>{ await __tblSet__("lavanderia", list); };
+
+  if (method === "GET"){
+    return list;
+  }
+
+  if (method === "PUT"){
+    const id = String((body && body.id) || (params && params.id) || "").trim();
+    if (!id) return { ok:true };
+    const now = __nowIso__();
+    const idx = list.findIndex(it => String(it?.id||"").trim() === id);
+    if (idx < 0) return { ok:true };
+    const prev = list[idx] || {};
+    const patch = Object.assign({}, body || {});
+    delete patch.id;
+    list[idx] = Object.assign({}, prev, patch, {
+      id: (prev.id || id),
+      updatedAt: now,
+      createdAt: (prev.createdAt || prev.created_at || now)
+    });
+    if (__normBool01(list[idx]?.isDeleted ?? list[idx]?.is_deleted ?? list[idx]?.deleted)){
+      list[idx].isDeleted = true;
+      list[idx].is_deleted = true;
+      list[idx].deletedAt = String(list[idx].deletedAt || list[idx].deleted_at || now);
+      list[idx].deleted_at = String(list[idx].deleted_at || list[idx].deletedAt || now);
+    }
+    await save();
+    return { ok:true };
+  }
+
+  if (method === "DELETE"){
+    const id = String((body && body.id) || (params && params.id) || "").trim();
+    if (!id) return { ok:true };
+    const now = __nowIso__();
+    const idx = list.findIndex(it => String(it?.id||"").trim() === id);
+    if (idx >= 0){
+      try{
+        const prev = list[idx] || {};
+        list[idx] = Object.assign({}, prev, {
+          id: (prev.id || id),
+          isDeleted: true,
+          is_deleted: true,
+          deletedAt: now,
+          deleted_at: now,
+          updatedAt: now,
+          createdAt: (prev.createdAt || prev.created_at || now)
+        });
+      }catch(_){
+        list[idx] = { id, isDeleted: true, is_deleted: true, deletedAt: now, deleted_at: now, createdAt: now, updatedAt: now };
+      }
+    } else {
+      list.push({ id, isDeleted: true, is_deleted: true, deletedAt: now, deleted_at: now, createdAt: now, updatedAt: now });
+    }
+    await save();
+    return { ok:true };
+  }
+
+
+if (method === "POST"){
+    const startDate = __normIsoDate__(body?.startDate || body?.start_date || body?.from);
+    const endDate = __normIsoDate__(body?.endDate || body?.end_date || body?.to);
+
+    if (!startDate || !endDate) throw new Error("Date mancanti");
+    if (startDate > endDate) throw new Error("Intervallo non valido");
+
+    // Aggrega da pulizie
+    const pul0 = await __tblGet__("pulizie", []);
+    const pul = Array.isArray(pul0) ? pul0 : [];
+    const cols = getLaundryComponentCodes();
+    // Recupera l'elenco delle stanze valide (stanza_num) dalla tabella "stanze" per filtrare
+    // eventuali righe con stanza non riconosciuta (es. stanza "7" fantasma).
+    let validRooms = null;
+    try{
+      const stanzeList = await __tblGet__("stanze", []);
+      if (Array.isArray(stanzeList)){
+        validRooms = new Set();
+        stanzeList.forEach((r) => {
+          const sn = r?.stanza_num ?? r?.stanzaNum ?? r?.room_number ?? r?.roomNumber ?? r?.stanza ?? r?.room;
+          if (sn !== undefined && sn !== null){
+            const v = String(sn).trim().toUpperCase();
+            if (v) validRooms.add(v);
+          }
+        });
+      }
+    }catch(_){ validRooms = null; }
+
+    // Inizializza accumulatori per pezzi e resi.  I resi sono
+    // rappresentati nelle pulizie come una riga separata con stanza
+    // "RES".  Dobbiamo sommare i valori di tale riga separatamente e
+    // non conteggiarli nel totale pagabile.  Inoltre, trattiamo
+    // qualsiasi valore negativo come reso.
+    const sums = {};
+    const resi = {};
+    cols.forEach(k => { sums[k] = 0; resi[k] = 0; });
+
+    pul.forEach(r => {
+      // Salta le righe eliminate (soft-delete) per evitare conteggi fantasma.
+      try{
+        const del = __normBool01(r?.isDeleted ?? r?.is_deleted ?? r?.deleted);
+        if (del) return;
+      }catch(_){ }
+      const d = __normIsoDate__(r?.data || r?.date || "");
+      if (!d) return;
+      if (d < startDate || d > endDate) return;
+      const s = String(r?.stanza || r?.room || "").trim().toUpperCase();
+      const isResRow = (s === 'RES');
+      // Se non è una riga di resi, verifica che la stanza sia valida; altrimenti scarta.
+      if (!isResRow && validRooms && validRooms.size > 0){
+        if (!validRooms.has(s)) return;
+      }
+      cols.forEach(k => {
+        let n = Number(r?.[k] ?? 0);
+        if (!isFinite(n)) return;
+        n = Math.floor(n);
+        // Se la riga rappresenta i resi o la quantità è negativa,
+        // accumula nei resi; altrimenti nei pezzi.
+        if (isResRow || n < 0){
+          resi[k] += Math.abs(n);
+        } else {
+          sums[k] += Math.max(0, n);
+        }
+      });
+    });
+
+    const catalog = getLaundryCatalogFromSettings();
+    const priceMap = getLaundryPricesFromSettings();
+    const laundryPrices = {};
+    cols.forEach((k) => {
+      const n = Number(priceMap?.[k] || 0) || 0;
+      laundryPrices[k] = Math.round(n * 100) / 100;
+    });
+
+    const item = {
+      id: (typeof genId === "function" ? genId("l") : ("l-"+Date.now())),
+      startDate,
+      endDate,
+      createdAt: __nowIso__(),
+      updatedAt: __nowIso__(),
+      laundryPrices,
+      laundryCatalog: catalog.map((row) => ({
+        id: String(row?.id || ''),
+        titolo: String(row?.titolo || '').trim(),
+        abbreviazione: String(row?.abbreviazione || '').trim(),
+        prezzo: Math.round((Number(row?.prezzo || 0) || 0) * 100) / 100,
+        colore: __normalizeLaundryColor__(row?.colore || 'blue'),
+      })),
+    };
+    // Copia i pezzi (sums) e i resi nel record.  I resi sono
+    // salvati con suffisso "_resi" per ogni colonna.
+    cols.forEach(k => {
+      item[k] = sums[k] || 0;
+      item[`${k}_resi`] = resi[k] || 0;
+    });
+    // Calcola il costo totale utilizzando solo i pezzi (sums) e non i resi.
+    item.totalCost = Math.round(cols.reduce((acc, k) => acc + ((Number(sums[k] || 0) || 0) * (Number(laundryPrices?.[k] || 0) || 0)), 0) * 100) / 100;
+
+    list.push(item);
+    await save();
+    return item;
+  }
+
+  return { ok:true };
+}
+
+async function __localApiTable__(action, method, params, body){
+  const rows0 = await __tblGet__(action, []);
+  let rows = Array.isArray(rows0) ? rows0 : [];
+
+  const save = async ()=>{ await __tblSet__(action, rows); };
+
+  const delById = async (id)=>{
+    const x = String(id || "").trim();
+    if (!x) return;
+    const idx = rows.findIndex(r => String(r?.id || "").trim() === x);
+    if (idx >= 0) rows.splice(idx, 1);
+    await save();
+  };
+
+  if (method === "GET"){
+    // filtri comuni
+    if (action === "servizi"){
+      const gid = String(params?.ospite_id || params?.ospiteId || "").trim();
+      if (!gid) return [];
+      return rows.filter(r => String(r?.ospite_id ?? r?.ospiteId ?? "").trim() === gid);
+    }
+
+    if (action === "ospiti"){
+      const from = params?.from || params?.da || "";
+      const to = params?.to || params?.a || "";
+      return rows.filter(r => __overlapRange__(r?.check_in, r?.check_out, from, to));
+    }
+
+    if (action === "ospiti_eliminati"){
+      const from = params?.from || params?.da || "";
+      const to = params?.to || params?.a || "";
+      return rows.filter(r => __dateInRange__(r?.deletedAt || r?.deleted_at || r?.data || "", from, to));
+    }
+
+    if (action === "spese"){
+      const from = params?.from || "";
+      const to = params?.to || "";
+      return rows.filter(r => __dateInRange__(r?.dataSpesa || r?.data_spesa || r?.data || "", from, to));
+    }
+
+    if (action === "pulizie"){
+      const d = __normIsoDate__(params?.data || "");
+      if (!d) return rows;
+      return rows.filter(r => __normIsoDate__(r?.data || "") === d);
+    }
+
+    if (action === "operatori"){
+      const d = __normIsoDate__(params?.data || "");
+      if (!d) return { rows };
+      const dayRows = rows.filter(r => __normIsoDate__(r?.data || "") === d);
+      return dayRows;
+    }
+
+    return rows;
+  }
+
+  // scritture specifiche
+  if (action === "motivazioni" && method === "POST"){
+    const motivazione = String(body?.motivazione || "").trim();
+    if (!motivazione) return { ok:true };
+    const key = motivazione.toLowerCase();
+    const exist = rows.find(r => String(r?.motivazione||"").trim().toLowerCase() === key);
+    if (!exist){
+      rows.push({ id: (typeof genId==="function"?genId("m"):("m-"+Date.now())), motivazione, attiva: 1, createdAt: __nowIso__(), updatedAt: __nowIso__() });
+      await save();
+    }
+    return { ok:true };
+  }
+
+  if (action === "stanze" && method === "POST"){
+    const gid = String(body?.ospite_id || "").trim();
+    const list = Array.isArray(body?.stanze) ? body.stanze : [];
+    if (!gid) return { ok:true };
+    rows = rows.filter(r => String(r?.ospite_id || "").trim() !== gid);
+    list.forEach(r => {
+      const it = Object.assign({}, r);
+      it.id = it.id || (typeof genId==="function"?genId("st"):("st-"+Date.now()+Math.random()));
+      it.ospite_id = gid;
+      it.createdAt = it.createdAt || __nowIso__();
+      it.updatedAt = __nowIso__();
+      rows.push(it);
+    });
+    await __tblSet__("stanze", rows);
+    return { ok:true };
+  }
+
+  if (action === "servizi" && method === "POST"){
+    const gid = String(body?.ospite_id || "").trim();
+    const list = Array.isArray(body?.servizi) ? body.servizi : [];
+    if (!gid) return { ok:true };
+    rows = rows.filter(r => String(r?.ospite_id || "").trim() !== gid);
+    list.forEach(r => {
+      const it = Object.assign({}, r);
+      it.id = it.id || (typeof genId==="function"?genId("sv"):("sv-"+Date.now()+Math.random()));
+      it.ospite_id = gid;
+      it.createdAt = it.createdAt || __nowIso__();
+      it.updatedAt = __nowIso__();
+      rows.push(it);
+    });
+    await __tblSet__("servizi", rows);
+    return { ok:true };
+  }
+
+  if (action === "pulizie" && method === "POST"){
+    const data = __normIsoDate__(body?.data || "");
+    const list = Array.isArray(body?.rows) ? body.rows : [];
+    if (!data) return { ok:true };
+    // upsert per stanza
+    const byKey = new Map();
+    rows.forEach(r => {
+      const k = `${__normIsoDate__(r?.data||"")}|${String(r?.stanza||"").trim()}`;
+      byKey.set(k, r);
+    });
+    list.forEach(r => {
+      const stanza = String(r?.stanza || "").trim();
+      if (!stanza) return;
+      const k = `${data}|${stanza}`;
+      const ex = byKey.get(k);
+      const it = ex ? ex : {};
+      it.id = it.id || (typeof genId==="function"?genId("p"):("p-"+Date.now()+Math.random()));
+      it.data = data;
+      it.stanza = stanza;
+      // copia colonne
+      Object.keys(r||{}).forEach((kk)=>{
+        if (kk === "id") return;
+        it[kk] = r[kk];
+      });
+      it.updatedAt = __nowIso__();
+      if (!it.createdAt) it.createdAt = __nowIso__();
+      if (!ex) rows.push(it);
+      byKey.set(k, it);
+    });
+    await __tblSet__("pulizie", rows);
+    return { ok:true };
+  }
+
+  if (action === "operatori" && method === "POST"){
+    const data = __normIsoDate__(body?.data || "");
+    const list = Array.isArray(body?.operatori) ? body.operatori : [];
+    if (!data) return { ok:true };
+    const replaceDay = !!body?.replaceDay;
+    if (replaceDay){
+      rows = rows.filter(r => __normIsoDate__(r?.data||"") !== data);
+    }
+    list.forEach(r => {
+      const it = Object.assign({}, r);
+      it.id = it.id || (typeof genId==="function"?genId("opd"):("opd-"+Date.now()+Math.random()));
+      it.data = data;
+      it.createdAt = it.createdAt || __nowIso__();
+      it.updatedAt = __nowIso__();
+      rows.push(it);
+    });
+    await __tblSet__("operatori", rows);
+    return { ok:true };
+  }
+
+  if (action === "spese" && method === "POST"){
+    const it = Object.assign({}, body || {});
+    it.id = it.id || (typeof genId==="function"?genId("s"):("s-"+Date.now()));
+    it.createdAt = it.createdAt || __nowIso__();
+    it.updatedAt = __nowIso__();
+    rows.unshift(it);
+    await save();
+    return { id: it.id };
+  }
+
+  if (action === "spese" && method === "DELETE"){
+    await delById(params?.id);
+    return { ok:true };
+  }
+
+  if (action === "ospiti" && (method === "POST" || method === "PUT")){
+    const it = Object.assign({}, body || {});
+    it.id = String(it.id || "").trim() || (typeof genId==="function"?genId("o"):("o-"+Date.now()));
+    // preserve createdAt if provided
+    it.createdAt = it.createdAt || it.created_at || __nowIso__();
+    it.created_at = it.createdAt;
+    it.updatedAt = __nowIso__();
+    it.updated_at = it.updatedAt;
+
+    const idx = rows.findIndex(r => String(r?.id||"").trim() === it.id);
+    if (idx >= 0) rows[idx] = Object.assign({}, rows[idx], it);
+    else rows.unshift(it);
+    await save();
+    return { id: it.id };
+  }
+
+  if (action === "ospiti" && method === "DELETE"){
+    const id = String(params?.id || "").trim();
+    if (!id) return { ok:true };
+    const idx = rows.findIndex(r => String(r?.id||"").trim() === id);
+    if (idx >= 0){
+      const removed = rows[idx];
+      rows.splice(idx, 1);
+      await save();
+
+      // sposta in eliminati
+      try{
+        const del0 = await __tblGet__("ospiti_eliminati", []);
+        const delRows = Array.isArray(del0) ? del0 : [];
+        delRows.unshift(Object.assign({}, removed, { deletedAt: __nowIso__(), isDeleted: 1 }));
+        await __tblSet__("ospiti_eliminati", delRows);
+      }catch(_){}
+
+      // pulisci relazioni
+      try{
+        const st0 = await __tblGet__("stanze", []);
+        const st = Array.isArray(st0) ? st0 : [];
+        await __tblSet__("stanze", st.filter(r => String(r?.ospite_id||"").trim() !== id));
+      }catch(_){}
+      try{
+        const sv0 = await __tblGet__("servizi", []);
+        const sv = Array.isArray(sv0) ? sv0 : [];
+        await __tblSet__("servizi", sv.filter(r => String(r?.ospite_id||"").trim() !== id));
+      }catch(_){}
+    }
+    return { ok:true };
+  }
+
+  // fallback generico PUT/DELETE per id
+  if (method === "PUT"){
+    const id = String(body?.id || "").trim();
+    if (!id) return { ok:true };
+    const idx = rows.findIndex(r => String(r?.id||"").trim() === id);
+    if (idx < 0) return { ok:true };
+    rows[idx] = Object.assign({}, rows[idx], body, { updatedAt: __nowIso__() });
+    await save();
+    return { ok:true };
+  }
+
+  if (method === "DELETE"){
+    await delById((params && params.id) || (body && body.id));
+    return { ok:true };
+  }
+
+  if (method === "POST"){
+    // append generico
+    const it = Object.assign({}, body || {});
+    it.id = it.id || (typeof genId==="function"?genId("r"):("r-"+Date.now()+Math.random()));
+    it.createdAt = it.createdAt || __nowIso__();
+    it.updatedAt = __nowIso__();
+    rows.push(it);
+    await save();
+    return { id: it.id };
+  }
+
+  return { ok:true };
+}
+
+async function __localApi__(action, { method="GET", params={}, body=null } = {}){
+  const m = String(method || "GET").toUpperCase();
+  const a = String(action || "").trim();
+  if (a === "utenti") return __localApiUtenti__(m, body || {});
+  if (a === "impostazioni") return __localApiImpostazioni__(m, body || {});
+  if (a === "colazione") return __localApiColazione__(m, body || {});
+  if (a === "prodotti_pulizia") return __localApiSpesaList__("prodotti_pulizia", m, body || {});
+  if (a === "lavanderia") return __localApiLavanderia__(m, params || {}, body || {});
+  return __localApiTable__(a, m, params || {}, body || {});
+}
+
+// Import/Export DB (JSON unico) — Admin vs Operatore
+/* Legacy localStorage DB Import/Export removed (LOCAL build uses IndexedDB) */
+
+// ================================
+// __FIREBASE_SYNC__ (Firestore-only, no Storage)
+// Sync Admin <-> Operatori tramite Firebase, attivato SOLO su tap Import/Export.
+// Nessun blocco della Home se offline.
+// ================================
+const __FB_STATE__ = { token:null, exp:0, teamId:null, teamKey:null };
+
+function __fbLoadLink__(){
+  try{
+    __FB_STATE__.teamId = localStorage.getItem("ddae_fb_teamId") || "";
+    __FB_STATE__.teamKey = localStorage.getItem("ddae_fb_teamKey") || "";
+  }catch(_){}
+}
+function __fbSaveLink__(teamId, teamKey){
+  try{
+    localStorage.setItem("ddae_fb_teamId", String(teamId||""));
+    localStorage.setItem("ddae_fb_teamKey", String(teamKey||""));
+  }catch(_){}
+  __FB_STATE__.teamId = String(teamId||"");
+  __FB_STATE__.teamKey = String(teamKey||"");
+}
+
+function __randStr__(n){
+  const a = "ABCDEFGHJKLMNPQRSTUVWXYZ23456789";
+  let s = "";
+  for (let i=0;i<n;i++) s += a[(Math.random()*a.length)|0];
+  return s;
+}
+function __qrCodeText__(teamId, teamKey){
+  return `DDAE|${teamId}|${teamKey}`;
+}
+function __parseQr__(txt){
+  const s = String(txt||"").trim();
+  const m = s.match(/^DDAE\|([^|]+)\|([^|]+)$/i);
+  if (!m) return null;
+  return { teamId: m[1], teamKey: m[2] };
+}
+
+async function __fbGetIdToken__(){
+  try{
+    if (!FIREBASE_ENABLED || !FIREBASE_CONFIG || !FIREBASE_CONFIG.apiKey) throw new Error("Firebase non configurato");
+    const now = Date.now();
+    if (__FB_STATE__.token && __FB_STATE__.exp && now < (__FB_STATE__.exp - 15000)) return __FB_STATE__.token;
+
+    // anonymous signUp (REST)
+    const url = `https://identitytoolkit.googleapis.com/v1/accounts:signUp?key=${encodeURIComponent(FIREBASE_CONFIG.apiKey)}`;
+    const res = await fetch(url, { method:"POST", headers:{ "Content-Type":"application/json" }, body: JSON.stringify({ returnSecureToken:true }) });
+    if (!res.ok) throw new Error("Auth Firebase fallita");
+    const data = await res.json();
+    __FB_STATE__.token = data.idToken;
+    const sec = parseInt(String(data.expiresIn||"3600"),10);
+    __FB_STATE__.exp = Date.now() + (isNaN(sec)?3600:sec)*1000;
+    return __FB_STATE__.token;
+  }catch(e){
+    throw e;
+  }
+}
+
+function __fsBase__(){
+  const pid = FIREBASE_CONFIG.projectId;
+  return `https://firestore.googleapis.com/v1/projects/${pid}/databases/(default)/documents`;
+}
+function __fsDocUrl__(path){
+  return `${__fsBase__()}/${path}`;
+}
+function __fsEncode__(obj){
+  // only simple string/timestamp/array<string>
+  const out = { fields:{} };
+  const f = out.fields;
+  for (const k of Object.keys(obj||{})){
+    const v = obj[k];
+    if (v === undefined) continue;
+    if (v === null){ f[k] = { nullValue: null }; continue; }
+    if (typeof v === "string"){ f[k] = { stringValue: v }; continue; }
+    if (typeof v === "number"){ f[k] = { doubleValue: v }; continue; }
+    if (typeof v === "boolean"){ f[k] = { booleanValue: v }; continue; }
+    if (v && v.__ts){ f[k] = { timestampValue: v.__ts }; continue; }
+    if (Array.isArray(v)){
+      f[k] = { arrayValue: { values: v.map(x => ({ stringValue: String(x) })) } };
+      continue;
+    }
+    // fallback: stringify
+    f[k] = { stringValue: JSON.stringify(v) };
+  }
+  return out;
+}
+function __fsDecode__(doc){
+  try{
+    const f = (doc && doc.fields) ? doc.fields : {};
+    const out = {};
+    for (const k of Object.keys(f)){
+      const v = f[k];
+      if (v.stringValue !== undefined) out[k] = v.stringValue;
+      else if (v.doubleValue !== undefined) out[k] = v.doubleValue;
+      else if (v.integerValue !== undefined) out[k] = parseInt(v.integerValue,10);
+      else if (v.booleanValue !== undefined) out[k] = !!v.booleanValue;
+      else if (v.timestampValue !== undefined) out[k] = v.timestampValue;
+      else if (v.arrayValue && Array.isArray(v.arrayValue.values)) out[k] = v.arrayValue.values.map(it => it.stringValue);
+    }
+    return out;
+  }catch(_){ return {}; }
+}
+
+async function __fsGet__(path){
+  const token = await __fbGetIdToken__();
+  __syncLedBegin("GET");
+  try{
+    const res = await fetch(__fsDocUrl__(path), { headers: { "Authorization": `Bearer ${token}` }, cache:"no-store" });
+    if (!res.ok) return null;
+    return await res.json();
+  }finally{
+    __syncLedEnd("GET");
+  }
+}
+async function __fsPatch__(path, data){
+  const token = await __fbGetIdToken__();
+  __syncLedBegin("POST");
+  try{
+    const res = await fetch(__fsDocUrl__(path) + "?currentDocument.exists=true", {
+      method:"PATCH",
+      headers:{ "Authorization": `Bearer ${token}`, "Content-Type":"application/json" },
+      body: JSON.stringify(__fsEncode__(data))
+    });
+    if (res.ok) return await res.json();
+    // if missing, create
+    const res2 = await fetch(__fsDocUrl__(path), {
+      method:"POST",
+      headers:{ "Authorization": `Bearer ${token}`, "Content-Type":"application/json" },
+      body: JSON.stringify(__fsEncode__(data))
+    });
+    if (!res2.ok) throw new Error("Scrittura Firebase fallita");
+    return await res2.json();
+  }finally{
+    __syncLedEnd("POST");
+  }
+}
+async function __fsSet__(path, data){
+  const token = await __fbGetIdToken__();
+  __syncLedBegin("POST");
+  try{
+    const res = await fetch(__fsDocUrl__(path), {
+      method:"PATCH",
+      headers:{ "Authorization": `Bearer ${token}`, "Content-Type":"application/json" },
+      body: JSON.stringify(__fsEncode__(data))
+    });
+    if (!res.ok) throw new Error("Scrittura Firebase fallita");
+    return await res.json();
+  }finally{
+    __syncLedEnd("POST");
+  }
+}
+
+async function __fsList__(collectionPath){
+  const token = await __fbGetIdToken__();
+  __syncLedBegin("GET");
+  try{
+    const res = await fetch(__fsBase__() + "/" + collectionPath, { headers:{ "Authorization": `Bearer ${token}` }, cache:"no-store" });
+    if (!res.ok) return [];
+    const j = await res.json();
+    return Array.isArray(j.documents) ? j.documents : [];
+  }finally{
+    __syncLedEnd("GET");
+  }
+}
+
+async function __ensureAdminTeam__(){
+  __fbLoadLink__();
+      // QR modal close
+      try{
+        const qc = document.getElementById("qrClose");
+        const qm = document.getElementById("qrModal");
+        if (qc && qm) bindFastTap(qc, ()=>{ qm.hidden = true; try{ qm.setAttribute("aria-hidden","true"); }catch(_){} });
+      }catch(_){}
+
+  if (__FB_STATE__.teamId && __FB_STATE__.teamKey) return { teamId: __FB_STATE__.teamId, teamKey: __FB_STATE__.teamKey };
+
+  const teamId = "T" + __randStr__(10);
+  const teamKey = __randStr__(24);
+  __fbSaveLink__(teamId, teamKey);
+  return { teamId, teamKey };
+}
+
+async function __adminGenerateCode__(){
+  // ensure team
+  const { teamId, teamKey } = await __ensureAdminTeam__();
+
+  // update team doc (include operator names from impostazioni if available)
+  let ops = [];
+  try{
+    await ensureSettingsLoaded({ force:false, showLoader:false });
+    ops = (getOperatorNamesFromSettings ? getOperatorNamesFromSettings() : []).map(x=>String(x||"").trim()).filter(Boolean);
+  }catch(_){}
+
+  const nowIso = new Date().toISOString();
+  await __fsSet__(`teams/${teamId}`, { key: teamKey, operators: ops, updatedAt: { __ts: nowIso } });
+
+  const code = __qrCodeText__(teamId, teamKey);
+  try{ __showQrModal__(code); }catch(_){ alert(code); }
+}
+
+function __showQrModal__(code){
+  const modal = document.getElementById("qrModal");
+  const txt = document.getElementById("qrCodeText");
+
+  if (txt){
+    txt.textContent = code;
+
+    // Tap per copiare (iOS-friendly)
+    try{
+      txt.onclick = async () => {
+        try{
+          if (navigator.clipboard && navigator.clipboard.writeText){
+            await navigator.clipboard.writeText(String(code||""));
+            try{ toast("Codice copiato", "blue"); }catch(_){}
+          }else{
+            // fallback: seleziona e copia via execCommand
+            const r = document.createRange();
+            r.selectNodeContents(txt);
+            const sel = window.getSelection();
+            sel.removeAllRanges();
+            sel.addRange(r);
+            document.execCommand("copy");
+            sel.removeAllRanges();
+            try{ toast("Codice copiato", "blue"); }catch(_){}
+          }
+        }catch(_e){
+          try{ toast("Copia non disponibile", "orange"); }catch(_){}
+        }
+      };
+    }catch(_){}
+  }
+
+  if (modal){
+    modal.hidden = false;
+    try{ modal.setAttribute("aria-hidden","false"); }catch(_){}
+  }
+}
+
+function __openCodeLinkModal__(){
+  return new Promise((resolve)=>{
+    const modal = document.getElementById("qrScanModal");
+    const input = document.getElementById("qrScanInput");
+    const ok = document.getElementById("qrScanConfirm");
+    const close = document.getElementById("qrScanClose");
+
+    const finish = (val)=>{
+      try{
+        if (modal){
+          modal.hidden = true;
+          try{ modal.setAttribute("aria-hidden","true"); }catch(_){}
+        }
+      }catch(_){}
+      resolve(String(val||"").trim());
+    };
+
+    // open
+    try{
+      if (modal){
+        modal.hidden = false;
+        try{ modal.setAttribute("aria-hidden","false"); }catch(_){}
+      }
+    }catch(_){}
+
+    try{
+      if (input){
+        input.value = "";
+        setTimeout(()=>{ try{ input.focus(); }catch(_){ } }, 80);
+      }
+    }catch(_){}
+
+    const onOk = (e)=>{ try{ if(e && e.preventDefault) e.preventDefault(); }catch(_){ } finish(input ? input.value : ""); };
+    const onClose = (e)=>{ try{ if(e && e.preventDefault) e.preventDefault(); }catch(_){ } finish(""); };
+
+    if (ok) ok.onclick = onOk;
+    if (close) close.onclick = onClose;
+    if (input){
+      input.onkeydown = (e)=>{ if (e && e.key === "Enter") onOk(e); };
+    }
+  });
+}
+
+async function __qrScanAndLink__(){
+  // Ora: inserimento codice (no QR)
+  let code = "";
+  try{
+    code = await __openCodeLinkModal__();
+  }catch(_){ code = ""; }
+
+  if (!code){
+    try{ code = String(prompt("Incolla codice (DDAE|...)") || "").trim(); }catch(_){ code = ""; }
+  }
+  if (!code) return;
+
+  const parsed = __parseQr__(code);
+  if (!parsed) { try{ toast("Codice non valido", "orange"); }catch(_){ } return; }
+
+  // validate team key matches
+  const doc = await __fsGet__(`teams/${parsed.teamId}`);
+  if (!doc){ try{ toast("Team non trovato", "orange"); }catch(_){ } return; }
+  const data = __fsDecode__(doc);
+  if (String(data.key||"") !== String(parsed.teamKey||"")){ try{ toast("Codice non valido", "orange"); }catch(_){ } return; }
+
+  __fbSaveLink__(parsed.teamId, parsed.teamKey);
+  try{ toast("Collegato", "green"); }catch(_){ }
+}
+
+function __isAdmin__(){
+  return !!(state && state.session && !isOperatoreSession(state.session));
+}
+function __operatorName__(){
+  try{ return String(state?.session?.username || "").trim(); }catch(_){ return ""; }
+}
+
+
+// --- Spesa Board (bacheca condivisa) ---
+// La bacheca vive su Firebase in: sync/{teamId}/boards/spesa
+// Contiene SOLO colazione + prodotti_pulizia e viene aggiornata da admin e operatori.
+// Precedenza: ultimo aggiornamento per singolo prodotto (LWW) usando updatedAt/deletedAt.
+function __spesaKeyShared__(it){
+  const p = String(it?.prodotto || it?.nome || "").trim().toUpperCase();
+  return p || String(it?.id || "").trim();
+}
+function __spesaIsDeleted__(it){
+  const d = (it && (it.isDeleted ?? it.is_deleted ?? it.deleted));
+  return (d === true) || (String(d) === "1");
+}
+function __spesaEffTs__(it){
+  const u = String(it?.updatedAt || it?.updated_at || it?.createdAt || it?.created_at || "");
+  if (__spesaIsDeleted__(it)){
+    const d = String(it?.deletedAt || it?.deleted_at || "") || u;
+    return d || u;
+  }
+  return u;
+}
+function __mergeSpesaLWW__(base, inc){
+  const out = [];
+  const best = new Map();
+  const put = (r)=>{
+    if (!r || typeof r !== "object") return;
+    const k = __spesaKeyShared__(r);
+    if (!k) return;
+    const prev = best.get(k);
+    if (!prev){ best.set(k, r); return; }
+    const ta = __spesaEffTs__(prev);
+    const tb = __spesaEffTs__(r);
+    if (tb && (!ta || tb > ta)){
+      best.set(k, r);
+      return;
+    }
+    if (ta && tb && tb === ta){
+      // tie-break: prefer tombstone (evita resurrezioni a parità di timestamp)
+      if (__spesaIsDeleted__(r) && !__spesaIsDeleted__(prev)){
+        best.set(k, r);
+        return;
+      }
+      if (!__spesaIsDeleted__(r) && __spesaIsDeleted__(prev)){
+        return;
+      }
+      // else keep prev
+    }
+  };
+  (Array.isArray(base)?base:[]).forEach(put);
+  (Array.isArray(inc)?inc:[]).forEach(put);
+  best.forEach(v=>out.push(v));
+  return out;
+}
+
+async function __fbExportSpesaBoard__(opts){
+  __fbLoadLink__();
+  if (!__FB_STATE__.teamId) return false;
+  try{
+    const colazione = await __tblGet__("colazione", []);
+    const prodotti = await __tblGet__("prodotti_pulizia", []);
+    const payload = {
+      kind:"DDAE_SPESA_BOARD",
+      build: BUILD_VERSION,
+      at: __nowIso__(),
+      datasets:{
+        colazione: Array.isArray(colazione)?colazione:[],
+        prodotti_pulizia: Array.isArray(prodotti)?prodotti:[]
+      }
+    };
+    await __fsSet__(`sync/${__FB_STATE__.teamId}/boards/spesa`, {
+      spesa_json: JSON.stringify(payload),
+      updatedAt: { __ts: __nowIso__() }
+    });
+    return true;
+  }catch(_){
+    return false;
+  }
+}
+
+async function __fbReadSpesaBoardPayload__(){
+  __fbLoadLink__();
+  if (!__FB_STATE__.teamId) return null;
+  try{
+    const doc = await __fsGet__(`sync/${__FB_STATE__.teamId}/boards/spesa`);
+    if (!doc) return null;
+    const data = __fsDecode__(doc);
+    const raw = String(data?.spesa_json || "");
+    if (!raw) return null;
+    const p = JSON.parse(raw);
+    if (p && p.datasets) return p;
+  }catch(_){}
+  return null;
+}
+// --- /Spesa Board ---
+async function __fbExportAdmin__(opts){
+  __fbLoadLink__();
+  if (!__FB_STATE__.teamId) { try{ if(!opts?.silent) toast("Genera prima il codice in Impostazioni", "orange"); }catch(_){ } return false; }
+
+  const tables = __OP_TABLES__.filter(t => t !== 'utenti');
+  const datasets = {};
+  for (const t of tables){ datasets[t] = await __tblGet__(t, (t==="impostazioni"?[]:[])); }
+  const payload = { kind:"DDAE_SYNC_ADMIN", build: BUILD_VERSION, at: __nowIso__(), datasets };
+
+  await __fsSet__(`sync/${__FB_STATE__.teamId}`, { admin_json: JSON.stringify(payload), updatedAt:{ __ts: __nowIso__() } });
+  try{ await __fbExportSpesaBoard__({ silent:true }); }catch(_){ }
+  try{ if(!opts?.silent) toast("Operazione completata", "blue"); }catch(_){}
+  return true;
+
+}
+
+async function __fbImportOperator__(opts){
+  __fbLoadLink__();
+  if (!__FB_STATE__.teamId) { try{ if(!opts?.silent) toast("Inserisci prima il codice", "orange"); }catch(_){ } return false; }
+
+// Carica dati condivisi SENZA dipendere dall'admin:
+// - admin_json (se presente)
+// - export di tutti gli operatori (collection operators)
+let payloads = [];
+try{
+  const docAdmin = await __fsGet__(`sync/${__FB_STATE__.teamId}`);
+  if (docAdmin){
+    const dataA = __fsDecode__(docAdmin);
+    const rawA = String(dataA.admin_json||"");
+    if (rawA){
+      try{
+        const pA = JSON.parse(rawA);
+        if (pA && pA.datasets) payloads.push(pA);
+      }catch(_){}
+    }
+  }
+}catch(_){}
+
+try{
+  const docsOps = await __fsList__(`sync/${__FB_STATE__.teamId}/operators`);
+  (docsOps||[]).forEach(d=>{
+    try{
+      const dd = __fsDecode__(d);
+      const rawO = String(dd.operator_json||"");
+      if (!rawO) return;
+      const pO = JSON.parse(rawO);
+      if (pO && pO.datasets) payloads.push(pO);
+    }catch(_){}
+  });
+}catch(_){}
+
+
+// bacheca spesa condivisa (opzionale)
+try{
+  const b = await __fbReadSpesaBoardPayload__();
+  if (b && b.datasets) payloads.push(b);
+}catch(_){}
+if (!payloads.length){ try{ if(!opts?.silent) toast("Nessun dato disponibile", "orange"); }catch(_){ } return false; }
+
+// Combina tutti i dataset in un unico payload remoto
+let payload = { kind:"DDAE_SYNC_COMBINED", build: BUILD_VERSION, at: __nowIso__(), datasets: {} };
+try{
+  for (const p of payloads){
+    const ds = (p && p.datasets && typeof p.datasets === "object") ? p.datasets : {};
+    for (const k of Object.keys(ds)){
+      const v = ds[k];
+      if (Array.isArray(v)){
+        if (!Array.isArray(payload.datasets[k])) payload.datasets[k] = [];
+        payload.datasets[k] = payload.datasets[k].concat(v);
+      } else if (v && typeof v === "object") {
+        // oggetti: merge shallow
+        payload.datasets[k] = Object.assign({}, payload.datasets[k]||{}, v);
+      } else {
+        if (payload.datasets[k] === undefined) payload.datasets[k] = v;
+      }
+    }
+  }
+}catch(_){}
+
+
+// Normalizza liste spesa (evita duplicati e applica precedenza cronologica per prodotto)
+try{
+  if (payload.datasets){
+    if (Array.isArray(payload.datasets.colazione)){
+      payload.datasets.colazione = __mergeSpesaLWW__([], payload.datasets.colazione);
+    }
+    if (Array.isArray(payload.datasets.prodotti_pulizia)){
+      payload.datasets.prodotti_pulizia = __mergeSpesaLWW__([], payload.datasets.prodotti_pulizia);
+    }
+  }
+}catch(_){}
+if (!payload || !payload.datasets){ try{ if(!opts?.silent) toast("Dati non validi", "orange"); }catch(_){ } return false; }
+
+// Import subset operatore
+  // Import subset operatore (NON sovrascrivere credenziali locali)
+  // - Evita di perdere l'account operatore dopo logout su device che importano da Firebase
+  // - Per sicurezza: se nel payload arriva 'utenti', lo mergiamo con quelli già presenti
+  try{
+    if (payload && payload.datasets && Array.isArray(payload.datasets.utenti)) {
+      const existingUsers = await __tblGet__("utenti", []);
+      await __tblSet__("utenti", __mergeUsers__(existingUsers, payload.datasets.utenti));
+    }
+  }catch(_){ }
+
+  // Merge helper: unisce per id scegliendo la versione più recente (updatedAt/createdAt)
+  const __mergeByIdLatest__ = (localArr, remoteArr) => {
+    try{
+      const loc = Array.isArray(localArr) ? localArr : [];
+      const rem = Array.isArray(remoteArr) ? remoteArr : [];
+      const pickT = (o) => String(o?.updatedAt || o?.updated_at || o?.createdAt || o?.created_at || "");
+      const map = new Map();
+      let anon = 0;
+
+      const put = (it) => {
+        if (!it) return;
+        const id = String(it?.id || "").trim();
+        if (!id){
+          map.set(`__anon_${anon++}`, it);
+          return;
+        }
+        const prev = map.get(id);
+        if (!prev){ map.set(id, it); return; }
+        const tp = pickT(prev);
+        const tn = pickT(it);
+        // se "it" è più recente, sovrascrive prev; altrimenti mantiene prev
+        if (tn && (!tp || tn > tp)){
+          map.set(id, Object.assign({}, prev, it));
+        } else {
+          map.set(id, Object.assign({}, it, prev));
+        }
+      };
+
+      loc.forEach(put);
+      rem.forEach(put);
+
+      return Array.from(map.values());
+    }catch(_){
+      return Array.isArray(remoteArr) ? remoteArr : (Array.isArray(localArr) ? localArr : []);
+    }
+  };
+
+  for (const t of __OP_TABLES__){
+    if (t === "utenti") continue;
+
+    // Dati operativi: MERGE smart (key-based) per evitare di perdere lavoro locale
+    // e per garantire che ogni operatore veda anche i dati degli altri.
+    if (t === "pulizie"){
+  if (payload.datasets[t] !== undefined){
+    const local = await __tblGet__(t, []);
+    const remote = Array.isArray(payload.datasets[t]) ? payload.datasets[t] : [];
+
+    const pickU = (o) => String(o?.updatedAt || o?.updated_at || o?.createdAt || o?.created_at || "");
+    const pickD = (o) => String(o?.deletedAt || o?.deleted_at || "");
+    const key = (r) => {
+      const d = String(r?.data || r?.date || "").slice(0,10);
+      const s = String(r?.stanza || r?.room || "").trim();
+      return (d && s) ? (d + "|" + s) : "";
+    };
+    const isNum = (v)=> typeof v === "number" && !Number.isNaN(v);
+    const asNum = (v)=> {
+      if (isNum(v)) return v;
+      if (typeof v === "string" && v.trim()!=="" && !isNaN(Number(v))) return Number(v);
+      return null;
+    };
+    const mergeMax = (a,b)=>{
+      // LWW (Last-Write-Wins): vince SEMPRE l'ultima modifica, anche se è una cancellazione (valori a 0).
+      const pickU = (o) => String(o?.updatedAt || o?.updated_at || o?.createdAt || o?.created_at || "");
+      const pickD = (o) => String(o?.deletedAt || o?.deleted_at || "");
+      const isDel = (o) => !!(o && (o.isDeleted || o.deleted));
+      const effT = (o) => {
+        const u = pickU(o);
+        if (isDel(o)){ const d = pickD(o) || u; return d || u; }
+        return u;
+      };
+      const ta = effT(a);
+      const tb = effT(b);
+      const newerIsB = (!ta && !tb) ? true : (tb && (!ta || tb >= ta));
+      const newer = newerIsB ? (b||{}) : (a||{});
+      const older = newerIsB ? (a||{}) : (b||{});
+      return Object.assign({}, older, newer);
+    };
+
+    const best = new Map();
+    const put = (it) => {
+      if (!it || typeof it !== "object") return;
+      const k = key(it);
+      if (!k){ best.set("__anon_"+best.size, it); return; }
+      const prev = best.get(k);
+      if (!prev){ best.set(k, it); return; }
+      best.set(k, mergeMax(prev, it));
+    };
+    (Array.isArray(local)?local:[]).forEach(put);
+    remote.forEach(put);
+    await __tblSet__(t, Array.from(best.values()));
+  }
+  continue;
+}
+
+    if (t === "operatori"){
+  if (payload.datasets[t] !== undefined){
+    const local = await __tblGet__(t, []);
+    const remote = Array.isArray(payload.datasets[t]) ? payload.datasets[t] : [];
+    const pickU = (o) => String(o?.updatedAt || o?.updated_at || o?.createdAt || o?.created_at || "");
+    const pickD = (o) => String(o?.deletedAt || o?.deleted_at || "");
+    const normOp = (s) => String(s||"").trim().toLowerCase();
+    const normD  = (s) => __normIsoDate__(s);
+    const key = (r) => {
+      const d = normD(r?.data || r?.date || "");
+      const o = normOp(r?.operatore || r?.nome || "");
+      return (d && o) ? (d + "|" + o) : "";
+    };
+    const asNum = (v)=> {
+      if (typeof v === "number" && !Number.isNaN(v)) return v;
+      if (typeof v === "string" && v.trim()!=="" && !isNaN(Number(v))) return Number(v);
+      return null;
+    };
+    const mergeMax = (a,b)=>{
+      // LWW (Last-Write-Wins): vince SEMPRE l'ultima modifica, anche se è una cancellazione (valori a 0).
+      const pickU = (o) => String(o?.updatedAt || o?.updated_at || o?.createdAt || o?.created_at || "");
+      const pickD = (o) => String(o?.deletedAt || o?.deleted_at || "");
+      const isDel = (o) => !!(o && (o.isDeleted || o.deleted));
+      const effT = (o) => {
+        const u = pickU(o);
+        if (isDel(o)){ const d = pickD(o) || u; return d || u; }
+        return u;
+      };
+      const ta = effT(a);
+      const tb = effT(b);
+      const newerIsB = (!ta && !tb) ? true : (tb && (!ta || tb >= ta));
+      const newer = newerIsB ? (b||{}) : (a||{});
+      const older = newerIsB ? (a||{}) : (b||{});
+      return Object.assign({}, older, newer);
+    };
+
+    const best = new Map();
+    const put = (it) => {
+      if (!it || typeof it !== "object") return;
+      const k = key(it);
+      if (!k){ best.set("__anon_"+best.size, it); return; }
+      const prev = best.get(k);
+      if (!prev){ best.set(k, it); return; }
+      best.set(k, mergeMax(prev, it));
+    };
+    (Array.isArray(local)?local:[]).forEach(put);
+    remote.forEach(put);
+    await __tblSet__(t, Array.from(best.values()));
+  }
+  continue;
+}
+
+    if (t === "lavanderia"){
+  if (payload.datasets[t] !== undefined){
+    const local = await __tblGet__(t, []);
+    const remote = Array.isArray(payload.datasets[t]) ? payload.datasets[t] : [];
+    const pickU = (o) => String(o?.updatedAt || o?.updated_at || o?.createdAt || o?.created_at || "");
+    const pickD = (o) => String(o?.deletedAt || o?.deleted_at || "");
+    const key = (it) => {
+      const id = String(it?.id || "").trim();
+      if (id) return "id:" + id;
+      const a = __normIsoDate__(it?.startDate || it?.start_date || it?.from || "");
+      const b = __normIsoDate__(it?.endDate || it?.end_date || it?.to || "");
+      return (a && b) ? ("rng:" + a + "|" + b) : "";
+    };
+    const asNum = (v)=> {
+      if (typeof v === "number" && !Number.isNaN(v)) return v;
+      if (typeof v === "string" && v.trim()!=="" && !isNaN(Number(v))) return Number(v);
+      return null;
+    };
+    const mergeMax = (a,b)=>{
+      // LWW (Last-Write-Wins): vince SEMPRE l'ultima modifica, anche se è una cancellazione (valori a 0).
+      const pickU = (o) => String(o?.updatedAt || o?.updated_at || o?.createdAt || o?.created_at || "");
+      const pickD = (o) => String(o?.deletedAt || o?.deleted_at || "");
+      const isDel = (o) => !!(o && (o.isDeleted || o.deleted));
+      const effT = (o) => {
+        const u = pickU(o);
+        if (isDel(o)){ const d = pickD(o) || u; return d || u; }
+        return u;
+      };
+      const ta = effT(a);
+      const tb = effT(b);
+      const newerIsB = (!ta && !tb) ? true : (tb && (!ta || tb >= ta));
+      const newer = newerIsB ? (b||{}) : (a||{});
+      const older = newerIsB ? (a||{}) : (b||{});
+      return Object.assign({}, older, newer);
+    };
+    const best = new Map();
+    const put = (it) => {
+      if (!it || typeof it !== "object") return;
+      const k = key(it);
+      if (!k){ best.set("__anon_"+best.size, it); return; }
+      const prev = best.get(k);
+      if (!prev){ best.set(k, it); return; }
+      best.set(k, mergeMax(prev, it));
+    };
+    (Array.isArray(local)?local:[]).forEach(put);
+    remote.forEach(put);
+    await __tblSet__(t, Array.from(best.values()));
+  }
+  continue;
+}
+
+    if (t === "colazione" || t === "prodotti_pulizia"){
+      if (payload.datasets[t] !== undefined){
+        const local = await __tblGet__(t, []);
+        const remote = Array.isArray(payload.datasets[t]) ? payload.datasets[t] : [];
+        await __tblSet__(t, __mergeSpesaLWW__(local, remote));
+      }
+      continue;
+    }
+
+    if (payload.datasets[t] !== undefined){
+      await __tblSet__(t, payload.datasets[t]);
+    }
+  }
+
+    try{ await __fbExportSpesaBoard__({ silent:true }); }catch(_){ }
+
+try{ if(!opts?.silent) toast("Operazione completata", "green"); }catch(_){}
+  const __restoreAfterSync = opts?.restoreState || __captureSyncRestoreState();
+  try{ await __refreshAfterSync__(__restoreAfterSync); }catch(_){
+    if(!opts?.skipReload){ setTimeout(()=>{ try{ __writeRestoreState(__restoreAfterSync); }catch(_){ } try{ location.reload(); }catch(_){ } }, 250); }
+  }
+  return true;
+}
+
+async function __fbExportOperator__(opts){
+  __fbLoadLink__();
+  if (!__FB_STATE__.teamId) { try{ if(!opts?.silent) toast("Inserisci prima il codice", "orange"); }catch(_){ } return false; }
+  const name = (__operatorName__() || "operatore").toLowerCase().replace(/\s+/g,"_").replace(/[^a-z0-9_\-]/g,"");
+  if (!name){ try{ if(!opts?.silent) toast("Nome operatore mancante", "orange"); }catch(_){ } return false; }
+
+  const datasets = {
+    pulizie: await __tblGet__("pulizie", []),
+    operatori: await __tblGet__("operatori", []),
+    lavanderia: await __tblGet__("lavanderia", []),
+    colazione: await __tblGet__("colazione", []),
+    prodotti_pulizia: await __tblGet__("prodotti_pulizia", [])
+  };
+  const payload = { kind:"DDAE_SYNC_OPERATOR", operator:name, build: BUILD_VERSION, at: __nowIso__(), datasets };
+  await __fsSet__(`sync/${__FB_STATE__.teamId}/operators/${name}`, { operator_json: JSON.stringify(payload), updatedAt:{ __ts: __nowIso__() } });
+  try{ await __fbExportSpesaBoard__({ silent:true }); }catch(_){ }
+  try{ if(!opts?.silent) toast("Operazione completata", "blue"); }catch(_){}
+  return true;
+
+}
+
+function __pickLatestLaundry__(list){
+  try{
+    const arr = Array.isArray(list)?list:[];
+    if (!arr.length) return null;
+    // pick max updatedAt or endDate
+    return arr.slice().sort((a,b)=>{
+      const ua = String(a.updatedAt||a.updated_at||a.endDate||a.end_date||"");
+      const ub = String(b.updatedAt||b.updated_at||b.endDate||b.end_date||"");
+      return ua < ub ? 1 : (ua > ub ? -1 : 0);
+    })[0];
+  }catch(_){ return null; }
+}
+
+async function __fbImportAdmin__(opts){
+  __fbLoadLink__();
+  if (!__FB_STATE__.teamId) { try{ if(!opts?.silent) toast("Genera prima il codice in Impostazioni", "orange"); }catch(_){ } return false; }
+
+  // get operator list from settings if present
+  let ops = [];
+  try{
+    await ensureSettingsLoaded({ force:false, showLoader:false });
+    ops = (getOperatorNamesFromSettings ? getOperatorNamesFromSettings() : []).map(x=>String(x||"").trim()).filter(Boolean);
+  }catch(_){}
+  // normalize
+  ops = ops.map(n => String(n).toLowerCase().replace(/\s+/g,"_").replace(/[^a-z0-9_\-]/g,"")).filter(Boolean);
+
+  // Sempre includi TUTTI i documenti presenti nella collection operators (non dipendere solo dal roster/settings)
+  // per evitare che un operatore venga "saltato" e che l'admin esporti solo un sottoinsieme dei dati.
+  try{
+    const docsAll = await __fsList__(`sync/${__FB_STATE__.teamId}/operators`);
+    const fromDocs = (docsAll||[]).map(d => String(d.name||"").split("/").pop()).map(x=>String(x||"").trim()).filter(Boolean);
+    if (!ops.length) ops = fromDocs;
+    else {
+      const set = new Set(ops);
+      fromDocs.forEach(n=>{ if(n) set.add(n); });
+      ops = Array.from(set);
+    }
+  }catch(_){ }
+
+  if (!ops.length){
+    try{ if(!opts?.silent) toast("Nessun operatore trovato", "orange"); }catch(_){ }
+  }
+
+  // merge
+  let mergedPulizie = await __tblGet__("pulizie", []);
+  const basePulizie = Array.isArray(mergedPulizie) ? mergedPulizie : [];
+  mergedPulizie = basePulizie.slice();
+
+  let mergedOperatori = await __tblGet__("operatori", []);
+  const baseOperatori = Array.isArray(mergedOperatori) ? mergedOperatori : [];
+  mergedOperatori = baseOperatori.slice();
+
+
+  // merge colazione + prodotti pulizia (lista spesa) da operatori
+  let mergedColazione = await __tblGet__("colazione", []);
+  mergedColazione = Array.isArray(mergedColazione) ? mergedColazione.slice() : [];
+
+  let mergedProdottiPulizia = await __tblGet__("prodotti_pulizia", []);
+  mergedProdottiPulizia = Array.isArray(mergedProdottiPulizia) ? mergedProdottiPulizia.slice() : [];
+
+  // merge bacheca condivisa spesa (se presente)
+  try{
+    const b = await __fbReadSpesaBoardPayload__();
+    if (b && b.datasets){
+      mergedColazione = __mergeSpesaLWW__(mergedColazione, b.datasets.colazione);
+      mergedProdottiPulizia = __mergeSpesaLWW__(mergedProdottiPulizia, b.datasets.prodotti_pulizia);
+    }
+  }catch(_){}
+
+  const __spesaKey__ = (it) => {
+    const p = String(it?.prodotto || it?.nome || "").trim().toUpperCase();
+    return p || String(it?.id || "").trim();
+  };
+  const __spesaUAt__ = (it) => String(it?.updatedAt || it?.updated_at || it?.createdAt || it?.created_at || "");
+  const __mergeSpesaList__ = (base, inc) => {
+    const out = Array.isArray(base) ? base.slice() : [];
+    const idxByKey = new Map();
+    out.forEach((r, i) => { const k = __spesaKey__(r); if (k) idxByKey.set(k, i); });
+    (Array.isArray(inc) ? inc : []).forEach((r) => {
+      const k = __spesaKey__(r);
+      if (!k) return;
+      const i = idxByKey.get(k);
+      if (i === undefined){
+        out.push(r);
+        idxByKey.set(k, out.length - 1);
+        return;
+      }
+      const a = out[i];
+      const ua = __spesaUAt__(a);
+      const ub = __spesaUAt__(r);
+      if (ub && (!ua || ub > ua)){
+        out[i] = r;
+      }else if (!ub && !ua){
+        // fallback: conserva qty più alta
+        const qa = parseInt(String(a?.qty ?? 0), 10);
+        const qb = parseInt(String(r?.qty ?? 0), 10);
+        if ((isNaN(qa)?0:qa) < (isNaN(qb)?0:qb)) out[i] = Object.assign({}, a, r);
+      }
+    });
+    return out;
+  };
+
+  let mergedLavanderia = await __tblGet__("lavanderia", []);
+  mergedLavanderia = Array.isArray(mergedLavanderia) ? mergedLavanderia.slice() : [];
+  const __lavKey__ = (it) => {
+    const id = String(it?.id || "").trim();
+    if (id) return "id:" + id;
+    const a = __normIsoDate__(it?.startDate || it?.start_date || it?.from || "");
+    const b = __normIsoDate__(it?.endDate || it?.end_date || it?.to || "");
+    return (a && b) ? ("rng:" + a + "|" + b) : "";
+  };
+  const __lavUAt__ = (it) => String(it?.updatedAt || it?.updated_at || it?.createdAt || it?.created_at || "");
+  const __lavIdx__ = new Map();
+  mergedLavanderia.forEach((it, i) => { const k = __lavKey__(it); if (k && !__lavIdx__.has(k)) __lavIdx__.set(k, i); });
+
+  for (const op of ops){
+
+    const doc = await __fsGet__(`sync/${__FB_STATE__.teamId}/operators/${op}`);
+    if (!doc) continue;
+    const d = __fsDecode__(doc);
+    const raw = String(d.operator_json||"");
+    if (!raw) continue;
+    let payload=null; try{ payload=JSON.parse(raw); }catch(_){ payload=null; }
+    if (!payload || !payload.datasets) continue;
+
+    // merge pulizie entries (merge by id or by key data+stanza; max per-col)
+    try{
+      const cols = getLaundryComponentCodes();
+      const listP = Array.isArray(payload.datasets.pulizie) ? payload.datasets.pulizie : [];
+      const byId = new Map();
+      mergedPulizie.forEach(r=>{ const id = String(r?.id||"").trim(); if (id) byId.set(id, r); });
+      const byKey = new Map();
+      mergedPulizie.forEach(r=>{
+        const d = String(r?.data||r?.date||"").slice(0,10);
+        const s = String(r?.stanza||r?.room||"").trim();
+        if (d && s) byKey.set(d+"|"+s, r);
+      });
+      listP.forEach(r=>{
+        if (!r) return;
+        const id = String(r?.id||"").trim();
+        const d = String(r?.data||r?.date||"").slice(0,10);
+        const s = String(r?.stanza||r?.room||"").trim();
+        const key = (d && s) ? (d+"|"+s) : "";
+        const target = (id && byId.has(id)) ? byId.get(id) : (key && byKey.has(key) ? byKey.get(key) : null);
+        if (!target){
+          mergedPulizie.push(r);
+          if (id) byId.set(id, r);
+          if (key) byKey.set(key, r);
+          return;
+        }
+        const ua = String(target.updatedAt||target.updated_at||target.createdAt||target.created_at||"");
+        const ub = String(r.updatedAt||r.updated_at||r.createdAt||r.created_at||"");
+        const should = (!ua && !ub) ? true : (ub && (!ua || ub > ua));
+        if (should){
+          try{ Object.keys(r||{}).forEach(k=>{ target[k] = r[k]; }); }catch(_){ }
+        }
+      });
+    }catch(_){ }
+
+    // merge operatori entries (LWW by data+operatore; consente decrementi/cancellazioni)
+    try{
+      const list = Array.isArray(payload.datasets.operatori) ? payload.datasets.operatori : [];
+      const __opKey__ = (it) => {
+        const d = __normIsoDate__(it?.data || it?.date || "");
+        const op = String(it?.operatore || it?.nome || "").trim().toLowerCase();
+        return (d && op) ? (d + "|" + op) : "";
+      };
+      const __opUAt__ = (it) => String(it?.updatedAt || it?.updated_at || it?.createdAt || it?.created_at || "");
+      const idxByKey = new Map();
+      // indicizza base (dedupe interno: tieni la più recente)
+      mergedOperatori.forEach((it, i) => {
+        const k = __opKey__(it);
+        if (!k) return;
+        if (!idxByKey.has(k)) { idxByKey.set(k, i); return; }
+        const j = idxByKey.get(k);
+        const a = mergedOperatori[j];
+        const ua = __opUAt__(a);
+        const ub = __opUAt__(it);
+        const should = (!ua && !ub) ? false : (ub && (!ua || ub > ua));
+        if (should) idxByKey.set(k, i);
+      });
+
+      list.forEach((it) => {
+        const k = __opKey__(it);
+        if (!k){ mergedOperatori.push(it); return; }
+        const i = idxByKey.get(k);
+        if (i === undefined){
+          mergedOperatori.push(it);
+          idxByKey.set(k, mergedOperatori.length - 1);
+          return;
+        }
+        const a = mergedOperatori[i];
+        const ua = __opUAt__(a);
+        const ub = __opUAt__(it);
+        const should = (!ua && !ub) ? true : (ub && (!ua || ub > ua));
+        if (should){
+          mergedOperatori[i] = Object.assign({}, (mergedOperatori[i]||{}), (it||{}));
+        }
+      });
+    }catch(_){}
+// merge lista spesa (colazione + prodotti pulizia)
+    try{
+      if (payload.datasets.colazione !== undefined){
+        mergedColazione = __mergeSpesaLWW__(mergedColazione, payload.datasets.colazione);
+      }
+      if (payload.datasets.prodotti_pulizia !== undefined){
+        mergedProdottiPulizia = __mergeSpesaLWW__(mergedProdottiPulizia, payload.datasets.prodotti_pulizia);
+      }
+    }catch(_){}
+
+    // merge lavanderia entries (LWW; supporta eliminazioni via isDeleted)
+    try{
+      const listL = Array.isArray(payload.datasets.lavanderia) ? payload.datasets.lavanderia : [];
+      (Array.isArray(listL) ? listL : []).forEach((it) => {
+        const k = __lavKey__(it);
+        if (!k){ mergedLavanderia.push(it); return; }
+        const i = __lavIdx__.get(k);
+        if (i === undefined){
+          mergedLavanderia.push(it);
+          __lavIdx__.set(k, mergedLavanderia.length - 1);
+          return;
+        }
+        const a = mergedLavanderia[i];
+        const ua = __lavUAt__(a);
+        const ub = __lavUAt__(it);
+        const should = (!ua && !ub) ? true : (ub && (!ua || ub > ua));
+        if (should){
+          mergedLavanderia[i] = it;
+        }
+      });
+    }catch(_){}
+  }
+
+  // merge impostazioni dall'admin_json per preservare catalogo operatori (colore/tariffa/benzina) anche dopo sync
+  try{
+    const docAdminSync = await __fsGet__(`sync/${__FB_STATE__.teamId}`);
+    if (docAdminSync){
+      const dataAdminSync = __fsDecode__(docAdminSync);
+      const rawAdminSync = String(dataAdminSync?.admin_json || "");
+      if (rawAdminSync){
+        const payloadAdminSync = JSON.parse(rawAdminSync);
+        const remoteImp = Array.isArray(payloadAdminSync?.datasets?.impostazioni) ? payloadAdminSync.datasets.impostazioni : [];
+        if (remoteImp.length){
+          const localImp = await __tblGet__("impostazioni", []);
+          const pickKey = (r) => String(r?.key || r?.Key || "").trim().toLowerCase();
+          const pickU = (r) => String(r?.updatedAt || r?.updated_at || r?.createdAt || r?.created_at || "");
+          const byKey = new Map();
+          (Array.isArray(localImp) ? localImp : []).forEach((row) => {
+            const k = pickKey(row) || `__local_${byKey.size}`;
+            byKey.set(k, row);
+          });
+          remoteImp.forEach((row) => {
+            const k = pickKey(row) || `__remote_${byKey.size}`;
+            if ((state?.session && isOperatoreSession(state.session)) && k === "app_language") return;
+            const prev = byKey.get(k);
+            if (!prev){ byKey.set(k, row); return; }
+            const up = pickU(prev);
+            const ur = pickU(row);
+            const takeRemote = (!up && !ur) ? true : (!!ur && (!up || ur >= up));
+            byKey.set(k, takeRemote ? Object.assign({}, prev, row) : Object.assign({}, row, prev));
+          });
+          await __tblSet__("impostazioni", Array.from(byKey.values()));
+          try{ state.settings.loaded = false; }catch(_){ }
+          try{ await ensureSettingsLoaded({ force:true, showLoader:false }); }catch(_){ }
+        }
+      }
+    }
+  }catch(_){ }
+
+  // cleanup: dedupe pulizie/operatori/lavanderia con logica LWW (evita che i vecchi valori "restino appiccicati")
+  try{
+    const __uAt__ = (it) => String(it?.updatedAt || it?.updated_at || it?.createdAt || it?.created_at || "");
+    const __pKey__ = (it) => {
+      const d = String(it?.data || it?.date || "").slice(0,10);
+      const s = String(it?.stanza || it?.room || "").trim();
+      return (d && s) ? (d + "|" + s) : "";
+    };
+    const bestP = new Map();
+    (Array.isArray(mergedPulizie) ? mergedPulizie : []).forEach(it => {
+      const k = __pKey__(it);
+      if (!k) return;
+      const prev = bestP.get(k);
+      if (!prev){ bestP.set(k, it); return; }
+      const ua = __uAt__(prev);
+      const ub = __uAt__(it);
+      const should = (!ua && !ub) ? false : (ub && (!ua || ub > ua));
+      if (should) bestP.set(k, it);
+    });
+    mergedPulizie = Array.from(bestP.values());
+  }catch(_){}
+
+  try{
+    const __uAt__ = (it) => String(it?.updatedAt || it?.updated_at || it?.createdAt || it?.created_at || "");
+    const __oKey__ = (it) => {
+      const d = __normIsoDate__(it?.data || it?.date || "");
+      const op = String(it?.operatore || it?.nome || "").trim().toLowerCase();
+      return (d && op) ? (d + "|" + op) : "";
+    };
+    const bestO = new Map();
+    (Array.isArray(mergedOperatori) ? mergedOperatori : []).forEach(it => {
+      const k = __oKey__(it);
+      if (!k) return;
+      const prev = bestO.get(k);
+      if (!prev){ bestO.set(k, it); return; }
+      const ua = __uAt__(prev);
+      const ub = __uAt__(it);
+      const should = (!ua && !ub) ? false : (ub && (!ua || ub > ua));
+      if (should) bestO.set(k, it);
+    });
+    mergedOperatori = Array.from(bestO.values());
+  }catch(_){}
+
+  try{
+    const __uAt__ = (it) => String(it?.updatedAt || it?.updated_at || it?.createdAt || it?.created_at || "");
+    const __lKey__ = (it) => {
+      const id = String(it?.id || "").trim();
+      if (id) return "id:" + id;
+      const a = __normIsoDate__(it?.startDate || it?.start_date || it?.from || "");
+      const b = __normIsoDate__(it?.endDate || it?.end_date || it?.to || "");
+      return (a && b) ? ("rng:" + a + "|" + b) : "";
+    };
+    const bestL = new Map();
+    (Array.isArray(mergedLavanderia) ? mergedLavanderia : []).forEach(it => {
+      const k = __lKey__(it);
+      if (!k) return;
+      const prev = bestL.get(k);
+      if (!prev){ bestL.set(k, it); return; }
+      const ua = __uAt__(prev);
+      const ub = __uAt__(it);
+      const should = (!ua && !ub) ? false : (ub && (!ua || ub > ua));
+      if (should) bestL.set(k, it);
+    });
+    mergedLavanderia = Array.from(bestL.values());
+  }catch(_){}
+// write merged pulizie
+  await __tblSet__("pulizie", mergedPulizie);
+
+  // write merged operatori
+  await __tblSet__("operatori", mergedOperatori);
+
+  // write merged spesa (colazione + prodotti pulizia)
+  await __tblSet__("colazione", mergedColazione);
+  await __tblSet__("prodotti_pulizia", mergedProdottiPulizia);
+
+  // write merged lavanderia (include tombstones; UI filtra isDeleted)
+  await __tblSet__("lavanderia", mergedLavanderia);
+
+
+    try{ await __fbExportSpesaBoard__({ silent:true }); }catch(_){ }
+
+try{ if(!opts?.silent) toast("Operazione completata", "green"); }catch(_){}
+  const __restoreAfterSync = opts?.restoreState || __captureSyncRestoreState();
+  try{ await __refreshAfterSync__(__restoreAfterSync); }catch(_){
+    if(!opts?.skipReload){ setTimeout(()=>{ try{ __writeRestoreState(__restoreAfterSync); }catch(_){ } try{ location.reload(); }catch(_){ } }, 250); }
+  }
+  return true;
+}
+
+async function __handleSyncImport__(){
+  const restoreState = __captureSyncRestoreState();
+  if (__isAdmin__()) return __fbImportAdmin__({ restoreState });
+  return __fbImportOperator__({ restoreState });
+}
+async function __handleSyncExport__(){
+  const restoreState = __captureSyncRestoreState();
+  if (__isAdmin__()) return __fbExportAdmin__({ restoreState });
+  return __fbExportOperator__({ restoreState });
+}
+
+
+async function __handleSyncBoth__(){
+  __fbLoadLink__();
+  const restoreState = __captureSyncRestoreState();
+  try{ toast("Sync in corso...", "blue"); }catch(_){}
+  const __sleep__ = (ms) => new Promise(r => setTimeout(r, ms));
+  const __attemptSync__ = async (fn, tries = 2, delay = 350) => {
+    let last = false;
+    for (let i = 0; i < tries; i++){
+      try{
+        last = await fn();
+        if (last !== false) return last;
+      }catch(_){
+        last = false;
+      }
+      if (i < (tries - 1)) await __sleep__(delay);
+    }
+    return last;
+  };
+  let exported = false, imported = false;
+  try{
+    if (__isAdmin__()){
+      exported = await __attemptSync__(()=>__fbExportAdmin__({ silent:true, restoreState }), 2, 350);
+      imported = await __attemptSync__(()=>__fbImportAdmin__({ silent:true, skipReload:true, restoreState }), 3, 450);
+    }else{
+      exported = await __attemptSync__(()=>__fbExportOperator__({ silent:true, restoreState }), 2, 350);
+      imported = await __attemptSync__(()=>__fbImportOperator__({ silent:true, skipReload:true, restoreState }), 3, 450);
+    }
+  }catch(_){ }
+  const ok = (exported !== false) || (imported !== false);
+  try{ toast(ok ? "Sync completata" : "Sync non riuscita", ok ? "green" : "orange"); }catch(_){}
+  setTimeout(()=>{ try{ __writeRestoreState(restoreState); }catch(_){ } try{ location.reload(); }catch(_){ } }, 900);
+  return ok;
+}
+
+// Bind sync buttons once DOM is ready
+try{
+  window.addEventListener("load", ()=>{
+    try{
+      __fbLoadLink__();
+      const btn = document.getElementById("goDbSync");
+      if (btn && !btn.__syncBound){ btn.__syncBound = true; bindFastTap(btn, async ()=>{ try{ await __handleSyncBoth__(); }catch(e){ try{ toast("Sync non disponibile", "orange"); }catch(_){ } } }); }
+      try{ setTimeout(()=>{ try{ __fitHomeSyncBtn__(); }catch(_){ } }, 0); }catch(_){ }
+      try{
+        if (!window.__homeSyncFitBound){
+          window.__homeSyncFitBound = true;
+          let __homeSyncFitTO__ = null;
+          window.addEventListener("resize", ()=>{
+            try{ clearTimeout(__homeSyncFitTO__); }catch(_){ }
+            __homeSyncFitTO__ = setTimeout(()=>{ try{ __fitHomeSyncBtn__(); }catch(_){ } }, 80);
+          }, { passive:true });
+        }
+      }catch(_){ }
+    }catch(_){}
+  }, { passive:true });
+}catch(_){}
+
+
+// Dialog a due azioni (riusa il modal Sì/No esistente con label dinamiche)
+// Ritorna "yes" o "no".
+async function __confirmTwoActions__(message, yesLabel, noLabel){
+  try{
+    const yesBtn = document.getElementById("confirmYesNoYes");
+    const noBtn  = document.getElementById("confirmYesNoNo");
+    const prevYes = yesBtn ? yesBtn.textContent : null;
+    const prevNo  = noBtn  ? noBtn.textContent  : null;
+
+    if (yesBtn) yesBtn.textContent = String(yesLabel || "Sì");
+    if (noBtn)  noBtn.textContent  = String(noLabel  || "No");
+
+    const ok = await confirmYesNo(String(message || "Confermare?"));
+
+    // restore
+    if (yesBtn && prevYes !== null) yesBtn.textContent = prevYes;
+    if (noBtn  && prevNo  !== null) noBtn.textContent  = prevNo;
+
+    return ok ? "yes" : "no";
+  }catch(_){
+    // fallback
+    try{ return (confirm(String(message || "Confermare?")) ? "yes" : "no"); }catch(__){ return "no"; }
+  }
+}
+
+
+async function __openDbPopup__(kind){
+  const k = String(kind||"admin").toLowerCase().startsWith("op") ? "operator" : "admin";
+  const label = (k==="admin") ? "DB Amministratore" : "DB Operatore";
+  const choice = await __confirmTwoActions__(label + ": scegli operazione", "Importa", "Esporta");
+  if (choice === "yes") return __dbImport__(k);
+  // best-effort preopen for iOS download
+  let w=null; try{ w = window.open("", "_blank"); }catch(_){ w=null; }
+  return __dbExport__(k, w);
+}
+
+
+// Nuovo menu DB: un solo popup con selezione Admin/Operatore + Import/Export
+function __setDbMenuSelected__(kind){
+  const a = document.getElementById("dbMenuOptAdmin");
+  const o = document.getElementById("dbMenuOptOperator");
+  if (!a || !o) return;
+  const k = String(kind||"admin").toLowerCase().startsWith("op") ? "operator" : "admin";
+  if (k === "admin"){
+    a.classList.add("selected"); o.classList.remove("selected");
+    try{ a.setAttribute("aria-pressed","true"); o.setAttribute("aria-pressed","false"); }catch(_){}
+  }else{
+    o.classList.add("selected"); a.classList.remove("selected");
+    try{ o.setAttribute("aria-pressed","true"); a.setAttribute("aria-pressed","false"); }catch(_){}
+  }
+  try{ window.__dbMenuKind = k; }catch(_){}
+}
+
+function __closeDbMenuModal__(){
+  try{
+    const modal = document.getElementById("dbMenuModal");
+    if (modal){ modal.hidden = true; try{ modal.setAttribute("aria-hidden","true"); }catch(_){ } }
+  }catch(_){}
+}
+
+function __openDbMenuModal__(){
+  try{
+    const modal = document.getElementById("dbMenuModal");
+    const closeBtn = document.getElementById("dbMenuClose");
+    const importBtn = document.getElementById("dbMenuImportBtn");
+    const exportBtn = document.getElementById("dbMenuExportBtn");
+    if (!modal || !importBtn || !exportBtn){
+      return __openDbPopup__("admin");
+    }
+
+    // bind once
+    if (!modal.__bound){
+      modal.__bound = true;
+      const bind = (el, fn) => { try{ if (el) bindFastTap(el, fn); }catch(_){ try{ el.addEventListener("click", fn); }catch(__){} } };
+
+      bind(closeBtn, ()=>{ __closeDbMenuModal__(); });
+
+      // Import/Export LOCAL (FILE OFFLINE) — solo Admin
+      bind(importBtn, async ()=>{ __closeDbMenuModal__(); await __dbImport__("admin"); });
+      bind(exportBtn, async ()=>{
+        __closeDbMenuModal__();
+        // Pre-open window to keep iOS user gesture for download (best-effort)
+        let w=null; try{ w = window.open("", "_blank"); }catch(_){ w=null; }
+        await __dbExport__("admin", w);
+      });
+      // click outside to close
+      try{
+        modal.addEventListener("click", (e)=>{ if (e.target === modal) __closeDbMenuModal__(); });
+      }catch(_){}
+    }
+
+    modal.hidden = false;
+    try{ modal.setAttribute("aria-hidden","false"); }catch(_){}
+  }catch(e){
+    try{ toast(e.message || String(e)); }catch(_){}
+  }
+}
+
+
+
+
+// ===== DB Import/Export (LOCAL) =====
+const __DB_EXPORT_KIND__ = "dDAE_export";
+const __DB_SCHEMA_VERSION__ = 1;
+
+function __dbTablesForKind__(kind){
+  const k = String(kind || "").toLowerCase();
+  return (k.startsWith("admin") ? __ADMIN_TABLES__ : __OP_TABLES__);
+}
+
+function __safeFileName__(base){
+  return String(base || "backup").replace(/[^\w\-\.]+/g, "_");
+}
+
+function __dbFmtDateDdMmYy__(){
+  try{
+    const ts = new Date();
+    const d = String(ts.getDate()).padStart(2,"0");
+    const m = String(ts.getMonth()+1).padStart(2,"0");
+    const y = String(ts.getFullYear()).slice(-2);
+    return `${d}-${m}-${y}`;
+  }catch(_){ return "00-00-00"; }
+}
+
+function __dbAccountNameForKind__(kind){
+  // admin/operator name for filenames. Prefer current session username; fallback to app label.
+  try{
+    const k = String(kind||"").toLowerCase();
+    const sess = (typeof loadSession === "function") ? loadSession() : null;
+    const uname = String(sess?.username || "").trim();
+    if (uname) return uname.toUpperCase();
+    if (k.startsWith("admin")) return "DAEDALIUM";
+    return "OPERATORE";
+  }catch(_){
+    return "DAEDALIUM";
+  }
+}
+
+
+
+
+function __sessionFromUserRow__(u){
+  try{
+    if (!u || typeof u !== "object") return null;
+    const user_id = String(u?.id || u?.user_id || u?.userId || u?.username || "").trim();
+    const username = String(u?.username || u?.user || u?.email || "").trim();
+    const ruoloRaw = String(u?.ruolo || u?.role || u?.tipo || "").trim().toLowerCase();
+    const ruolo = ruoloRaw
+      ? (ruoloRaw.startsWith("op") ? "operatore" : "admin")
+      : ((String(u?.isOperatore || u?.is_operatore || "").trim() === "1" || u?.isOperatore === true) ? "operatore" : "admin");
+    if (!user_id || !username) return null;
+    return {
+      user_id,
+      username,
+      ruolo,
+      name: String(u?.name || u?.nome || username).trim()
+    };
+  }catch(_){ return null; }
+}
+
+function __mergeUsers__(existing, incoming){
+  const out = [];
+  const seen = new Set();
+  const add = (u) => {
+    if (!u || typeof u !== "object") return;
+    const id = String(u.id || u.user_id || u.userId || "").trim();
+    const un = String(u.username || "").trim().toLowerCase();
+    const key = (id ? `id:${id}` : "") + "|" + (un ? `u:${un}` : "");
+    if (key === "|" ) return;
+    if (seen.has(key)) return;
+    seen.add(key);
+    out.push(u);
+  };
+  try{ (Array.isArray(existing)?existing:[]).forEach(add); }catch(_){}
+  try{ (Array.isArray(incoming)?incoming:[]).forEach(add); }catch(_){}
+  return out;
+}
+
+async function __dbImport__(kind){
+  try{
+    const label = (String(kind||"").toLowerCase().startsWith("admin")) ? "DB Amministratore" : "DB Operatore";
+    const input = document.createElement("input");
+    input.type = "file";
+    input.accept = "application/json,.json";
+    input.style.position = "fixed";
+    input.style.left = "-9999px";
+    document.body.appendChild(input);
+
+    const file = await new Promise((resolve)=>{
+      input.onchange = () => resolve((input.files && input.files[0]) ? input.files[0] : null);
+      input.click();
+    });
+
+    try{ document.body.removeChild(input); }catch(_){}
+
+    if (!file){
+      try{ toast("Import annullato"); }catch(_){}
+      return;
+    }
+
+    const text = await file.text();
+    let data = null;
+    try{ data = JSON.parse(text); }catch(e){
+      try{ toast("JSON non valido", "orange"); }catch(_){}
+      return;
+    }
+
+    const kindOk = String(data?.kind || "").trim() === __DB_EXPORT_KIND__;
+    const sv = data?.schemaVersion;
+    const svNum = (typeof sv === "number") ? sv : parseInt(String(sv||"").trim(), 10);
+    const hasDatasets = data && typeof data === "object" && data.datasets && typeof data.datasets === "object";
+
+    if (!kindOk || !hasDatasets || !(svNum >= 1)){
+      try{ toast("File non compatibile", "orange"); }catch(_){}
+      return;
+    }
+
+
+    const allowedTables = new Set(__dbTablesForKind__(kind));
+    const ds = data.datasets || {};
+    const tablesToWrite = Object.keys(ds).filter(t => allowedTables.has(t));
+
+    if (!tablesToWrite.length){
+      try{ toast("Nessun dataset da importare", "orange"); }catch(_){}
+      return;
+    }
+
+    // Precompute auth-page imported session BEFORE writing datasets so the backup
+    // gets stored in the correct account context instead of the anonymous login context.
+    const __isAuthPageImport__ = String(state?.page || "").trim() === "auth";
+    const __isAdminImport__ = String(kind||"").toLowerCase().startsWith("admin");
+    let __authImportedSession__ = null;
+    try{
+      const importedUsers = Array.isArray(ds?.utenti) ? ds.utenti : [];
+      if (__isAuthPageImport__ && importedUsers.length){
+        const preferred = __isAdminImport__
+          ? (importedUsers.find(u => !isOperatoreSession(u)) || importedUsers[0])
+          : (importedUsers.find(u => isOperatoreSession(u)) || importedUsers[0]);
+        __authImportedSession__ = __sessionFromUserRow__(preferred);
+        if (__authImportedSession__){
+          try{ state.session = __authImportedSession__; }catch(_){ }
+          try{ saveSession(__authImportedSession__); }catch(_){ }
+          try{ await __kvSet__("auth:lastImportedAccount", { at: __nowIso__(), username: __authImportedSession__.username || "", role: __authImportedSession__.ruolo || (__isAdminImport__ ? "admin" : "operatore") }); }catch(_){ }
+        }
+      }
+    }catch(_){ }
+
+    // Pre-merge "utenti" for operator import to avoid losing existing accounts
+    try{
+      if (!__isAdminImport__ && Array.isArray(ds?.utenti)){
+        const existingUsers = await __tblGet__("utenti", []);
+        ds.utenti = __mergeUsers__(existingUsers, ds.utenti);
+      }
+    }catch(_){ }
+
+    // Write datasets (only allowed tables)
+    for (const t of tablesToWrite){
+      const v = ds[t];
+      await __tblSet__(t, v);
+    }
+
+    // Ensure missing tables exist as empty (prevents UI from seeing old leftovers)
+    for (const t of allowedTables){
+      if (!(t in ds)){
+        // non cancellare utenti/impostazioni se non presenti? per sicurezza admin/operator:
+        if (t === "utenti" || t === "impostazioni") continue;
+        await __tblSet__(t, []);
+      }
+    }
+
+    
+    // IMPORT_SESSION_RECONCILE: solo per import ADMIN (l'import operatore non deve forzare logout)
+    try{
+      const __isAdminImport__ = String(kind||"").toLowerCase().startsWith("admin");
+      if (__isAdminImport__){
+        const importedUsers = Array.isArray(ds?.utenti) ? ds.utenti : null;
+        if (importedUsers){
+          const sess = loadSession();
+          if (sess && sess.user_id){
+            const stillExists = importedUsers.some(u => String(u?.id||"") === String(sess.user_id)) || importedUsers.some(u => String(u?.username||"").trim() === String(sess?.username||"").trim());
+            if (!stillExists){
+              clearSession();
+            }
+          }
+        }
+      }
+    }catch(_){}
+    // Login import from auth page: sessione già predisposta prima della scrittura dei dataset.
+    // Manteniamo qui solo un fallback difensivo per backup legacy o sessioni incomplete.
+    try{
+      const isAuthPage = String(state?.page || "").trim() === "auth";
+      const importedUsers = Array.isArray(ds?.utenti) ? ds.utenti : [];
+      if (isAuthPage && !__authImportedSession__ && importedUsers.length){
+        const preferred = __isAdminImport__
+          ? (importedUsers.find(u => !isOperatoreSession(u)) || importedUsers[0])
+          : (importedUsers.find(u => isOperatoreSession(u)) || importedUsers[0]);
+        const importedSession = __sessionFromUserRow__(preferred);
+        if (importedSession){
+          try{ state.session = importedSession; }catch(_){ }
+          try{ saveSession(importedSession); }catch(_){ }
+          try{ await __kvSet__("auth:lastImportedAccount", { at: __nowIso__(), username: importedSession.username || "", role: importedSession.ruolo || (__isAdminImport__ ? "admin" : "operatore") }); }catch(_){ }
+        }
+      }
+    }catch(_){ }
+
+// Mark last import
+    await __kvSet__(`db:lastImport:${String(kind||"")}`, { at: __nowIso__(), fileName: file.name || "" });
+
+    let __isAuthAutoLogin__ = false;
+    try{
+      __isAuthAutoLogin__ = String(state?.page || "").trim() === "auth" && !!loadSession();
+      toast(__isAuthAutoLogin__ ? "Backup importato: account creato e accesso eseguito" : `${label}: import completato`, "blue");
+    }catch(_){ }
+
+    if (__isAuthAutoLogin__){
+      setTimeout(()=>{
+        try{
+          state.session = loadSession() || state.session || null;
+          state.exerciseYear = loadExerciseYear();
+        }catch(_){ }
+        try{ updateYearPill(); }catch(_){ }
+        try{ __applyContext__({ force:true }); }catch(_){ }
+        try{ applyRoleMode(); }catch(_){ }
+  try{ __hydrateAppLanguageFromSettings__(); }catch(_){ }
+        try{
+          const __targetAfterImport__ = (state.session && isOperatoreSession(state.session)) ? "pulizie" : "home";
+          __writeRestoreState({ page: __targetAfterImport__ });
+        }catch(_){ }
+        try{ location.reload(); }catch(__){
+          try{ showPage((state.session && isOperatoreSession(state.session)) ? "pulizie" : "home"); }catch(___){}
+        }
+      }, 150);
+      return;
+    }
+
+    setTimeout(()=>{ try{ __writeRestoreState(__captureUiState()); }catch(_){ } try{ location.reload(); }catch(_){ } }, 400);
+
+  }catch(e){
+    try{ toast("Errore import", "orange"); }catch(_){}
+  }
+}
+
+
+async function __extractRosterNames__(data){
+  try{
+    if (!data || typeof data !== "object") return [];
+    // direct arrays
+    if (Array.isArray(data.operatori)) return data.operatori.map(x=>String(x||"").trim()).filter(Boolean).slice(0,3);
+    if (Array.isArray(data.operators)) return data.operators.map(x=>String(x||"").trim()).filter(Boolean).slice(0,3);
+    if (Array.isArray(data.roster)) return data.roster.map(x=>String(x||"").trim()).filter(Boolean).slice(0,3);
+
+    // nested: { operatori: {operatore_1,...}}
+    if (data.operatori && typeof data.operatori === "object" && !Array.isArray(data.operatori)){
+      const o=data.operatori;
+      const arr=[o.operatore_1,o.operatore_2,o.operatore_3].map(x=>String(x||"").trim()).filter(Boolean);
+      if (arr.length) return arr.slice(0,3);
+    }
+
+    // db export: datasets.impostazioni row key=operatori
+    const ds = data.datasets || {};
+    const imp = ds.impostazioni;
+    if (Array.isArray(imp)){
+      const row = imp.find(r => String(r?.key || r?.Key || "").trim().toLowerCase() === "operatori");
+      if (row){
+        const arr=[row.operatore_1,row.operatore_2,row.operatore_3,row.Operatore_1,row.Operatore_2,row.Operatore_3].map(x=>String(x||"").trim()).filter(Boolean);
+        // arr contains duplicates; keep first 3 unique in order
+        const out=[];
+        for (const n of arr){ if (!out.includes(n)) out.push(n); if (out.length>=3) break; }
+        if (out.length) return out;
+      }
+    }
+
+    // settings-like: {operatore_1,...}
+    const arr=[data.operatore_1,data.operatore_2,data.operatore_3,data.Operatore_1,data.Operatore_2,data.Operatore_3].map(x=>String(x||"").trim()).filter(Boolean);
+    if (arr.length){
+      const out=[];
+      for (const n of arr){ if (!out.includes(n)) out.push(n); if (out.length>=3) break; }
+      return out;
+    }
+  }catch(_){ }
+  return [];
+}
+
+async function __importRosterOperators__(){
+  const input = document.createElement("input");
+  input.type = "file";
+  input.accept = "application/json,.json";
+  input.style.position = "fixed";
+  input.style.left = "-9999px";
+  document.body.appendChild(input);
+
+  const file = await new Promise((resolve)=>{
+    input.onchange = () => resolve((input.files && input.files[0]) ? input.files[0] : null);
+    input.click();
+  });
+
+  try{ document.body.removeChild(input); }catch(_){}
+
+  if (!file) return;
+
+  let data = null;
+  try{
+    const txt = await file.text();
+    data = JSON.parse(txt);
+  }catch(_){
+    try{ toast("File non compatibile", "orange"); }catch(__){}
+    return;
+  }
+
+  const names = await __extractRosterNames__(data);
+  if (!names || !names.length){
+    try{ toast("Roster vuoto o non valido", "orange"); }catch(_){}
+    return;
+  }
+
+  // salva nella tabella impostazioni (row key=operatori)
+  try{
+    await api("impostazioni", { method:"POST", body:{ operatori: names }, showLoader:true });
+    try{ await ensureSettingsLoaded({ force:true, showLoader:false }); }catch(_){}
+    try{ toast("Roster operatori importato", "green"); }catch(_){}
+    // refresh UI (pulizie ecc.)
+    try{ renderSettingsOperatorsNames?.(); }catch(_){}
+    try{ if (state.page === "pulizie") renderPuliziePage?.(); }catch(_){}
+  }catch(e){
+    try{ toast("Errore import roster", "orange"); }catch(_){}
+  }
+}
+
+async function __exportRosterOperators__(){
+  try{
+    await ensureSettingsLoaded({ force:false, showLoader:true });
+    const names = (getOperatorNamesFromSettings ? getOperatorNamesFromSettings() : []).map(x=>String(x||"").trim()).filter(Boolean);
+    if (!names.length){
+      try{ toast("Nessun operatore impostato", "orange"); }catch(_){}
+      return;
+    }
+
+    const payload = {
+      kind: "DDAE_ROSTER_OPERATORS",
+      schemaVersion: 1,
+      exportedAt: __nowIso__(),
+      operatori: names
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    const ts = new Date();
+    const y = ts.getFullYear();
+    const m = String(ts.getMonth()+1).padStart(2,"0");
+    const d = String(ts.getDate()).padStart(2,"0");
+    a.href = url;
+    a.download = __safeFileName__(`dDAE_Roster_Operatori_${y}${m}${d}_${BUILD_VERSION}.json`);
+    document.body.appendChild(a);
+    a.click();
+    setTimeout(()=>{ try{ URL.revokeObjectURL(url); }catch(_){}
+      try{ document.body.removeChild(a); }catch(_){}
+    }, 0);
+
+    try{ toast("Roster operatori: export pronto", "blue"); }catch(_){}
+  }catch(e){
+    try{ toast("Errore export roster", "orange"); }catch(_){}
+  }
+}
+
+
+async function __dbExport__(kind, preopenWin){
+  try{
+    const label = (String(kind||"").toLowerCase().startsWith("admin")) ? "DB Amministratore" : "DB Operatore";
+    const tables = __dbTablesForKind__(kind);
+    const datasets = {};
+    for (const t of tables){
+      datasets[t] = await __tblGet__(t, (t==="impostazioni" ? {} : []));
+    }
+    const payload = {
+      kind: __DB_EXPORT_KIND__,
+      schemaVersion: __DB_SCHEMA_VERSION__,
+      exportedAt: __nowIso__(),
+      datasets,
+      meta: {}
+    };
+
+    const blob = new Blob([JSON.stringify(payload, null, 2)], { type: "application/json" });
+    const url = URL.createObjectURL(blob);
+    // Nome file export: dd-mm-yyyy_nome_account.json
+    const dtObj = new Date();
+    const dd = String(dtObj.getDate()).padStart(2, "0");
+    const mm = String(dtObj.getMonth() + 1).padStart(2, "0");
+    const yyyy = String(dtObj.getFullYear());
+    const dt = `${dd}-${mm}-${yyyy}`;
+    let accountName = "";
+    try{
+      accountName =
+        String(
+          state?.session?.account_name ||
+          state?.session?.accountName ||
+          state?.session?.nome_account ||
+          state?.session?.nomeAccount ||
+          state?.session?.name ||
+          state?.session?.username ||
+          ""
+        ).trim();
+    }catch(_){ accountName = ""; }
+    if (!accountName){
+      try{
+        accountName = String(
+          payload?.meta?.account_name ||
+          payload?.meta?.accountName ||
+          ""
+        ).trim();
+      }catch(_){ accountName = ""; }
+    }
+    const accountTag = __safeFileName__(accountName || "nome_account");
+    const filename = `${dt}_${accountTag}.json`;
+
+    let usedPreopenDownload = false;
+
+    // iOS/Safari: se abbiamo una finestra aperta nel gesto utente, usiamo solo quella
+    // per evitare un secondo popup/secondo tentativo di download dopo il salvataggio.
+    if (preopenWin && typeof preopenWin === "object"){
+      try{
+        const doc = preopenWin.document;
+        doc.open();
+        doc.write(`<!doctype html><html><head><meta name="viewport" content="width=device-width,initial-scale=1"></head><body style="font-family:-apple-system,system-ui;padding:16px">
+          <a id="dl" download="${filename}" href="${url}" style="display:inline-block;padding:12px 14px;border:1px solid #ccc;border-radius:10px;text-decoration:none">Download</a>
+          <script>
+            (function(){
+              var a=document.getElementById('dl');
+              try{ a.click(); }catch(e){}
+              setTimeout(function(){ try{ window.close(); }catch(e){} }, 600);
+            })();
+          </script>
+        </body></html>`);
+        doc.close();
+        usedPreopenDownload = true;
+        setTimeout(()=>{ try{ URL.revokeObjectURL(url); }catch(_){ } }, 2000);
+        try{ toast("Backup creato", "green"); }catch(_){ }
+      }catch(_){ usedPreopenDownload = false; }
+    }
+
+    if (!usedPreopenDownload){
+      // Fallback: se non stiamo usando la finestra pre-aperta, chiediamo conferma finale
+      // e avviamo il download solo sul tap "Salva".
+      let doSave = true;
+      try{
+        const choice = await __confirmTwoActions__(`${label}: backup pronto`, "Salva", "Chiudi");
+        doSave = (choice === "yes");
+      }catch(_){ doSave = true; }
+
+      if (doSave){
+        const a = document.createElement("a");
+        a.href = url;
+        a.download = filename;
+        document.body.appendChild(a);
+        try{ a.click(); }catch(_){ }
+        setTimeout(()=>{
+          try{ document.body.removeChild(a); }catch(_){ }
+          try{ URL.revokeObjectURL(url); }catch(_){ }
+        }, 800);
+        try{ toast("Backup creato", "green"); }catch(_){ }
+      } else {
+        try{ URL.revokeObjectURL(url); }catch(_){ }
+      }
+    }
+
+  }catch(e){
+    try{ toast("Errore export", "orange"); }catch(_){}
+  }
+}
+// ===== /DB Import/Export (LOCAL) =====
+
 
 // Utility: parse importi (usato anche in guest list)
 function money(v){
@@ -76,15 +2794,19 @@ let __audioCtx = null;
 let __lastTapSfxAt = 0;
 
 function __loadAudioPref(){
-  try{ __audioEnabled = (localStorage.getItem(AUDIO_PREF_KEY) === "1"); }
-  catch(_){ __audioEnabled = false; }
+  try{
+    const stored = localStorage.getItem(AUDIO_PREF_KEY);
+    __audioEnabled = (stored === null) ? true : (stored === "1");
+  }catch(_){ __audioEnabled = true; }
 }
 function __setAudioPref(v){
   __audioEnabled = !!v;
   try{ localStorage.setItem(AUDIO_PREF_KEY, __audioEnabled ? "1" : "0"); }catch(_){}
   try{
-    const t = document.getElementById("audioToggle");
-    if (t) t.checked = __audioEnabled;
+    ["audioToggle", "opAudioToggle"].forEach((id) => {
+      const t = document.getElementById(id);
+      if (t) t.checked = __audioEnabled;
+    });
   }catch(_){}
 }
 function __ensureAudioCtx(){
@@ -206,17 +2928,19 @@ function __sfxSave(){
 function setupAudioUI(){
   __loadAudioPref();
 
-  // Aggancia toggle in Impostazioni (se presente)
+  // Aggancia toggle audio in Impostazioni admin + operatore
   try{
-    const t = document.getElementById("audioToggle");
-    if (t){
+    ["audioToggle", "opAudioToggle"].forEach((id) => {
+      const t = document.getElementById(id);
+      if (!t || t.dataset.audioBound === "1") return;
+      t.dataset.audioBound = "1";
       t.checked = __audioEnabled;
       t.addEventListener("change", () => {
         __ensureAudioCtx(); // unlock su gesto utente
         __setAudioPref(!!t.checked);
         if (__audioEnabled) __sfxTap();
       }, { passive:true });
-    }
+    });
   }catch(_){}
 
   // iOS: sblocca/resume AudioContext sul primo gesto (anche senza suono)
@@ -259,18 +2983,64 @@ function isOperatoreSession(sess){
   catch(_){ return false; }
 }
 
+function __fitHomeSyncBtn__(){
+  try{
+    const bar = document.getElementById("homeSyncBar");
+    const btn = document.getElementById("goDbSync");
+    if (!bar || !btn) return;
+
+    // Layout vincolato: linea sopra + tasto SYNC sotto (stack verticale).
+    // Resetta eventuali override inline che potevano mettere gli elementi "affiancati".
+    try{
+      bar.style.display = "";
+      bar.style.alignItems = "";
+      bar.style.justifyContent = "";
+    }catch(_){}
+
+    try{
+      btn.style.width = "";
+      btn.style.marginLeft = "";
+      btn.style.marginRight = "";
+    }catch(_){}
+  }catch(_){}
+}
+
 function applyRoleMode(){
   const isOp = !!(state && state.session && isOperatoreSession(state.session));
   try{ document.body.dataset.role = isOp ? "operatore" : "user"; }catch(_){ }
+  try{
+    const shoppingBtn = document.getElementById("goProdotti");
+    if (shoppingBtn){
+      shoppingBtn.setAttribute("aria-label", isOp ? "Lista spesa" : "Spesa");
+      const shoppingLbl = shoppingBtn.querySelector(".home-main-label");
+      if (shoppingLbl){
+        shoppingLbl.textContent = isOp ? "Lista spesa" : "Spesa";
+        shoppingLbl.classList.toggle("small", !!isOp);
+      }
+    }
+  }catch(_){ }
 
-  // HOME: mostra solo Pulizie / Lavanderia / Calendario per operatori
+  // Home: SYNC Firebase — tasto unico (Admin sempre; Operatore solo dopo collegamento Roster)
+  try{
+    const impTile = document.getElementById("goDbImport");
+    const expTile = document.getElementById("goDbExport");
+    if (impTile){ try{ impTile.hidden = true; impTile.style.display = "none"; }catch(_){ } }
+    if (expTile){ try{ expTile.hidden = true; expTile.style.display = "none"; }catch(_){ } }
+    const row = document.getElementById("operatorDbRow");
+    if (row) row.hidden = true;
+
+    const bar = document.getElementById("homeSyncBar");
+    if (bar){
+      try{ bar.hidden = false; bar.style.display = ""; }catch(_){ }
+    }
+  }catch(_){ }
+// HOME operatore: mostra solo Pulizie / Lavanderia / Calendario / Spesa in griglia 2x2
   if (isOp){
     const hideIds = [
       "goOspite",
-      "openLauncher",
       "goTassaSoggiorno",
       "goStatistiche",
-      "homeSettingsTop",
+      "goOrePuliziaHome",
             // icone/shortcuts ospiti duplicati (se presenti)
       "goOspiti",
     ];
@@ -281,6 +3051,12 @@ function applyRoleMode(){
       try{ el.style.display = "none"; }catch(_){ }
     });
 
+
+    // Impostazioni: per Operatore non mostrare il popup Database locale (solo Admin)
+    try{
+      const sdb = document.getElementById("settingsDbBtn");
+      if (sdb){ sdb.hidden = true; try{ sdb.style.display = "none"; }catch(_){ } }
+    }catch(_){}
     // Header tools: nascondi tools non consentiti
     try{ const ospitiTopTools = document.getElementById("ospitiTopTools"); if (ospitiTopTools) ospitiTopTools.hidden = true; }catch(_){ }
     try{ const speseTopTools = document.getElementById("speseTopTools"); if (speseTopTools) speseTopTools.hidden = true; }catch(_){ }
@@ -295,7 +3071,8 @@ function applyRoleMode(){
 
 function __parseBuildVersion(v){
   try{
-    const m = String(v||'').match(/dDAE_(\d+)\.(\d+)/);
+    const raw = String(v||'').trim();
+    const m = raw.match(/(?:dDAE_)?(\d+)\.(\d+)/i);
     if(!m) return null;
     return {maj:Number(m[1]), min:Number(m[2])};
   }catch(_){ return null; }
@@ -309,7 +3086,7 @@ function __isRemoteNewer(remote, local){
 }
 
 // =========================
-// AUTH + SESSION (dDAE_2.212)
+// AUTH + SESSION (dDAE_1.020)
 // =========================
 
 const __SESSION_KEY = "dDAE_session_v2";
@@ -346,32 +3123,282 @@ function saveExerciseYear(year){
   try{ localStorage.setItem(__YEAR_KEY, String(year || "")); } catch(_){ }
 }
 
+function __applyExerciseYearChange__(nextYear){
+  const y = String(nextYear || "").trim();
+  if (!y) return false;
+  state.exerciseYear = y;
+  saveExerciseYear(state.exerciseYear);
+  updateYearPill();
+  try{ __applyContext__({ force:true }); }catch(_){ }
+  try{
+    if (y){
+      setPresetValue("ytd");
+      setPeriod(`${y}-01-01`, `${y}-12-31`);
+    }
+  }catch(_){ }
+  invalidateApiCache();
+  try{ refreshHome(); }catch(_){ }
+  try{ if (state.page==="spese") ensurePeriodData({showLoader:true,force:true}).then(()=>{ try{ renderSpese(); }catch(_){ } }); }catch(_){ }
+  try{ if (state.page==="ospiti") ensureGuestsForPeriod(true); }catch(_){ }
+  try{ if (state.page==="statistiche") loadStatistichePage({ force:true }); }catch(_){ }
+  try{ if (state.page==="pulizie") loadPuliziePage(); }catch(_){ }
+  try{ if (state.page==="lavanderia") loadLavanderiaPage(); }catch(_){ }
+  try{ if (state.page==="calendario") renderCalendar(); }catch(_){ }
+  try{ updateSettingsAccountName(); }catch(_){ }
+  return true;
+}
+
+const __SETTINGS_YEAR_WHEEL_ROW__ = 60;
+const __SETTINGS_YEAR_WHEEL_PAD_ROWS__ = 2;
+let __settingsYearWheelTimer__ = null;
+let __settingsYearWheelApplying__ = false;
+
+function __getSettingsYearValues__(){
+  const years = [];
+  for (let y = 2100; y >= 2000; y -= 1) years.push(String(y));
+  return years;
+}
+
+function __populateSettingsYearPicker__(selectedYear){
+  const wheel = document.getElementById("settingsYearWheel");
+  if (!wheel) return;
+  const years = __getSettingsYearValues__();
+  const selected = String(selectedYear || state.exerciseYear || loadExerciseYear() || new Date().getFullYear());
+  const pad = '<div class="settings-year-wheel-spacer" aria-hidden="true"></div>'.repeat(__SETTINGS_YEAR_WHEEL_PAD_ROWS__);
+  wheel.innerHTML = pad + years.map((year) => `<div class="settings-year-wheel-item${year === selected ? ' is-selected' : ''}" data-year="${year}" role="option" aria-selected="${year === selected ? 'true' : 'false'}">${year}</div>`).join("") + pad;
+}
+
+function __highlightSettingsYearWheel__(year){
+  const wheel = document.getElementById("settingsYearWheel");
+  if (!wheel) return;
+  const target = String(year || "").trim();
+  wheel.querySelectorAll('.settings-year-wheel-item').forEach((item) => {
+    const on = item.getAttribute('data-year') === target;
+    item.classList.toggle('is-selected', on);
+    item.setAttribute('aria-selected', on ? 'true' : 'false');
+  });
+}
+
+function __getSettingsYearWheelValue__(){
+  const wheel = document.getElementById("settingsYearWheel");
+  if (!wheel) return String(state.exerciseYear || loadExerciseYear() || new Date().getFullYear());
+  const years = __getSettingsYearValues__();
+  const rawIndex = Math.round((wheel.scrollTop || 0) / __SETTINGS_YEAR_WHEEL_ROW__);
+  const index = Math.max(0, Math.min(years.length - 1, rawIndex));
+  return years[index] || years[0];
+}
+
+function __scrollSettingsYearWheelTo__(year, behavior){
+  const wheel = document.getElementById("settingsYearWheel");
+  if (!wheel) return;
+  const years = __getSettingsYearValues__();
+  const target = String(year || state.exerciseYear || loadExerciseYear() || new Date().getFullYear());
+  const index = Math.max(0, years.indexOf(target));
+  const top = index * __SETTINGS_YEAR_WHEEL_ROW__;
+  try{ wheel.scrollTo({ top, behavior: behavior || 'auto' }); }
+  catch(_){ wheel.scrollTop = top; }
+  __highlightSettingsYearWheel__(target);
+}
+
+function __applySettingsYearWheelSelection__(opts){
+  if (__settingsYearWheelApplying__) return;
+  __settingsYearWheelApplying__ = true;
+  const next = __getSettingsYearWheelValue__();
+  const current = String(state.exerciseYear || loadExerciseYear() || new Date().getFullYear());
+  __highlightSettingsYearWheel__(next);
+  __scrollSettingsYearWheelTo__(next, (opts && opts.snapOnly) ? 'auto' : 'smooth');
+  if (next && next !== current){
+    try{ __applyExerciseYearChange__(String(next)); }catch(_){ }
+  }
+  requestAnimationFrame(() => { __settingsYearWheelApplying__ = false; });
+}
+
+function __openSettingsYearModal__(){
+  const modal = document.getElementById("settingsYearModal");
+  const wheel = document.getElementById("settingsYearWheel");
+  if (!modal || !wheel) return;
+  const current = String(state.exerciseYear || loadExerciseYear() || new Date().getFullYear());
+  __populateSettingsYearPicker__(current);
+  modal.hidden = false;
+  modal.setAttribute("aria-hidden", "false");
+  __settingsYearWheelApplying__ = false;
+  requestAnimationFrame(() => {
+    __scrollSettingsYearWheelTo__(current, 'auto');
+    try{ wheel.focus({ preventScroll:true }); }catch(_){ try{ wheel.focus(); }catch(__){ } }
+  });
+}
+
+function __closeSettingsYearModal__(){
+  const modal = document.getElementById("settingsYearModal");
+  if (!modal) return;
+  try{ clearTimeout(__settingsYearWheelTimer__); }catch(_){ }
+  modal.hidden = true;
+  modal.setAttribute("aria-hidden", "true");
+}
+
+function __saveSettingsYearModal__(){
+  __applySettingsYearWheelSelection__({ snapOnly:true });
+  __closeSettingsYearModal__();
+}
+
+function __pickExerciseYearFromSettings__(){
+  __openSettingsYearModal__();
+}
+
+// =========================
+// Context change (account / anno) — reset cache + state
+// =========================
+function __resetInMemoryData__(){
+  try{
+    for (const k of Object.keys(state || {})){
+      const v = state[k];
+      if (!v || typeof v !== "object") continue;
+      if (Array.isArray(v.items)) v.items.length = 0;
+      if (Array.isArray(v.rows)) v.rows.length = 0;
+      if ("loadedAt" in v) try{ v.loadedAt = 0; }catch(_){}
+      if ("loaded" in v) try{ v.loaded = false; }catch(_){}
+      if ("byId" in v && v.byId && typeof v.byId === "object" && !Array.isArray(v.byId)) try{ v.byId = {}; }catch(_){}
+      if ("map" in v && v.map && typeof v.map === "object" && !Array.isArray(v.map)) try{ v.map = {}; }catch(_){}
+      if ("cache" in v && v.cache && typeof v.cache === "object") try{ v.cache = {}; }catch(_){}
+    }
+  }catch(_){}
+}
+
+function __applyContext__({ force } = {}){
+  try{
+    const sig = __ctxSig__();
+    if (force || state.__ctxSig !== sig){
+      state.__ctxSig = sig;
+      try{ __resetInMemoryData__(); }catch(_){}
+      try{ invalidateApiCache(); }catch(_){}
+    }
+  }catch(_){}
+}
+
+// Cancella COMPLETAMENTE i dati locali del browser (tutti account/anni)
+async function __wipeBrowserDb__(){
+  try{ invalidateApiCache(); }catch(_){}
+  try{ __lsClearAll(); }catch(_){}
+
+  try{
+    const toDel = [];
+    for (let i=0; i<localStorage.length; i++){
+      const k = localStorage.key(i);
+      if (!k) continue;
+      if (k.startsWith(__lsPrefixBase) || k.startsWith("ddae_") || k.startsWith("dDAE_")) toDel.push(k);
+    }
+    toDel.forEach(k => { try{ localStorage.removeItem(k); }catch(_){ }});
+  }catch(_){}
+
+  try{ localStorage.removeItem(__SESSION_KEY); }catch(_){}
+  try{ localStorage.removeItem(__YEAR_KEY); }catch(_){}
+
+  try{
+    await new Promise((resolve)=> {
+      try{
+        const rq = indexedDB.deleteDatabase(__IDB_NAME__);
+        rq.onsuccess = () => resolve(true);
+        rq.onerror = () => resolve(false);
+        rq.onblocked = () => resolve(false);
+      }catch(_){ resolve(false); }
+    });
+  }catch(_){}
+
+  try{
+    if (window.caches && caches.keys){
+      const ks = await caches.keys();
+      await Promise.all(ks.map(k => {
+        if (k && (String(k).toLowerCase().includes("ddae") || String(k).toLowerCase().includes("daed"))) {
+          return caches.delete(k);
+        }
+        return Promise.resolve(false);
+      }));
+    }
+  }catch(_){}
+
+  try{
+    if (navigator.serviceWorker && navigator.serviceWorker.getRegistrations){
+      const regs = await navigator.serviceWorker.getRegistrations();
+      await Promise.all(regs.map(r => {
+        try{
+          const url = String(r && r.active && r.active.scriptURL ? r.active.scriptURL : "");
+          if (!url || url.includes("service-worker")) return r.unregister();
+        }catch(_){}
+        return Promise.resolve(false);
+      }));
+    }
+  }catch(_){}
+}
+
+function formatPulizieTopbarDateIT(d){
+  try{
+    const dt = (d instanceof Date) ? d : new Date(d);
+    if (isNaN(dt)) return "";
+    const wd = __capitalizeLocale__(__getWeekdayLongForLocale__(dt));
+    const month = __capitalizeLocale__(dt.toLocaleDateString(__getCurrentLocale__(), { month:"long" }));
+    return `${wd} ${dt.getDate()} ${month}`.trim();
+  }catch(_){ return ""; }
+}
+
+function __setTopbarCenterLabel__(){
+  try{
+    const el = document.getElementById("topbarYear");
+    if (!el) return;
+    if (state && state.page === "calendario"){
+      const a = (state.calendar && state.calendar.anchor) ? state.calendar.anchor : new Date();
+      el.textContent = monthNameIT(a).toUpperCase();
+    } else if (state && state.page === "pulizie"){
+      const base = (state && state.session && isOperatoreSession(state.session)) ? new Date() : (state.cleanDay ? new Date(state.cleanDay) : new Date());
+      el.textContent = formatPulizieTopbarDateIT(startOfLocalDay(base)) || "Daedalium";
+    } else {
+      el.textContent = "Daedalium";
+    }
+  }catch(_){ }
+}
+
 function updateYearPill(){
-  const pill = document.getElementById("yearPill");
-  if (!pill) return;
-  const y = state.exerciseYear;
-  if (!y){ pill.hidden = true; return; }
-  pill.textContent = `${y}`;
-  pill.hidden = false;
+  const y = String(state.exerciseYear || loadExerciseYear() || "").trim();
+  const pills = [
+    document.getElementById("yearPill"),
+    document.getElementById("homeYearPill")
+  ].filter(Boolean);
+
+  pills.forEach((pill) => {
+    if (!y){ pill.hidden = true; }
+    else{
+      pill.textContent = y;
+      pill.hidden = false;
+    }
+  });
+
+  // Topbar: anno (default) o mese (solo Calendario)
+  try{ __setTopbarCenterLabel__(); }catch(_){ }
+
   try{ updateSettingsTabs(); }catch(_){ }
 }
 
 function updateSettingsTabs(){
   try{
-    const yEl = document.getElementById("settingsYearTab");
-    const aEl = document.getElementById("settingsAccountTab");
+    const y = String(state.exerciseYear || loadExerciseYear() || new Date().getFullYear() || "").trim();
+    const yLabel = y || "—";
+    const s = state.session || {};
+    const raw = (s.accountName || s.username || s.user || s.nome || s.name || s.email || "").toString().trim();
+    const userLabel = raw ? raw : "—";
+    const el = document.getElementById("settingsAccountYearTab");
+    if (el) el.textContent = `${userLabel} - ${yLabel}`;
+    const yearPill = document.getElementById("settingsYearPill");
+    if (yearPill) yearPill.textContent = yLabel;
+    const opYearPill = document.getElementById("opSettingsYearPill");
+    if (opYearPill) opYearPill.textContent = userLabel;
+  }catch(_){ }
+  try{ updateSettingsAccountName(); }catch(_){ }
+}
 
-    if (yEl){
-      const y = String(state.exerciseYear || "").trim();
-      yEl.textContent = y ? `${y}` : "—";
-    }
-
-    if (aEl){
-      const s = state.session || {};
-      const raw = (s.username || s.user || s.nome || s.name || s.email || "").toString().trim();
-      const label = raw ? raw : "—";
-      aEl.textContent = `${label}`;
-    }
+function updateSettingsAccountName(){
+  try{
+    const s = state.session || {};
+    const raw = String(s.accountName || s.username || s.user || s.nome || s.name || s.email || "").trim();
+    ["settingsAccountName","opSettingsAccountName"].forEach((id)=>{ const el = document.getElementById(id); if (el) el.textContent = raw || "—"; });
   }catch(_){ }
 }
 
@@ -379,39 +3406,91 @@ function updateSettingsTabs(){
 // Mostra la build a runtime (se il JS è vecchio, lo vedi subito)
 (function syncBuildLabel(){
   try{
-    const el = document.getElementById("buildText");
-    if (el) el.textContent = BUILD_VERSION;
+    ["buildText","settingsBuildText","opSettingsBuildText"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = `dDAE_${BUILD_VERSION}`;
+    });
+    try{
+      const box = document.getElementById("homeOperatorDbBox");
+      if (box){
+        const role = String((state && state.session && (state.session.ruolo || state.session.role || state.session.tipo || state.session.account_type)) || "").toLowerCase();
+        box.hidden = !(role.includes("oper"));
+      }
+    }catch(_){}
+
   }catch(_){}
+  try{
+    const pendingBuild = String(sessionStorage.getItem("dDAE_pending_build") || "").trim();
+    if (pendingBuild && !__isRemoteNewer(pendingBuild, BUILD_VERSION) && !__isRemoteNewer(BUILD_VERSION, pendingBuild)) {
+      sessionStorage.removeItem("dDAE_pending_build");
+      sessionStorage.removeItem("dDAE_update_attempt_build");
+      sessionStorage.removeItem("dDAE_update_attempt_at");
+    }
+  }catch(_){ }
 })();
-// Aggiornamento "hard" anti-cache iOS:
-// Legge ./version.json (sempre no-store) e se il build remoto è diverso
-// svuota cache, deregistra SW e ricarica con cache-bust.
+try{
+  const pendingBuild = String(sessionStorage.getItem("dDAE_pending_build") || "").trim();
+  if (pendingBuild) {
+    ["buildText","settingsBuildText","opSettingsBuildText"].forEach((id) => {
+      const el = document.getElementById(id);
+      if (el) el.textContent = pendingBuild;
+    });
+  }
+}catch(_){ }
+// Aggiornamento build iOS: niente purge aggressivo di cache/SW.
+// Se esiste una build remota più nuova, chiediamo l'update del SW e facciamo al massimo
+// un solo reload con cache-bust per build, evitando loop/toast invasivi.
 async function hardUpdateCheck(){
   try{
+    if (window.__ddaeHardUpdating) return;
     const res = await fetch(`./version.json?ts=${Date.now()}`, { cache: "no-store" });
     if (!res.ok) return;
     const data = await res.json();
     const remote = String((data && (data.build || data.version || data.ver)) || "").trim();
-    if (!remote || !__isRemoteNewer(remote, BUILD_VERSION)) return;
+    if (!remote){
+      try{ sessionStorage.removeItem("dDAE_pending_build"); }catch(_){ }
+      try{ sessionStorage.removeItem("dDAE_update_attempt_build"); }catch(_){ }
+      try{ sessionStorage.removeItem("dDAE_update_attempt_at"); }catch(_){ }
+      return;
+    }
+    if (!__isRemoteNewer(remote, BUILD_VERSION)) {
+      try{ sessionStorage.removeItem("dDAE_pending_build"); }catch(_){ }
+      try{ sessionStorage.removeItem("dDAE_update_attempt_build"); }catch(_){ }
+      try{ sessionStorage.removeItem("dDAE_update_attempt_at"); }catch(_){ }
+      return;
+    }
 
-    try{ toast(`Aggiornamento ${remote}…`); } catch(_) {}
+    const lastBuild = String(sessionStorage.getItem("dDAE_update_attempt_build") || "").trim();
+    const lastAt = parseInt(String(sessionStorage.getItem("dDAE_update_attempt_at") || "0"), 10) || 0;
+    const tooSoon = (lastBuild === remote) && ((Date.now() - lastAt) < 15000);
+    if (tooSoon) return;
+
+    window.__ddaeHardUpdating = true;
+    try{ sessionStorage.setItem("dDAE_pending_build", remote); }catch(_){ }
+    try{ sessionStorage.setItem("dDAE_update_attempt_build", remote); }catch(_){ }
+    try{ sessionStorage.setItem("dDAE_update_attempt_at", String(Date.now())); }catch(_){ }
 
     try{
       if ("serviceWorker" in navigator){
-        const regs = await navigator.serviceWorker.getRegistrations();
-        await Promise.all(regs.map(r => r.unregister()));
+        const reg = await navigator.serviceWorker.getRegistration();
+        if (reg){
+          try{ await reg.update(); }catch(_){ }
+          try{ if (reg.waiting) reg.waiting.postMessage({ type: "SKIP_WAITING" }); }catch(_){ }
+        }
       }
-    }catch(_){}
+    }catch(_){ }
 
-    try{
-      if (window.caches){
-        const keys = await caches.keys();
-        await Promise.all(keys.map(k => caches.delete(k)));
-      }
-    }catch(_){}
+    const target = `./index.html?v=${encodeURIComponent(remote)}&r=${Date.now()}`;
+    const href = String(location.href || "");
+    if (!href.includes(`v=${encodeURIComponent(remote)}`)) {
+      window.location.replace(target);
+      return;
+    }
 
-    location.href = `./?v=${encodeURIComponent(remote)}&r=${Date.now()}`;
-  }catch(_){}
+    window.__ddaeHardUpdating = false;
+  }catch(_){
+    window.__ddaeHardUpdating = false;
+  }
 }
 // ===== Performance mode (iOS/Safari PWA) =====
 const IS_IOS = (() => {
@@ -565,6 +3644,20 @@ function __applyFormValue(id, v){
   } catch (_) {}
 }
 
+function __captureSyncRestoreState(){
+  try{
+    const out = __captureUiState();
+    const currentPage = __sanitizePage(state.page)
+      || __sanitizePage(document.body?.dataset?.page)
+      || __readHashPage()
+      || "home";
+    out.page = currentPage;
+    return out;
+  }catch(_){
+    return { page: (__sanitizePage(state.page) || "home") };
+  }
+}
+
 function __captureUiState(){
   // IMPORTANT:
   // Salviamo lo stato della scheda ospite SOLO se l'utente e' davvero nella pagina "ospite".
@@ -595,6 +3688,8 @@ function __captureUiState(){
         guestCheckIn: __captureFormValue("guestCheckIn"),
         guestCheckOut: __captureFormValue("guestCheckOut"),
         guestTotal: __captureFormValue("guestTotal"),
+        guestChannel: __captureFormValue("guestChannel"),
+        guestChannelCommission: __captureFormValue("guestChannelCommission"),
         guestBooking: __captureFormValue("guestBooking"),
         guestDeposit: __captureFormValue("guestDeposit"),
         guestSaldo: __captureFormValue("guestSaldo"),
@@ -652,7 +3747,10 @@ function __applyUiState(restore){
       __applyFormValue("guestCheckIn", f.guestCheckIn);
       __applyFormValue("guestCheckOut", f.guestCheckOut);
       __applyFormValue("guestTotal", f.guestTotal);
+      __applyFormValue("guestChannel", f.guestChannel);
+      __applyFormValue("guestChannelCommission", f.guestChannelCommission);
       __applyFormValue("guestBooking", f.guestBooking);
+      try { applySelectedChannelToGuestForm(f.guestChannel, { preserveManual:true }); } catch (_) {}
       __applyFormValue("guestDeposit", f.guestDeposit);
       __applyFormValue("guestSaldo", f.guestSaldo);
       try { updateGuestRemaining(); } catch (_) {}
@@ -760,7 +3858,7 @@ function truthy(v){
   return (s === "1" || s === "true" || s === "yes" || s === "si" || s === "on");
 }
 
-// dDAE_2.212 — error overlay: evita blocchi silenziosi su iPhone PWA
+// dDAE_1.020 — error overlay: evita blocchi silenziosi su iPhone PWA
 window.addEventListener("error", (e) => {
   try {
     const msg = (e?.message || "Errore JS") + (e?.filename ? ` @ ${e.filename.split("/").pop()}:${e.lineno||0}` : "");
@@ -799,6 +3897,9 @@ const state = {
   pendingReceipts: [],
   pendingReceiptsGuests: [],
   pendingReceiptsCount: 0,
+  guestAlerts: { left: [], right: [] },
+  guestAlertCounts: { left: 0, right: 0 },
+  guestAlertModalSide: "left",
 
   guestEditId: null,
   guestMode: "create",
@@ -863,39 +3964,295 @@ const loadingState = {
 };
 
 
-// ===== Sync LED (read/write) =====
-const __syncState = { reads: 0, writes: 0 };
+// ===== Alert LED ospiti (topbar) =====
+const __guestAlertState = { timer: null, lastTick: 0 };
 
-function __syncLedUpdate(){
-  const elRead = document.getElementById("dbLedRead");
-  const elWrite = document.getElementById("dbLedWrite");
+function _guestAlertDismissKey(side){
+  const uid = (state && state.session && state.session.user_id) ? String(state.session.user_id) : 'anon';
+  const year = (state && state.exerciseYear) ? String(state.exerciseYear) : 'year';
+  return `dDAE_guest_alert_dismissed_${uid}_${year}_${side}`;
+}
+function _readGuestAlertDismissed(side){
+  try{
+    const raw = localStorage.getItem(_guestAlertDismissKey(side));
+    const arr = JSON.parse(raw || '[]');
+    return Array.isArray(arr) ? new Set(arr.map(x => String(x || '').trim()).filter(Boolean)) : new Set();
+  }catch(_){ return new Set(); }
+}
+function _writeGuestAlertDismissed(side, set){
+  try{ localStorage.setItem(_guestAlertDismissKey(side), JSON.stringify(Array.from(set || []))); }catch(_){ }
+}
+function dismissGuestAlert(side, guestId){
+  const id = String(guestId || '').trim();
+  if (!id) return;
+  const set = _readGuestAlertDismissed(side);
+  set.add(id);
+  _writeGuestAlertDismissed(side, set);
+  try{ refreshTopGuestAlerts({ force:true, keepModal:true }); }catch(_){ }
+}
+function clearDismissedGuestAlert(side, guestId){
+  const id = String(guestId || '').trim();
+  if (!id) return;
+  const set = _readGuestAlertDismissed(side);
+  if (set.delete(id)) _writeGuestAlertDismissed(side, set);
+}
+function _guestStayFinancials(g){
+  const total = money(g?.importo_prenotazione ?? g?.importo_prenota ?? g?.total ?? g?.importo_booking ?? 0);
+  const services = money(g?.servizi_totale ?? g?.serviziTotal ?? g?.importo_servizi ?? 0);
+  const dep = money(g?.acconto_importo ?? g?.accontoImporto ?? g?.deposit ?? 0);
+  const saldo = money(g?.saldo_pagato ?? g?.saldoPagato ?? g?.saldo ?? 0);
+  const remaining = (total + services) - dep - saldo;
+  return { total, services, dep, saldo, remaining };
+}
+function _guestReceiptMissingNow(g){
+  const missing = [];
+  const dep = _num(g?.acconto_importo ?? g?.accontoImporto ?? 0);
+  const depType = (g?.acconto_tipo ?? g?.accontoTipo ?? '');
+  if (dep > 0 && _isElectronicTypeStr_(depType) && !_isRicevutaFlag(g, 'acconto')) missing.push('Acconto elettronico senza ricevuta');
+  const saldo = _num(g?.saldo_pagato ?? g?.saldoPagato ?? g?.saldo ?? 0);
+  const saldoType = (g?.saldo_tipo ?? g?.saldoTipo ?? '');
+  if (saldo > 0 && _isElectronicTypeStr_(saldoType) && !_isRicevutaFlag(g, 'saldo')) missing.push('Saldo elettronico senza ricevuta');
+  return missing;
+}
+function computeTopGuestAlerts(guests){
+  const now = Date.now();
+  const twelveHoursMs = 12 * 60 * 60 * 1000;
+  const twentyFourHoursMs = 24 * 60 * 60 * 1000;
+  const leftDismissed = _readGuestAlertDismissed('left');
+  const rightDismissed = _readGuestAlertDismissed('right');
+  const left = [];
+  const right = [];
+  const src = Array.isArray(guests) ? guests : [];
+  for (const g of src){
+    const guestId = guestIdOf(g);
+    if (!guestId) continue;
+    const rawName = g?.nome ?? g?.name ?? '';
+    const name = collapseSpaces(String(rawName || '').trim()) || 'Prenotazione';
+    const checkInTs = parseDateTs(g?.check_in ?? g?.checkIn ?? g?.arrivo ?? g?.dataArrivo ?? '');
+    const checkOutTs = parseDateTs(g?.check_out ?? g?.checkOut ?? g?.checkout ?? g?.data_check_out ?? '');
+    const psReg = truthy(g?.ps_registrato ?? g?.psRegistrato);
+    const istatReg = truthy(g?.istat_registrato ?? g?.istatRegistrato);
 
-  const w = __syncState.writes|0;
-  const r = __syncState.reads|0;
+    if (checkInTs && now >= (checkInTs + twelveHoursMs)){
+      const missingPs = !psReg;
+      const missingIstat = !istatReg;
+      if (missingPs || missingIstat){
+        if (!leftDismissed.has(guestId)){
+          left.push({
+            id: guestId,
+            name,
+            guest: g,
+            details: [
+              missingPs ? 'Registrazione Polizia mancante' : '',
+              missingIstat ? 'Registrazione ISTAT mancante' : ''
+            ].filter(Boolean),
+            mode: (missingPs && missingIstat) ? 'dual' : (missingPs ? 'black' : 'sky'),
+            tags: [
+              missingPs ? { label: 'Polizia', cls: 'tag-black' } : null,
+              missingIstat ? { label: 'ISTAT', cls: 'tag-sky' } : null
+            ].filter(Boolean),
+            checkInTs,
+            checkOutTs
+          });
+        }
+      }else{
+        clearDismissedGuestAlert('left', guestId);
+      }
+    }else if (psReg && istatReg){
+      clearDismissedGuestAlert('left', guestId);
+    }
 
-  if (elRead) elRead.classList.toggle("is-on", r > 0);
-  if (elWrite) elWrite.classList.toggle("is-on", w > 0);
-
-  // Compat (se esiste ancora in vecchi markup)
-  const legacy = document.getElementById("syncLed");
-  if (legacy){
-    const mode = (w>0) ? "write" : (r>0 ? "read" : "off");
-    legacy.setAttribute("data-sync", mode);
+    const fin = _guestStayFinancials(g);
+    const receiptMissing = _guestReceiptMissingNow(g);
+    const dueSoon = !!(checkOutTs && (checkOutTs - now) <= twentyFourHoursMs && (checkOutTs - now) >= 0 && isFinite(fin.remaining) && fin.remaining > 0.0001);
+    const receiptAlert = receiptMissing.length > 0;
+    if (dueSoon || receiptAlert){
+      if (!rightDismissed.has(guestId)){
+        right.push({
+          id: guestId,
+          name,
+          guest: g,
+          details: [
+            dueSoon ? 'Check-out entro 24 ore con pagamento mancante' : '',
+            ...receiptMissing
+          ].filter(Boolean),
+          mode: (dueSoon && receiptAlert) ? 'dual' : (receiptAlert ? 'red' : 'yellow'),
+          tags: [
+            dueSoon ? { label: 'Pagamento', cls: 'tag-yellow' } : null,
+            receiptAlert ? { label: 'Ricevuta', cls: 'tag-red' } : null
+          ].filter(Boolean),
+          checkInTs,
+          checkOutTs
+        });
+      }
+    }else{
+      clearDismissedGuestAlert('right', guestId);
+    }
+  }
+  left.sort((a,b) => (a.checkInTs || 0) - (b.checkInTs || 0));
+  right.sort((a,b) => {
+    const ta = (a.checkOutTs == null) ? 1e18 : Number(a.checkOutTs);
+    const tb = (b.checkOutTs == null) ? 1e18 : Number(b.checkOutTs);
+    return ta - tb;
+  });
+  return { left, right };
+}
+let __topGuestDualPhase = 0;
+let __topGuestDualTimer = null;
+function paintTopGuestDualLed(side){
+  const el = document.getElementById(side === 'right' ? 'dbLedWrite' : 'dbLedRead');
+  if (!el) return;
+  el.classList.remove('is-black','is-sky','is-yellow','is-red','is-blink');
+  if (side === 'left'){
+    el.classList.add(__topGuestDualPhase ? 'is-sky' : 'is-black');
+  }else{
+    el.classList.add(__topGuestDualPhase ? 'is-red' : 'is-yellow');
   }
 }
-
-function __syncLedBegin(method){
-  const m = String(method||"GET").toUpperCase();
-  if (m === "GET") __syncState.reads += 1;
-  else __syncState.writes += 1;
-  __syncLedUpdate();
+function syncTopGuestDualTimer(){
+  const leftDual = !!document.getElementById('dbLedRead')?.classList.contains('is-dual-left');
+  const rightDual = !!document.getElementById('dbLedWrite')?.classList.contains('is-dual-right');
+  if (!(leftDual || rightDual)){
+    if (__topGuestDualTimer){ clearInterval(__topGuestDualTimer); __topGuestDualTimer = null; }
+    return;
+  }
+  if (__topGuestDualTimer) return;
+  __topGuestDualTimer = setInterval(() => {
+    __topGuestDualPhase = __topGuestDualPhase ? 0 : 1;
+    try{ if (document.getElementById('dbLedRead')?.classList.contains('is-dual-left')) paintTopGuestDualLed('left'); }catch(_){ }
+    try{ if (document.getElementById('dbLedWrite')?.classList.contains('is-dual-right')) paintTopGuestDualLed('right'); }catch(_){ }
+  }, 700);
 }
-function __syncLedEnd(method){
-  const m = String(method||"GET").toUpperCase();
-  if (m === "GET") __syncState.reads = Math.max(0, (__syncState.reads|0) - 1);
-  else __syncState.writes = Math.max(0, (__syncState.writes|0) - 1);
-  __syncLedUpdate();
+function applyTopGuestAlertLed(side){
+  const el = document.getElementById(side === 'right' ? 'dbLedWrite' : 'dbLedRead');
+  if (!el) return;
+  const items = (state.guestAlerts && Array.isArray(state.guestAlerts[side])) ? state.guestAlerts[side] : [];
+  const hasBlack = items.some(x => x.mode === 'black' || x.mode === 'dual');
+  const hasSky = items.some(x => x.mode === 'sky' || x.mode === 'dual');
+  const hasYellow = items.some(x => x.mode === 'yellow' || x.mode === 'dual');
+  const hasRed = items.some(x => x.mode === 'red' || x.mode === 'dual');
+  el.classList.remove('is-off','is-black','is-sky','is-yellow','is-red','is-blink','is-dual-left','is-dual-right');
+  if (!items.length){
+    el.classList.add('is-off');
+    el.setAttribute('aria-label', side === 'left' ? 'Nessun alert registrazioni ospiti' : 'Nessun alert pagamenti ospiti');
+    syncTopGuestDualTimer();
+    return;
+  }
+  if (side === 'left'){
+    if (hasBlack && hasSky){
+      el.classList.add('is-dual-left');
+      paintTopGuestDualLed('left');
+    }
+    else if (hasBlack){ el.classList.add('is-black','is-blink'); }
+    else { el.classList.add('is-sky','is-blink'); }
+    el.setAttribute('aria-label', `Alert registrazioni ospiti (${items.length})`);
+  }else{
+    if (hasYellow && hasRed){
+      el.classList.add('is-dual-right');
+      paintTopGuestDualLed('right');
+    }
+    else if (hasRed){ el.classList.add('is-red','is-blink'); }
+    else { el.classList.add('is-yellow','is-blink'); }
+    el.setAttribute('aria-label', `Alert pagamenti ospiti (${items.length})`);
+  }
+  syncTopGuestDualTimer();
 }
+function updateTopGuestAlertLeds(){
+  try{ applyTopGuestAlertLed('left'); }catch(_){ }
+  try{ applyTopGuestAlertLed('right'); }catch(_){ }
+}
+function openGuestAlertModal(side){
+  const modal = document.getElementById('guestAlertModal');
+  const title = document.getElementById('guestAlertTitle');
+  const list = document.getElementById('guestAlertList');
+  if (!modal || !title || !list) return;
+  state.guestAlertModalSide = (side === 'right') ? 'right' : 'left';
+  const items = (state.guestAlerts && Array.isArray(state.guestAlerts[state.guestAlertModalSide])) ? state.guestAlerts[state.guestAlertModalSide] : [];
+  title.textContent = state.guestAlertModalSide === 'right' ? `Alert pagamenti (${items.length})` : `Alert registrazioni (${items.length})`;
+  list.innerHTML = '';
+  if (!items.length){
+    const empty = document.createElement('div');
+    empty.className = 'guest-alert-empty';
+    empty.textContent = 'Nessun ospite in alert.';
+    list.appendChild(empty);
+  } else {
+    items.forEach((it) => {
+      const card = document.createElement('div');
+      card.className = 'guest-alert-card';
+      const tagsHtml = (it.tags || []).map(tag => `<span class="guest-alert-tag ${escapeHtml(tag.cls || '')}">${escapeHtml(tag.label || '')}</span>`).join('');
+      const details = (it.details || []).map(x => escapeHtml(x)).join(' · ');
+      const range = formatRangeCompactIT(it.guest?.check_in ?? it.guest?.checkIn ?? '', it.guest?.check_out ?? it.guest?.checkOut ?? '');
+      card.innerHTML = `<div class="guest-alert-copy"><div class="guest-alert-name">${escapeHtml(it.name)}</div><div class="guest-alert-meta">${details || 'Alert attivo'}</div>${range ? `<div class="guest-alert-meta">${escapeHtml(range)}</div>` : ''}<div class="guest-alert-tags">${tagsHtml}</div></div><button type="button" class="guest-alert-dismiss" aria-label="Nascondi alert ospite">✕</button>`;
+      const closeBtn = card.querySelector('.guest-alert-dismiss');
+      if (closeBtn) bindFastTap(closeBtn, () => dismissGuestAlert(state.guestAlertModalSide, it.id));
+      list.appendChild(card);
+    });
+  }
+  modal.hidden = false;
+  modal.setAttribute('aria-hidden', 'false');
+}
+function closeGuestAlertModal(){
+  const modal = document.getElementById('guestAlertModal');
+  if (!modal) return;
+  modal.hidden = true;
+  modal.setAttribute('aria-hidden', 'true');
+}
+async function refreshTopGuestAlerts(opts){
+  opts = opts || {};
+  try{
+    if (!(state.session && state.session.user_id)) {
+      state.guestAlerts = { left: [], right: [] };
+      state.guestAlertCounts = { left: 0, right: 0 };
+      updateTopGuestAlertLeds();
+      if (!opts.keepModal) closeGuestAlertModal();
+      return;
+    }
+    let rows = [];
+    try{
+      if (!opts.force){
+        const cached = Array.isArray(state.ospiti) && state.ospiti.length ? state.ospiti : (Array.isArray(state.guests) && state.guests.length ? state.guests : null);
+        if (cached) rows = cached;
+      }
+      if (!rows.length){
+        const data = await cachedGet('ospiti', {}, { showLoader:false, ttlMs: opts.force ? 0 : 45000, swrMs: 120000, force: !!opts.force });
+        rows = Array.isArray(data) ? data : [];
+      }
+    }catch(_){ rows = []; }
+    const alerts = computeTopGuestAlerts(rows);
+    state.guestAlerts = alerts;
+    state.guestAlertCounts = { left: alerts.left.length, right: alerts.right.length };
+    updateTopGuestAlertLeds();
+    if (!opts.keepModal){
+      try{
+        const modal = document.getElementById('guestAlertModal');
+        if (modal && !modal.hidden) openGuestAlertModal(state.guestAlertModalSide || 'left');
+      }catch(_){ }
+    } else {
+      try{
+        const modal = document.getElementById('guestAlertModal');
+        if (modal && !modal.hidden) openGuestAlertModal(state.guestAlertModalSide || 'left');
+      }catch(_){ }
+    }
+  }catch(e){ console.error(e); }
+}
+function scheduleTopGuestAlertsRefresh(){
+  try{
+    if (__guestAlertState.timer) return;
+    const tick = () => {
+      const now = Date.now();
+      if ((now - (__guestAlertState.lastTick || 0)) < 20000) return;
+      __guestAlertState.lastTick = now;
+      try{ refreshTopGuestAlerts({ force:false, keepModal:true }); }catch(_){ }
+    };
+    __guestAlertState.timer = setInterval(tick, 60000);
+    window.addEventListener('focus', tick);
+    document.addEventListener('visibilitychange', ()=>{ if (!document.hidden) tick(); });
+    setTimeout(tick, 450);
+  }catch(_){ }
+}
+function __syncLedUpdate(){}
+function __syncLedBegin(method){}
+function __syncLedEnd(method){}
 
 function showLoading(){
   // Loader overlay disabilitato: usiamo LED sync in topbar
@@ -965,13 +4322,14 @@ function endRequest(){
 
 function euro(n){
   const x = Number(n || 0);
-  return x.toLocaleString("it-IT", { style:"currency", currency:"EUR" });
+  try{ return x.toLocaleString(__getCurrentLocale__(), { style:"currency", currency:"EUR" }); }catch(_){ return `${(Math.round(x * 100) / 100).toFixed(2)} €`; }
 }
 
 let __toastTimer = null;
 function toast(msg, kind){
   const t = $("#toast");
   if (!t) return;
+  try{ msg = __translateText__ ? __translateText__(msg) : msg; }catch(_){ }
   t.textContent = msg;
   // kind: "blue" | "orange" | "" (default)
   t.dataset.kind = kind ? String(kind) : "";
@@ -982,6 +4340,1466 @@ function toast(msg, kind){
     t.dataset.kind = "";
   }, 1700);
 }
+
+
+const __I18N_STORAGE_KEY__ = "ddae:app-language";
+function __getAppLanguageStorageKey__(){
+  try{
+    const base = __I18N_STORAGE_KEY__;
+    const sess = state?.session || null;
+    if (sess && isOperatoreSession(sess)){
+      const user = String(sess?.username || sess?.user_id || "operator").trim().toLowerCase().replace(/[^a-z0-9_\-]+/g, "_");
+      return `${base}:operator:${user || "default"}`;
+    }
+    return `${base}:admin`;
+  }catch(_){ return __I18N_STORAGE_KEY__; }
+}
+function __getSharedAppLanguageFromSettings__(fallback = "it"){
+  try{
+    const fromSettings = getSettingText ? String(getSettingText("app_language", fallback) || "").trim().toLowerCase() : String(fallback || "it").trim().toLowerCase();
+    return __I18N_LOCALES__[fromSettings] ? fromSettings : String(fallback || "it").trim().toLowerCase();
+  }catch(_){ return String(fallback || "it").trim().toLowerCase(); }
+}
+function __canPersistSharedAppLanguage__(){
+  try{ return !!(state?.session?.user_id) && !isOperatoreSession(state.session); }catch(_){ return false; }
+}
+const __I18N_LOCALES__ = { it:"it-IT", en:"en-GB", fr:"fr-FR", de:"de-DE", es:"es-ES" };
+let __appLanguage__ = "it";
+let __applyingLanguage__ = false;
+let __languageObserver__ = null;
+let __MONTHS_IT = [];
+const __I18N_PHRASES__ = {
+  "crea account": {
+    "en": "create account",
+    "fr": "créer un compte",
+    "de": "Konto erstellen",
+    "es": "crear cuenta"
+  },
+  "modifica account": {
+    "en": "edit account",
+    "fr": "modifier le compte",
+    "de": "Konto bearbeiten",
+    "es": "editar cuenta"
+  },
+  "amministratore": {
+    "en": "administrator",
+    "fr": "administrateur",
+    "de": "Administrator",
+    "es": "administrador"
+  },
+  "operatore": {
+    "en": "operator",
+    "fr": "opérateur",
+    "de": "Mitarbeiter",
+    "es": "operador"
+  },
+  "Struttura": {
+    "en": "Property",
+    "fr": "Structure",
+    "de": "Unterkunft",
+    "es": "Alojamiento"
+  },
+  "Ricorda struttura": {
+    "en": "Remember property",
+    "fr": "Mémoriser la structure",
+    "de": "Unterkunft merken",
+    "es": "Recordar alojamiento"
+  },
+  "Username": {
+    "en": "Username",
+    "fr": "Nom d'utilisateur",
+    "de": "Benutzername",
+    "es": "Usuario"
+  },
+  "Password": {
+    "en": "Password",
+    "fr": "Mot de passe",
+    "de": "Passwort",
+    "es": "Contraseña"
+  },
+  "Conferma password": {
+    "en": "Confirm password",
+    "fr": "Confirmer le mot de passe",
+    "de": "Passwort bestätigen",
+    "es": "Confirmar contraseña"
+  },
+  "Nuova password": {
+    "en": "New password",
+    "fr": "Nouveau mot de passe",
+    "de": "Neues Passwort",
+    "es": "Nueva contraseña"
+  },
+  "Conferma nuova password": {
+    "en": "Confirm new password",
+    "fr": "Confirmer le nouveau mot de passe",
+    "de": "Neues Passwort bestätigen",
+    "es": "Confirmar nueva contraseña"
+  },
+  "Nome": {
+    "en": "Name",
+    "fr": "Nom",
+    "de": "Name",
+    "es": "Nombre"
+  },
+  "Inserimento": {
+    "en": "Entry",
+    "fr": "Insertion",
+    "de": "Eingabe",
+    "es": "Inserción"
+  },
+  "Arrivo": {
+    "en": "Arrival",
+    "fr": "Arrivée",
+    "de": "Ankunft",
+    "es": "Llegada"
+  },
+  "Telefono": {
+    "en": "Phone",
+    "fr": "Téléphone",
+    "de": "Telefon",
+    "es": "Teléfono"
+  },
+  "Email": {
+    "en": "Email",
+    "fr": "E-mail",
+    "de": "E-Mail",
+    "es": "Correo"
+  },
+  "indietro": {
+    "en": "back",
+    "fr": "retour",
+    "de": "zurück",
+    "es": "volver"
+  },
+  "continua": {
+    "en": "continue",
+    "fr": "continuer",
+    "de": "weiter",
+    "es": "continuar"
+  },
+  "Ospiti": {
+    "en": "Guests",
+    "fr": "Clients",
+    "de": "Gäste",
+    "es": "Huéspedes"
+  },
+  "Calendario": {
+    "en": "Calendar",
+    "fr": "Calendrier",
+    "de": "Kalender",
+    "es": "Calendario"
+  },
+  "Spese": {
+    "en": "Expenses",
+    "fr": "Dépenses",
+    "de": "Ausgaben",
+    "es": "Gastos"
+  },
+  "Tassa": {
+    "en": "Tax",
+    "fr": "Taxe",
+    "de": "Steuer",
+    "es": "Tasa"
+  },
+  "Pulizie": {
+    "en": "Cleaning",
+    "fr": "Ménage",
+    "de": "Reinigung",
+    "es": "Limpieza"
+  },
+  "Lavanderia": {
+    "en": "Laundry",
+    "fr": "Blanchisserie",
+    "de": "Wäscherei",
+    "es": "Lavandería"
+  },
+  "Ore Pulizia": {
+    "en": "Cleaning Hours",
+    "fr": "Heures de ménage",
+    "de": "Reinigungsstunden",
+    "es": "Horas de limpieza"
+  },
+  "Ore Pulizia Mensili": {
+    "en": "Monthly Cleaning Hours",
+    "fr": "Heures de ménage mensuelles",
+    "de": "Monatliche Reinigungsstunden",
+    "es": "Horas de limpieza mensuales"
+  },
+  "Statistiche": {
+    "en": "Stats",
+    "fr": "Statistiques",
+    "de": "Statistiken",
+    "es": "Estadísticas"
+  },
+  "Spesa": {
+    "en": "Shopping",
+    "fr": "Achats",
+    "de": "Einkauf",
+    "es": "Compras"
+  },
+  "IMPORTA": {
+    "en": "IMPORT",
+    "fr": "IMPORTER",
+    "de": "IMPORT",
+    "es": "IMPORTAR"
+  },
+  "ESPORTA": {
+    "en": "EXPORT",
+    "fr": "EXPORTER",
+    "de": "EXPORT",
+    "es": "EXPORTAR"
+  },
+  "Lista della spesa": {
+    "en": "Shopping List",
+    "fr": "Liste des achats",
+    "de": "Einkaufsliste",
+    "es": "Lista de compras"
+  },
+  "Colazione": {
+    "en": "Breakfast",
+    "fr": "Petit-déjeuner",
+    "de": "Frühstück",
+    "es": "Desayuno"
+  },
+  "Prodotti": {
+    "en": "Products",
+    "fr": "Produits",
+    "de": "Produkte",
+    "es": "Productos"
+  },
+  "Aggiungi prodotto": {
+    "en": "Add product",
+    "fr": "Ajouter un produit",
+    "de": "Produkt hinzufügen",
+    "es": "Añadir producto"
+  },
+  "Generali": {
+    "en": "General",
+    "fr": "Générales",
+    "de": "Allgemein",
+    "es": "Generales"
+  },
+  "Mensili": {
+    "en": "Monthly",
+    "fr": "Mensuelles",
+    "de": "Monatlich",
+    "es": "Mensuales"
+  },
+  "Grafici": {
+    "en": "Charts",
+    "fr": "Graphiques",
+    "de": "Diagramme",
+    "es": "Gráficos"
+  },
+  "Piscina": {
+    "en": "Pool",
+    "fr": "Piscine",
+    "de": "Pool",
+    "es": "Piscina"
+  },
+  "Cancellazioni": {
+    "en": "Cancellations",
+    "fr": "Annulations",
+    "de": "Stornierungen",
+    "es": "Cancelaciones"
+  },
+  "Impostazioni": {
+    "en": "Settings",
+    "fr": "Paramètres",
+    "de": "Einstellungen",
+    "es": "Ajustes"
+  },
+  "AUDIO": {
+    "en": "Sound",
+    "fr": "Son",
+    "de": "Ton",
+    "es": "Sonido"
+  },
+  "Anno": {
+    "en": "Year",
+    "fr": "Année",
+    "de": "Jahr",
+    "es": "Año"
+  },
+  "Backup": {
+    "en": "Backup",
+    "fr": "Sauvegarde",
+    "de": "Backup",
+    "es": "Copia de seguridad"
+  },
+  "Stanze": {
+    "en": "Rooms",
+    "fr": "Chambres",
+    "de": "Zimmer",
+    "es": "Habitaciones"
+  },
+  "Operatori": {
+    "en": "Operators",
+    "fr": "Opérateurs",
+    "de": "Mitarbeiter",
+    "es": "Operadores"
+  },
+  "Channel": {
+    "en": "Channel",
+    "fr": "Canal",
+    "de": "Kanal",
+    "es": "Canal"
+  },
+  "Tassa Sogg...": {
+    "en": "Tourist Tax",
+    "fr": "Taxe séjour",
+    "de": "Kurtaxe",
+    "es": "Tasa turíst."
+  },
+  "Codice Ope...": {
+    "en": "Operator Code",
+    "fr": "Code op.",
+    "de": "Mitarbeiter-Code",
+    "es": "Código op."
+  },
+  "Lingua": {
+    "en": "Language",
+    "fr": "Langue",
+    "de": "Sprache",
+    "es": "Idioma"
+  },
+  "Logout": {
+    "en": "Logout",
+    "fr": "Déconnexion",
+    "de": "Abmelden",
+    "es": "Cerrar sesión"
+  },
+  "Tassa di soggiorno": {
+    "en": "Tourist Tax",
+    "fr": "Taxe de séjour",
+    "de": "Kurtaxe",
+    "es": "Tasa turística"
+  },
+  "Stima": {
+    "en": "Estimate",
+    "fr": "Estimation",
+    "de": "Schätzung",
+    "es": "Estimación"
+  },
+  "Da": {
+    "en": "From",
+    "fr": "De",
+    "de": "Von",
+    "es": "Desde"
+  },
+  "A": {
+    "en": "To",
+    "fr": "À",
+    "de": "Bis",
+    "es": "Hasta"
+  },
+  "Totale tassa": {
+    "en": "Total tax",
+    "fr": "Taxe totale",
+    "de": "Gesamtsteuer",
+    "es": "Impuesto total"
+  },
+  "Ospiti paganti": {
+    "en": "Paying guests",
+    "fr": "Clients payants",
+    "de": "Zahlende Gäste",
+    "es": "Huéspedes que pagan"
+  },
+  "Bambini (<10)": {
+    "en": "Children (<10)",
+    "fr": "Enfants (<10)",
+    "de": "Kinder (<10)",
+    "es": "Niños (<10)"
+  },
+  "Altri (ridotti)": {
+    "en": "Others (reduced)",
+    "fr": "Autres (réduit)",
+    "de": "Andere (ermäßigt)",
+    "es": "Otros (reducidos)"
+  },
+  "Inserisci spesa": {
+    "en": "Add expense",
+    "fr": "Ajouter une dépense",
+    "de": "Ausgabe erfassen",
+    "es": "Añadir gasto"
+  },
+  "Motivazione": {
+    "en": "Reason",
+    "fr": "Motif",
+    "de": "Grund",
+    "es": "Motivo"
+  },
+  "Data": {
+    "en": "Date",
+    "fr": "Date",
+    "de": "Datum",
+    "es": "Fecha"
+  },
+  "Seleziona…": {
+    "en": "Select…",
+    "fr": "Sélectionner…",
+    "de": "Auswählen…",
+    "es": "Selecciona…"
+  },
+  "Categoria": {
+    "en": "Category",
+    "fr": "Catégorie",
+    "de": "Kategorie",
+    "es": "Categoría"
+  },
+  "Salva": {
+    "en": "Save",
+    "fr": "Enregistrer",
+    "de": "Speichern",
+    "es": "Guardar"
+  },
+  "Nessun operatore inserito": {
+    "en": "No operator added",
+    "fr": "Aucun opérateur saisi",
+    "de": "Kein Mitarbeiter vorhanden",
+    "es": "No hay operadores"
+  },
+  "Nessun channel inserito": {
+    "en": "No channel added",
+    "fr": "Aucun canal saisi",
+    "de": "Kein Kanal vorhanden",
+    "es": "No hay canales"
+  },
+  "Componenti lavanderia": {
+    "en": "Laundry Components",
+    "fr": "Composants blanchisserie",
+    "de": "Wäscherei-Komponenten",
+    "es": "Componentes de lavandería"
+  },
+  "Nessun componente lavanderia inserito": {
+    "en": "No laundry component added",
+    "fr": "Aucun composant blanchisserie saisi",
+    "de": "Keine Wäscherei-Komponente vorhanden",
+    "es": "No hay componentes de lavandería"
+  },
+  "Ordina: data": {
+    "en": "Sort: date",
+    "fr": "Trier : date",
+    "de": "Sortieren: Datum",
+    "es": "Ordenar: fecha"
+  },
+  "Ordina: inserimento": {
+    "en": "Sort: entry",
+    "fr": "Trier : saisie",
+    "de": "Sortieren: Eingabe",
+    "es": "Ordenar: ingreso"
+  },
+  "Ordina: motivazione": {
+    "en": "Sort: reason",
+    "fr": "Trier : motif",
+    "de": "Sortieren: Grund",
+    "es": "Ordenar: motivo"
+  },
+  "Nuovo ospite": {
+    "en": "New guest",
+    "fr": "Nouveau client",
+    "de": "Neuer Gast",
+    "es": "Nuevo huésped"
+  },
+  "Modifica": {
+    "en": "Edit",
+    "fr": "Modifier",
+    "de": "Bearbeiten",
+    "es": "Editar"
+  },
+  "Elimina": {
+    "en": "Delete",
+    "fr": "Supprimer",
+    "de": "Löschen",
+    "es": "Eliminar"
+  },
+  "Nome ospite": {
+    "en": "Guest name",
+    "fr": "Nom du client",
+    "de": "Name des Gasts",
+    "es": "Nombre del huésped"
+  },
+  "Adulti": {
+    "en": "Adults",
+    "fr": "Adultes",
+    "de": "Erwachsene",
+    "es": "Adultos"
+  },
+  "Bambini < 10": {
+    "en": "Children < 10",
+    "fr": "Enfants < 10",
+    "de": "Kinder < 10",
+    "es": "Niños < 10"
+  },
+  "Check-in": {
+    "en": "Check-in",
+    "fr": "Arrivée",
+    "de": "Check-in",
+    "es": "Check-in"
+  },
+  "Check-out": {
+    "en": "Check-out",
+    "fr": "Départ",
+    "de": "Check-out",
+    "es": "Check-out"
+  },
+  "Note": {
+    "en": "Notes",
+    "fr": "Notes",
+    "de": "Notizen",
+    "es": "Notas"
+  },
+  "Servizi": {
+    "en": "Services",
+    "fr": "Services",
+    "de": "Services",
+    "es": "Servicios"
+  },
+  "Oggi": {
+    "en": "Today",
+    "fr": "Aujourd'hui",
+    "de": "Heute",
+    "es": "Hoy"
+  },
+  "Matrimoniale": {
+    "en": "Double",
+    "fr": "Double",
+    "de": "Doppelbett",
+    "es": "Doble"
+  },
+  "Singolo": {
+    "en": "Single",
+    "fr": "Simple",
+    "de": "Einzelbett",
+    "es": "Individual"
+  },
+  "Culla": {
+    "en": "Cot",
+    "fr": "Berceau",
+    "de": "Kinderbett",
+    "es": "Cuna"
+  },
+  "Chiudi": {
+    "en": "Close",
+    "fr": "Fermer",
+    "de": "Schließen",
+    "es": "Cerrar"
+  },
+  "Annulla": {
+    "en": "Cancel",
+    "fr": "Annuler",
+    "de": "Abbrechen",
+    "es": "Cancelar"
+  },
+  "Conferma": {
+    "en": "Confirm",
+    "fr": "Confirmer",
+    "de": "Bestätigen",
+    "es": "Confirmar"
+  },
+  "Importa": {
+    "en": "Import",
+    "fr": "Importer",
+    "de": "Importieren",
+    "es": "Importar"
+  },
+  "Esporta": {
+    "en": "Export",
+    "fr": "Exporter",
+    "de": "Exportieren",
+    "es": "Exportar"
+  },
+  "Nuovo channel": {
+    "en": "New channel",
+    "fr": "Nouveau canal",
+    "de": "Neuer Kanal",
+    "es": "Nuevo canal"
+  },
+  "Nome channel": {
+    "en": "Channel name",
+    "fr": "Nom du canal",
+    "de": "Kanalname",
+    "es": "Nombre del canal"
+  },
+  "Commissione (%)": {
+    "en": "Commission (%)",
+    "fr": "Commission (%)",
+    "de": "Provision (%)",
+    "es": "Comisión (%)"
+  },
+  "Iniziale": {
+    "en": "Initial",
+    "fr": "Initiale",
+    "de": "Initiale",
+    "es": "Inicial"
+  },
+  "Tag colore": {
+    "en": "Color tag",
+    "fr": "Étiquette couleur",
+    "de": "Farbetikett",
+    "es": "Etiqueta de color"
+  },
+  "Nuovo operatore": {
+    "en": "New operator",
+    "fr": "Nouvel opérateur",
+    "de": "Neuer Mitarbeiter",
+    "es": "Nuevo operador"
+  },
+  "Nome operatore": {
+    "en": "Operator name",
+    "fr": "Nom de l'opérateur",
+    "de": "Name des Mitarbeiters",
+    "es": "Nombre del operador"
+  },
+  "Tariffa (€ / ora)": {
+    "en": "Rate (€ / hour)",
+    "fr": "Tarif (€ / heure)",
+    "de": "Satz (€ / Stunde)",
+    "es": "Tarifa (€ / hora)"
+  },
+  "Benzina (€)": {
+    "en": "Fuel (€)",
+    "fr": "Carburant (€)",
+    "de": "Kraftstoff (€)",
+    "es": "Combustible (€)"
+  },
+  "Nuovo componente lavanderia": {
+    "en": "New laundry component",
+    "fr": "Nouveau composant blanchisserie",
+    "de": "Neue Wäscherei-Komponente",
+    "es": "Nuevo componente de lavandería"
+  },
+  "Titolo componente": {
+    "en": "Component title",
+    "fr": "Titre du composant",
+    "de": "Komponententitel",
+    "es": "Título del componente"
+  },
+  "Abbreviazione": {
+    "en": "Abbreviation",
+    "fr": "Abréviation",
+    "de": "Abkürzung",
+    "es": "Abreviatura"
+  },
+  "Prezzo pulizia (€)": {
+    "en": "Cleaning price (€)",
+    "fr": "Prix nettoyage (€)",
+    "de": "Reinigungspreis (€)",
+    "es": "Precio de limpieza (€)"
+  },
+  "Azzurro": {
+    "en": "Sky blue",
+    "fr": "Bleu ciel",
+    "de": "Hellblau",
+    "es": "Azul cielo"
+  },
+  "Arancione": {
+    "en": "Orange",
+    "fr": "Orange",
+    "de": "Orange",
+    "es": "Naranja"
+  },
+  "Verde": {
+    "en": "Green",
+    "fr": "Vert",
+    "de": "Grün",
+    "es": "Verde"
+  },
+  "Rosso": {
+    "en": "Red",
+    "fr": "Rouge",
+    "de": "Rot",
+    "es": "Rojo"
+  },
+  "Viola": {
+    "en": "Purple",
+    "fr": "Violet",
+    "de": "Lila",
+    "es": "Morado"
+  },
+  "Sabbia": {
+    "en": "Sand",
+    "fr": "Sable",
+    "de": "Sand",
+    "es": "Arena"
+  },
+  "Tariffa": {
+    "en": "Rate",
+    "fr": "Tarif",
+    "de": "Satz",
+    "es": "Tarifa"
+  },
+  "Benzina": {
+    "en": "Fuel",
+    "fr": "Carburant",
+    "de": "Kraftstoff",
+    "es": "Combustible"
+  },
+  "Modifica operatore": {
+    "en": "Edit operator",
+    "fr": "Modifier l'opérateur",
+    "de": "Mitarbeiter bearbeiten",
+    "es": "Editar operador"
+  },
+  "Eliminare questo operatore?": {
+    "en": "Delete this operator?",
+    "fr": "Supprimer cet opérateur ?",
+    "de": "Diesen Mitarbeiter löschen?",
+    "es": "¿Eliminar este operador?"
+  },
+  "Inserisci il nome operatore": {
+    "en": "Enter the operator name",
+    "fr": "Saisissez le nom de l'opérateur",
+    "de": "Namen des Mitarbeiters eingeben",
+    "es": "Introduce el nombre del operador"
+  },
+  "Tariffa non valida": {
+    "en": "Invalid rate",
+    "fr": "Tarif non valide",
+    "de": "Ungültiger Satz",
+    "es": "Tarifa no válida"
+  },
+  "Benzina non valida": {
+    "en": "Invalid fuel amount",
+    "fr": "Montant carburant non valide",
+    "de": "Ungültiger Kraftstoffwert",
+    "es": "Importe de combustible no válido"
+  },
+  "Operatore salvato": {
+    "en": "Operator saved",
+    "fr": "Opérateur enregistré",
+    "de": "Mitarbeiter gespeichert",
+    "es": "Operador guardado"
+  },
+  "Operatore eliminato": {
+    "en": "Operator deleted",
+    "fr": "Opérateur supprimé",
+    "de": "Mitarbeiter gelöscht",
+    "es": "Operador eliminado"
+  },
+  "Nessun dato": {
+    "en": "No data",
+    "fr": "Aucune donnée",
+    "de": "Keine Daten",
+    "es": "Sin datos"
+  },
+  "Ricevute mancanti": {
+    "en": "Missing receipts",
+    "fr": "Reçus manquants",
+    "de": "Fehlende Belege",
+    "es": "Recibos faltantes"
+  },
+  "Calendario settimanale": {
+    "en": "Weekly calendar",
+    "fr": "Calendrier hebdomadaire",
+    "de": "Wochenkalender",
+    "es": "Calendario semanal"
+  },
+  "Calendario mensile": {
+    "en": "Monthly calendar",
+    "fr": "Calendrier mensuel",
+    "de": "Monatskalender",
+    "es": "Calendario mensual"
+  },
+  "Forza lettura database": {
+    "en": "Force database refresh",
+    "fr": "Forcer la lecture de la base",
+    "de": "Datenbank neu laden",
+    "es": "Forzar lectura de la base de datos"
+  },
+  "Reset pulizie": {
+    "en": "Reset cleaning",
+    "fr": "Réinitialiser le ménage",
+    "de": "Reinigung zurücksetzen",
+    "es": "Restablecer limpieza"
+  },
+  "Ore lavoro pulizie": {
+    "en": "Cleaning work hours",
+    "fr": "Heures de travail ménage",
+    "de": "Reinigungsarbeitsstunden",
+    "es": "Horas de trabajo de limpieza"
+  },
+  "Riepilogo ore pulizia": {
+    "en": "Cleaning hours summary",
+    "fr": "Résumé des heures de ménage",
+    "de": "Zusammenfassung Reinigungsstunden",
+    "es": "Resumen de horas de limpieza"
+  },
+  "Filtri ore pulizia": {
+    "en": "Cleaning hours filters",
+    "fr": "Filtres heures ménage",
+    "de": "Filter Reinigungsstunden",
+    "es": "Filtros horas de limpieza"
+  },
+  "Mese": {
+    "en": "Month",
+    "fr": "Mois",
+    "de": "Monat",
+    "es": "Mes"
+  },
+  "Operatore": {
+    "en": "Operator",
+    "fr": "Opérateur",
+    "de": "Mitarbeiter",
+    "es": "Operador"
+  },
+  "Totali ore e benzina": {
+    "en": "Hours and fuel totals",
+    "fr": "Totaux heures et carburant",
+    "de": "Stunden- und Kraftstoffsummen",
+    "es": "Totales de horas y combustible"
+  },
+  "Calendario ore pulizia": {
+    "en": "Cleaning hours calendar",
+    "fr": "Calendrier des heures de ménage",
+    "de": "Kalender Reinigungsstunden",
+    "es": "Calendario de horas de limpieza"
+  },
+  "Genera report lavanderia": {
+    "en": "Generate laundry report",
+    "fr": "Générer le rapport blanchisserie",
+    "de": "Wäscherei-Bericht erstellen",
+    "es": "Generar informe de lavandería"
+  },
+  "Intervallo report lavanderia": {
+    "en": "Laundry report range",
+    "fr": "Période du rapport blanchisserie",
+    "de": "Zeitraum Wäscherei-Bericht",
+    "es": "Intervalo del informe de lavandería"
+  },
+  "Data inizio": {
+    "en": "Start date",
+    "fr": "Date de début",
+    "de": "Startdatum",
+    "es": "Fecha de inicio"
+  },
+  "Data fine": {
+    "en": "End date",
+    "fr": "Date de fin",
+    "de": "Enddatum",
+    "es": "Fecha de fin"
+  },
+  "Condividi": {
+    "en": "Share",
+    "fr": "Partager",
+    "de": "Teilen",
+    "es": "Compartir"
+  },
+  "Caricamento": {
+    "en": "Loading",
+    "fr": "Chargement",
+    "de": "Laden",
+    "es": "Cargando"
+  },
+  "Costi lavanderia": {
+    "en": "Laundry costs",
+    "fr": "Coûts blanchisserie",
+    "de": "Wäschereikosten",
+    "es": "Costes de lavandería"
+  },
+  "Importa database": {
+    "en": "Import database",
+    "fr": "Importer la base",
+    "de": "Datenbank importieren",
+    "es": "Importar base de datos"
+  },
+  "Esporta database": {
+    "en": "Export database",
+    "fr": "Exporter la base",
+    "de": "Datenbank exportieren",
+    "es": "Exportar base de datos"
+  },
+  "Database": {
+    "en": "Database",
+    "fr": "Base de données",
+    "de": "Datenbank",
+    "es": "Base de datos"
+  },
+  "Aggiungi servizio": {
+    "en": "Add service",
+    "fr": "Ajouter un service",
+    "de": "Service hinzufügen",
+    "es": "Añadir servicio"
+  },
+  "Servizio": {
+    "en": "Service",
+    "fr": "Service",
+    "de": "Service",
+    "es": "Servicio"
+  },
+  "Cancella": {
+    "en": "Clear",
+    "fr": "Effacer",
+    "de": "Leeren",
+    "es": "Borrar"
+  },
+  "Eliminare definitivamente questa spesa?": {
+    "en": "Delete this expense permanently?",
+    "fr": "Supprimer définitivement cette dépense ?",
+    "de": "Diese Ausgabe endgültig löschen?",
+    "es": "¿Eliminar definitivamente este gasto?"
+  },
+  "Spesa eliminata": {
+    "en": "Expense deleted",
+    "fr": "Dépense supprimée",
+    "de": "Ausgabe gelöscht",
+    "es": "Gasto eliminado"
+  },
+  "Mese corrente": {
+    "en": "Current month",
+    "fr": "Mois en cours",
+    "de": "Aktueller Monat",
+    "es": "Mes actual"
+  },
+  "Mese precedente": {
+    "en": "Previous month",
+    "fr": "Mois précédent",
+    "de": "Vorheriger Monat",
+    "es": "Mes anterior"
+  },
+  "Mese successivo": {
+    "en": "Next month",
+    "fr": "Mois suivant",
+    "de": "Nächster Monat",
+    "es": "Mes siguiente"
+  },
+  "Giorno precedente": {
+    "en": "Previous day",
+    "fr": "Jour précédent",
+    "de": "Vorheriger Tag",
+    "es": "Día anterior"
+  },
+  "Giorno successivo": {
+    "en": "Next day",
+    "fr": "Jour suivant",
+    "de": "Nächster Tag",
+    "es": "Día siguiente"
+  },
+  "Navigazione giorno": {
+    "en": "Day navigation",
+    "fr": "Navigation jour",
+    "de": "Tagesnavigation",
+    "es": "Navegación por día"
+  },
+  "Navigazione calendario": {
+    "en": "Calendar navigation",
+    "fr": "Navigation calendrier",
+    "de": "Kalendernavigation",
+    "es": "Navegación del calendario"
+  },
+  "Legenda letti": {
+    "en": "Bed legend",
+    "fr": "Légende des lits",
+    "de": "Bettenlegende",
+    "es": "Leyenda de camas"
+  },
+  "Filtri ospiti": {
+    "en": "Guest filters",
+    "fr": "Filtres clients",
+    "de": "Gästefilter",
+    "es": "Filtros de huéspedes"
+  },
+  "Ordinamento": {
+    "en": "Sorting",
+    "fr": "Tri",
+    "de": "Sortierung",
+    "es": "Ordenación"
+  },
+  "Ordina ospiti per": {
+    "en": "Sort guests by",
+    "fr": "Trier les clients par",
+    "de": "Gäste sortieren nach",
+    "es": "Ordenar huéspedes por"
+  },
+  "Direzione ordinamento": {
+    "en": "Sort direction",
+    "fr": "Sens du tri",
+    "de": "Sortierrichtung",
+    "es": "Dirección de ordenación"
+  },
+  "Registrazioni": {
+    "en": "Registrations",
+    "fr": "Enregistrements",
+    "de": "Registrierungen",
+    "es": "Registros"
+  },
+  "Polizia di Stato": {
+    "en": "State Police",
+    "fr": "Police d'État",
+    "de": "Staatspolizei",
+    "es": "Policía del Estado"
+  },
+  "ISTAT": {
+    "en": "ISTAT",
+    "fr": "ISTAT",
+    "de": "ISTAT",
+    "es": "ISTAT"
+  },
+  "Ricevuta": {
+    "en": "Receipt",
+    "fr": "Reçu",
+    "de": "Beleg",
+    "es": "Recibo"
+  },
+  "Tipo acconto": {
+    "en": "Deposit type",
+    "fr": "Type d'acompte",
+    "de": "Art der Anzahlung",
+    "es": "Tipo de depósito"
+  },
+  "Elettronico": {
+    "en": "Electronic",
+    "fr": "Électronique",
+    "de": "Elektronisch",
+    "es": "Electrónico"
+  },
+  "Saldo": {
+    "en": "Balance",
+    "fr": "Solde",
+    "de": "Saldo",
+    "es": "Saldo"
+  },
+  "SI": {
+    "en": "YES",
+    "fr": "OUI",
+    "de": "JA",
+    "es": "SÍ"
+  },
+  "NO": {
+    "en": "NO",
+    "fr": "NON",
+    "de": "NEIN",
+    "es": "NO"
+  },
+  "Confermare?": {
+    "en": "Confirm?",
+    "fr": "Confirmer ?",
+    "de": "Bestätigen?",
+    "es": "¿Confirmar?"
+  },
+  "Sì": {
+    "en": "Yes",
+    "fr": "Oui",
+    "de": "Ja",
+    "es": "Sí"
+  },
+  "TUTTI": {
+    "en": "ALL",
+    "fr": "TOUS",
+    "de": "ALLE",
+    "es": "TODOS"
+  },
+  "Tutti": {
+    "en": "All",
+    "fr": "Tous",
+    "de": "Alle",
+    "es": "Todos"
+  },
+  "Audio on/off": {
+    "en": "Sound on/off",
+    "fr": "Activer/désactiver le son",
+    "de": "Ton ein/aus",
+    "es": "Activar/desactivar sonido"
+  },
+  "Lingua aggiornata": {
+    "en": "Language updated",
+    "fr": "Langue mise à jour",
+    "de": "Sprache aktualisiert",
+    "es": "Idioma actualizado"
+  },
+  "Seleziona la lingua dell'app": {
+    "en": "Select the app language",
+    "fr": "Sélectionnez la langue de l'application",
+    "de": "App-Sprache auswählen",
+    "es": "Selecciona el idioma de la app"
+  }
+};
+const __I18N_WORD_MAPS__ = {
+  "en": {
+    "Nuovo": "New",
+    "Nuova": "New",
+    "Modifica": "Edit",
+    "Salva": "Save",
+    "Elimina": "Delete",
+    "Chiudi": "Close",
+    "Annulla": "Cancel",
+    "Nome": "Name",
+    "operatore": "operator",
+    "operatori": "operators",
+    "ospite": "guest",
+    "ospiti": "guests",
+    "channel": "channel",
+    "lavanderia": "laundry",
+    "componente": "component",
+    "componenti": "components",
+    "Tariffa": "Rate",
+    "tariffa": "rate",
+    "Benzina": "Fuel",
+    "benzina": "fuel",
+    "Prezzo": "Price",
+    "prezzo": "price",
+    "Titolo": "Title",
+    "titolo": "title",
+    "Importo": "Amount",
+    "importo": "amount",
+    "Commissione": "Commission",
+    "commissione": "commission",
+    "Acconto": "Deposit",
+    "Saldo": "Balance",
+    "Servizi": "Services",
+    "servizi": "services",
+    "Spese": "Expenses",
+    "spese": "expenses",
+    "Spesa": "Shopping",
+    "spesa": "shopping",
+    "Pulizie": "Cleaning",
+    "pulizie": "cleaning",
+    "Calendario": "Calendar",
+    "calendario": "calendar",
+    "Impostazioni": "Settings",
+    "Lingua": "Language",
+    "lingua": "language",
+    "Stanze": "Rooms",
+    "stanze": "rooms",
+    "Tassa": "Tax",
+    "tassa": "tax",
+    "soggiorno": "stay",
+    "Data": "Date",
+    "Mese": "Month",
+    "mese": "month",
+    "Anno": "Year",
+    "anno": "year",
+    "Oggi": "Today",
+    "oggi": "today",
+    "Giorno": "Day",
+    "giorno": "day",
+    "ricevuta": "receipt",
+    "Ricevuta": "Receipt",
+    "Contanti": "Cash",
+    "Elettronico": "Electronic",
+    "Database": "Database",
+    "Codice": "Code",
+    "Report": "Report",
+    "Filtro": "Filter",
+    "Filtri": "Filters",
+    "Ordina": "Sort",
+    "Operatore": "Operator",
+    "Ore": "Hours",
+    "ore": "hours",
+    "Pulizia": "Cleaning",
+    "pulizia": "cleaning",
+    "Totale": "Total",
+    "totali": "totals",
+    "Totali": "Totals"
+  },
+  "fr": {
+    "Nuovo": "Nouveau",
+    "Nuova": "Nouvelle",
+    "Modifica": "Modifier",
+    "Salva": "Enregistrer",
+    "Elimina": "Supprimer",
+    "Chiudi": "Fermer",
+    "Annulla": "Annuler",
+    "Nome": "Nom",
+    "operatore": "opérateur",
+    "operatori": "opérateurs",
+    "ospite": "client",
+    "ospiti": "clients",
+    "channel": "canal",
+    "lavanderia": "blanchisserie",
+    "componente": "composant",
+    "componenti": "composants",
+    "Tariffa": "Tarif",
+    "tariffa": "tarif",
+    "Benzina": "Carburant",
+    "benzina": "carburant",
+    "Prezzo": "Prix",
+    "prezzo": "prix",
+    "Titolo": "Titre",
+    "titolo": "titre",
+    "Importo": "Montant",
+    "importo": "montant",
+    "Commissione": "Commission",
+    "commissione": "commission",
+    "Acconto": "Acompte",
+    "Saldo": "Solde",
+    "Servizi": "Services",
+    "servizi": "services",
+    "Spese": "Dépenses",
+    "spese": "dépenses",
+    "Spesa": "Achats",
+    "spesa": "achats",
+    "Pulizie": "Ménage",
+    "pulizie": "ménage",
+    "Calendario": "Calendrier",
+    "calendario": "calendrier",
+    "Impostazioni": "Paramètres",
+    "Lingua": "Langue",
+    "lingua": "langue",
+    "Stanze": "Chambres",
+    "stanze": "chambres",
+    "Tassa": "Taxe",
+    "tassa": "taxe",
+    "soggiorno": "séjour",
+    "Data": "Date",
+    "Mese": "Mois",
+    "mese": "mois",
+    "Anno": "Année",
+    "anno": "année",
+    "Oggi": "Aujourd'hui",
+    "oggi": "aujourd'hui",
+    "Giorno": "Jour",
+    "giorno": "jour",
+    "ricevuta": "reçu",
+    "Ricevuta": "Reçu",
+    "Contanti": "Espèces",
+    "Elettronico": "Électronique",
+    "Database": "Base de données",
+    "Codice": "Code",
+    "Report": "Rapport",
+    "Filtro": "Filtre",
+    "Filtri": "Filtres",
+    "Ordina": "Trier",
+    "Operatore": "Opérateur",
+    "Ore": "Heures",
+    "ore": "heures",
+    "Pulizia": "Ménage",
+    "pulizia": "ménage",
+    "Totale": "Total",
+    "totali": "totaux",
+    "Totali": "Totaux"
+  },
+  "de": {
+    "Nuovo": "Neu",
+    "Nuova": "Neu",
+    "Modifica": "Bearbeiten",
+    "Salva": "Speichern",
+    "Elimina": "Löschen",
+    "Chiudi": "Schließen",
+    "Annulla": "Abbrechen",
+    "Nome": "Name",
+    "operatore": "Mitarbeiter",
+    "operatori": "Mitarbeiter",
+    "ospite": "Gast",
+    "ospiti": "Gäste",
+    "channel": "Kanal",
+    "lavanderia": "Wäscherei",
+    "componente": "Komponente",
+    "componenti": "Komponenten",
+    "Tariffa": "Satz",
+    "tariffa": "Satz",
+    "Benzina": "Kraftstoff",
+    "benzina": "Kraftstoff",
+    "Prezzo": "Preis",
+    "prezzo": "Preis",
+    "Titolo": "Titel",
+    "titolo": "Titel",
+    "Importo": "Betrag",
+    "importo": "Betrag",
+    "Commissione": "Provision",
+    "commissione": "Provision",
+    "Acconto": "Anzahlung",
+    "Saldo": "Saldo",
+    "Servizi": "Services",
+    "servizi": "Services",
+    "Spese": "Ausgaben",
+    "spese": "Ausgaben",
+    "Spesa": "Einkauf",
+    "spesa": "Einkauf",
+    "Pulizie": "Reinigung",
+    "pulizie": "Reinigung",
+    "Calendario": "Kalender",
+    "calendario": "Kalender",
+    "Impostazioni": "Einstellungen",
+    "Lingua": "Sprache",
+    "lingua": "Sprache",
+    "Stanze": "Zimmer",
+    "stanze": "Zimmer",
+    "Tassa": "Steuer",
+    "tassa": "Steuer",
+    "soggiorno": "Aufenthalt",
+    "Data": "Datum",
+    "Mese": "Monat",
+    "mese": "Monat",
+    "Anno": "Jahr",
+    "anno": "Jahr",
+    "Oggi": "Heute",
+    "oggi": "heute",
+    "Giorno": "Tag",
+    "giorno": "Tag",
+    "ricevuta": "Beleg",
+    "Ricevuta": "Beleg",
+    "Contanti": "Bar",
+    "Elettronico": "Elektronisch",
+    "Database": "Datenbank",
+    "Codice": "Code",
+    "Report": "Bericht",
+    "Filtro": "Filter",
+    "Filtri": "Filter",
+    "Ordina": "Sortieren",
+    "Operatore": "Mitarbeiter",
+    "Ore": "Stunden",
+    "ore": "Stunden",
+    "Pulizia": "Reinigung",
+    "pulizia": "Reinigung",
+    "Totale": "Gesamt",
+    "totali": "Summen",
+    "Totali": "Summen"
+  },
+  "es": {
+    "Nuovo": "Nuevo",
+    "Nuova": "Nueva",
+    "Modifica": "Editar",
+    "Salva": "Guardar",
+    "Elimina": "Eliminar",
+    "Chiudi": "Cerrar",
+    "Annulla": "Cancelar",
+    "Nome": "Nombre",
+    "operatore": "operador",
+    "operatori": "operadores",
+    "ospite": "huésped",
+    "ospiti": "huéspedes",
+    "channel": "canal",
+    "lavanderia": "lavandería",
+    "componente": "componente",
+    "componenti": "componentes",
+    "Tariffa": "Tarifa",
+    "tariffa": "tarifa",
+    "Benzina": "Combustible",
+    "benzina": "combustible",
+    "Prezzo": "Precio",
+    "prezzo": "precio",
+    "Titolo": "Título",
+    "titolo": "título",
+    "Importo": "Importe",
+    "importo": "importe",
+    "Commissione": "Comisión",
+    "commissione": "comisión",
+    "Acconto": "Depósito",
+    "Saldo": "Saldo",
+    "Servizi": "Servicios",
+    "servizi": "servicios",
+    "Spese": "Gastos",
+    "spese": "gastos",
+    "Spesa": "Compras",
+    "spesa": "compras",
+    "Pulizie": "Limpieza",
+    "pulizie": "limpieza",
+    "Calendario": "Calendario",
+    "calendario": "calendario",
+    "Impostazioni": "Ajustes",
+    "Lingua": "Idioma",
+    "lingua": "idioma",
+    "Stanze": "Habitaciones",
+    "stanze": "habitaciones",
+    "Tassa": "Tasa",
+    "tassa": "tasa",
+    "soggiorno": "turística",
+    "Data": "Fecha",
+    "Mese": "Mes",
+    "mese": "mes",
+    "Anno": "Año",
+    "anno": "año",
+    "Oggi": "Hoy",
+    "oggi": "hoy",
+    "Giorno": "Día",
+    "giorno": "día",
+    "ricevuta": "recibo",
+    "Ricevuta": "Recibo",
+    "Contanti": "Efectivo",
+    "Elettronico": "Electrónico",
+    "Database": "Base de datos",
+    "Codice": "Código",
+    "Report": "Informe",
+    "Filtro": "Filtro",
+    "Filtri": "Filtros",
+    "Ordina": "Ordenar",
+    "Operatore": "Operador",
+    "Ore": "Horas",
+    "ore": "horas",
+    "Pulizia": "Limpieza",
+    "pulizia": "limpieza",
+    "Totale": "Total",
+    "totali": "totales",
+    "Totali": "Totales"
+  }
+};
+function __getAppLanguage__(){ const v = String(__appLanguage__ || "it").trim().toLowerCase(); return __I18N_LOCALES__[v] ? v : "it"; }
+function __getCurrentLocale__(){ return __I18N_LOCALES__[__getAppLanguage__()] || "it-IT"; }
+function __capitalizeLocale__(s){ const raw = String(s || ""); return raw ? (raw.charAt(0).toUpperCase() + raw.slice(1)) : ""; }
+function __normalizeI18nWhitespace__(text){ return String(text || "").replace(/\s+/g, " ").trim(); }
+function __getMonthNamesForLocale__(locale, capitalize = false){ try{ const out=[]; for(let i=0;i<12;i+=1){ let label=new Date(2026, i, 1).toLocaleDateString(locale || __getCurrentLocale__(), { month:"long" }); out.push(capitalize ? __capitalizeLocale__(label) : label); } return out; }catch(_){ return []; } }
+function __refreshMonthNamesCache__(){ __MONTHS_IT = __getMonthNamesForLocale__(__getCurrentLocale__(), true); }
+function __getWeekdayShortForLocale__(date){ try{ return new Date(date).toLocaleDateString(__getCurrentLocale__(), { weekday:"short" }); }catch(_){ return ""; } }
+function __getWeekdayLongForLocale__(date){ try{ return new Date(date).toLocaleDateString(__getCurrentLocale__(), { weekday:"long" }); }catch(_){ return ""; } }
+function __translateExactText__(value){ const lang=__getAppLanguage__(); if(lang==="it") return String(value||""); const key=__normalizeI18nWhitespace__(value); const row=__I18N_PHRASES__[key]; return row && row[lang] ? String(row[lang]) : String(value||""); }
+function __escapeRegExp__(s){ return String(s || "").replace(/[.*+?^${}()|[\]\\]/g, "\\$&"); }
+function __applyWordMap__(value){ let out=String(value||""); const lang=__getAppLanguage__(); const map=__I18N_WORD_MAPS__[lang]; if(!map) return out; const entries=Object.entries(map).sort((a,b)=>String(b[0]).length-String(a[0]).length); entries.forEach(([src,dst])=>{ const rx=new RegExp(`\\b${__escapeRegExp__(src)}\\b`,"gi"); out=out.replace(rx,(match)=>{ if(!match) return dst; if(match===match.toUpperCase()) return String(dst).toUpperCase(); if(match.charAt(0)===match.charAt(0).toUpperCase()) return __capitalizeLocale__(dst); return dst; }); }); return out; }
+function __translateText__(value){ const original=String(value??""); const lang=__getAppLanguage__(); if(lang==="it") return original; const trimmed=original.trim(); if(!trimmed) return original; const exact=__translateExactText__(trimmed); const translated=(exact!==trimmed)?exact:__applyWordMap__(trimmed); return (!translated || translated===trimmed) ? original : original.replace(trimmed, translated); }
+function __setOriginalAttr__(el, attr){ try{ if(!el.__i18nOriginalAttrs) el.__i18nOriginalAttrs={}; if(!(attr in el.__i18nOriginalAttrs)) el.__i18nOriginalAttrs[attr]=el.getAttribute(attr); }catch(_){} }
+function __translateElementAttributes__(el){ try{ if(!el || !el.getAttribute || el.closest?.("[data-no-i18n='1']")) return; ["aria-label","placeholder","title"].forEach((attr)=>{ if(!el.hasAttribute(attr)) return; __setOriginalAttr__(el, attr); const base=el.__i18nOriginalAttrs ? el.__i18nOriginalAttrs[attr] : el.getAttribute(attr); const next=(__getAppLanguage__()==="it") ? String(base ?? "") : __translateText__(base); if(String(next ?? "") !== String(el.getAttribute(attr) ?? "")) el.setAttribute(attr, String(next ?? "")); }); }catch(_){} }
+function __translateTextNode__(node){ try{ if(!node || !node.parentElement) return; const parent=node.parentElement; if(parent.closest?.("[data-no-i18n='1']")) return; if(/^(SCRIPT|STYLE|TEXTAREA)$/i.test(parent.tagName)) return; if(parent.closest?.("svg")) return; const current=String(node.nodeValue ?? ""); if(!current.trim()) return; if(typeof node.__i18nOriginal !== "string") node.__i18nOriginal=current; const base=String(node.__i18nOriginal ?? current); const next=(__getAppLanguage__()==="it") ? base : __translateText__(base); if(next !== current) node.nodeValue=next; }catch(_){} }
+function __translateTree__(root){ try{ if(!root || __applyingLanguage__) return; __applyingLanguage__=true; if(root.nodeType===Node.TEXT_NODE){ __translateTextNode__(root); return; } const start=(root.nodeType===Node.ELEMENT_NODE)?root:document.body; if(start && start.nodeType===Node.ELEMENT_NODE){ __translateElementAttributes__(start); const walker=document.createTreeWalker(start, NodeFilter.SHOW_TEXT, null); let textNode=walker.nextNode(); while(textNode){ __translateTextNode__(textNode); textNode=walker.nextNode(); } start.querySelectorAll?.("*").forEach((el)=>__translateElementAttributes__(el)); } }catch(_){} finally{ __applyingLanguage__=false; } }
+function __applyAppLanguageToDom__(){ try{ document.documentElement.lang=__getAppLanguage__(); }catch(_){} __refreshMonthNamesCache__(); __translateTree__(document.body); try{ document.querySelectorAll?.("#languageGrid .language-option").forEach((btn)=>btn.classList.toggle("is-selected", String(btn?.dataset?.lang || "")===__getAppLanguage__())); }catch(_){} }
+window.__applyAppLanguageToDom__ = __applyAppLanguageToDom__;
+function __ensureLanguageObserver__(){ try{ if(__languageObserver__ || !document.body) return; __languageObserver__ = new MutationObserver((mutations)=>{ if(__applyingLanguage__) return; mutations.forEach((m)=>{ if(m.type==="characterData"){ __translateTextNode__(m.target); return; } if(m.type==="attributes"){ __translateElementAttributes__(m.target); return; } if(m.type==="childList"){ m.addedNodes.forEach((node)=>{ if(node.nodeType===Node.TEXT_NODE) __translateTextNode__(node); else if(node.nodeType===Node.ELEMENT_NODE) __translateTree__(node); }); } }); }); __languageObserver__.observe(document.body, { childList:true, subtree:true, characterData:true, attributes:true, attributeFilter:["aria-label","placeholder","title"] }); }catch(_){} }
+async function __persistAppLanguage__(lang){
+  const next = String(lang || "it");
+  try{ localStorage.setItem(__getAppLanguageStorageKey__(), next); }catch(_){}
+  if (__canPersistSharedAppLanguage__()){
+    try{ if(state && state.settings && state.settings.byKey) state.settings.byKey.app_language={ key:"app_language", value:next }; }catch(_){}
+    try{ await api("impostazioni", { method:"POST", body:{ app_language:next }, showLoader:false }); }catch(_){}
+  }
+}
+async function __setAppLanguage__(lang, { persist = true, silent = false } = {}){ const next=__I18N_LOCALES__[String(lang || "").trim().toLowerCase()] ? String(lang || "").trim().toLowerCase() : "it"; __appLanguage__=next; if(persist) await __persistAppLanguage__(next); __applyAppLanguageToDom__(); try{ setLaundryLabels_(); }catch(_){} try{ __laundryUpdatePriceHints__(); }catch(_){} try{ const host=document.getElementById("laundryPricesList"); if(host && host.dataset.ready==="1") host.dataset.ready="0"; }catch(_){} try{ if(state?.page==="laundrycatalog") await renderLaundryCatalogPage(); }catch(_){} try{ if(state?.page==="lavanderia") renderLaundry_(state?.laundry?.current || null); }catch(_){} try{ window.dispatchEvent(new CustomEvent("ddae:language-change", { detail:{ lang:next } })); }catch(_){} if(!silent){ try{ toast("Lingua aggiornata", "blue"); }catch(_){} } }
+async function __hydrateAppLanguageFromSettings__(){
+  let next="it";
+  const isOp = !!(state?.session && isOperatoreSession(state.session));
+  const activeKey = __getAppLanguageStorageKey__();
+  let hasScopedLocal = false;
+  try{
+    const rawLocal = localStorage.getItem(activeKey);
+    hasScopedLocal = rawLocal !== null && rawLocal !== undefined && String(rawLocal).trim() !== "";
+    const local=String(rawLocal || "").trim().toLowerCase();
+    if(__I18N_LOCALES__[local]) next=local;
+  }catch(_){}
+  if (isOp){
+    if (!hasScopedLocal){
+      try{
+        const legacy = String(localStorage.getItem(__I18N_STORAGE_KEY__) || "").trim().toLowerCase();
+        if(__I18N_LOCALES__[legacy]) next = legacy;
+      }catch(_){}
+      if (!__I18N_LOCALES__[next]) next = "it";
+    }
+  }else{
+    const shared = __getSharedAppLanguageFromSettings__(next);
+    if(__I18N_LOCALES__[shared]) next = shared;
+  }
+  __appLanguage__=next;
+  try{ localStorage.setItem(activeKey, next); }catch(_){}
+  __applyAppLanguageToDom__();
+}
+let __languageModalReadyAt__ = 0;
+let __languageModalSuppressUntil__ = 0;
+function __languageModalGhostTapActive__(){ try{ return Date.now() < (__languageModalSuppressUntil__ || 0); }catch(_){ return false; } }
+function __languageModalSwallowGhostTap__(ev){
+  try{
+    if (!__languageModalGhostTapActive__()) return;
+    const modal = document.getElementById("languageModal");
+    const insideModal = !!(modal && !modal.hidden && ev && ev.target && modal.contains(ev.target));
+    if (insideModal) return;
+    try{ ev.preventDefault(); }catch(_){ }
+    try{ ev.stopPropagation(); }catch(_){ }
+    try{ ev.stopImmediatePropagation(); }catch(_){ }
+  }catch(_){ }
+}
+function __openLanguageModal__(){ const modal=document.getElementById("languageModal"); if(!modal) return; __languageModalReadyAt__ = Date.now() + 260; __languageModalSuppressUntil__ = 0; modal.hidden=false; modal.setAttribute("aria-hidden","false"); __applyAppLanguageToDom__(); }
+function __closeLanguageModal__(){ const modal=document.getElementById("languageModal"); if(!modal) return; modal.hidden=true; modal.setAttribute("aria-hidden","true"); __languageModalReadyAt__ = 0; __languageModalSuppressUntil__ = Date.now() + 700; }
+function setupLanguageModal(){ const modal=document.getElementById("languageModal"); if(!modal || modal.dataset.bound==="1") return; modal.dataset.bound="1"; const closeBtn=document.getElementById("languageModalClose"); const closeFooterBtn=document.getElementById("languageModalCloseBtn"); const card=modal.querySelector?.(".language-modal-card"); if(closeBtn) bindFastTap(closeBtn, __closeLanguageModal__); if(closeFooterBtn) bindFastTap(closeFooterBtn, __closeLanguageModal__); if(card){ ["pointerdown","pointerup","touchstart","touchend","click"].forEach((evt)=>{ try{ card.addEventListener(evt,(ev)=>{ try{ ev.stopPropagation(); }catch(_){} },{ passive:false }); }catch(_){ try{ card.addEventListener(evt,(ev)=>{ try{ ev.stopPropagation(); }catch(__){} }); }catch(__){} } }); } ["pointerdown","pointerup","touchstart","touchend","click"].forEach((evt)=>{ try{ document.addEventListener(evt, __languageModalSwallowGhostTap__, true); }catch(_){ } }); modal.addEventListener("click",(ev)=>{ try{ if(ev.target===modal) __closeLanguageModal__(); }catch(_){} }); document.querySelectorAll?.("#languageGrid .language-option").forEach((btn)=>bindFastTap(btn, async()=>{ try{ if(Date.now() < __languageModalReadyAt__) return; __languageModalSuppressUntil__ = Date.now() + 900; try{ if(document.activeElement && document.activeElement.blur) document.activeElement.blur(); }catch(_){} await __setAppLanguage__(btn.dataset.lang || "it"); setTimeout(()=>{ try{ __closeLanguageModal__(); }catch(_){} }, 80); }catch(_){} })); }
+try{ const __nativeConfirm__=(typeof window!=="undefined" && typeof window.confirm==="function") ? window.confirm.bind(window) : null; const __nativeAlert__=(typeof window!=="undefined" && typeof window.alert==="function") ? window.alert.bind(window) : null; if(__nativeConfirm__) window.confirm=(message)=>__nativeConfirm__(__translateText__(message)); if(__nativeAlert__) window.alert=(message)=>__nativeAlert__(__translateText__(message)); }catch(_){}
+try{ if(typeof window!=="undefined") window.addEventListener("DOMContentLoaded", ()=>{ try{ __ensureLanguageObserver__(); }catch(_){} try{ __hydrateAppLanguageFromSettings__(); }catch(_){} }); }catch(_){}
+__refreshMonthNamesCache__();
+
 
 // Conferma con modal Sì/No (label esplicite)
 let __confirmYesNoResolve = null;
@@ -994,7 +5812,7 @@ function confirmYesNo(message){
       const noBtn  = document.getElementById("confirmYesNoNo");
       if (!modal || !textEl || !yesBtn || !noBtn){
         // fallback
-        try{ resolve(!!confirm(String(message || "Confermare?"))); }catch(_){ resolve(false); }
+        try{ resolve(!!confirm(__translateText__(String(message || "Confermare?")))); }catch(_){ resolve(false); }
         return;
       }
 
@@ -1002,7 +5820,7 @@ function confirmYesNo(message){
       try{ if (__confirmYesNoResolve){ __confirmYesNoResolve(false); } }catch(_){ }
       __confirmYesNoResolve = resolve;
 
-      textEl.textContent = String(message || "Confermare?");
+      textEl.textContent = __translateText__(String(message || "Confermare?"));
       modal.hidden = false;
       try{ modal.setAttribute("aria-hidden", "false"); }catch(_){ }
 
@@ -1160,15 +5978,7 @@ function formatLongDateIT(value){
   const [y,m,d] = iso.split("-").map(n=>parseInt(n,10));
   const dt = new Date(y, (m-1), d);
   if (isNaN(dt)) return "";
-  const s = dt.toLocaleDateString("it-IT", { day: "numeric", month: "long", year: "numeric" });
-  // capitalizza il mese (in it-IT normalmente è minuscolo)
-  // es: "1 gennaio 2026" -> "1 Gennaio 2026"
-  const parts = s.split(" ");
-  if (parts.length >= 3) {
-    parts[1] = parts[1].charAt(0).toUpperCase() + parts[1].slice(1);
-    return parts.join(" ");
-  }
-  return s;
+  return __capitalizeLocale__(dt.toLocaleDateString(__getCurrentLocale__(), { day: "numeric", month: "long", year: "numeric" }));
 }
 
 function formatRangeCompactIT(checkInValue, checkOutValue){
@@ -1253,13 +6063,7 @@ function formatFullDateIT(d){
   try{
     const dt = (d instanceof Date) ? d : new Date(d);
     if (isNaN(dt)) return "";
-    const months = ["Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno","Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"];
-    const weekdays = ["Domenica","Lunedì","Martedì","Mercoledì","Giovedì","Venerdì","Sabato"];
-    const wd = weekdays[dt.getDay()] || "";
-    const day = dt.getDate();
-    const month = months[dt.getMonth()];
-    const year = dt.getFullYear();
-    return `${wd} ${day} ${month} ${year}`;
+    return __capitalizeLocale__(dt.toLocaleDateString(__getCurrentLocale__(), { weekday:"long", day:"numeric", month:"long", year:"numeric" }));
   }catch(_){ return ""; }
 }
 
@@ -1342,12 +6146,14 @@ function formatEUR(value){
 }
 
 function calcTouristTax(ospite, nights){
-  // Tassa di soggiorno: per persona > 10 anni (usa 'adulti'), max 3 giorni consecutivi
+  // Tassa di soggiorno: per persona > 10 anni (usa 'adulti'), max notti configurabile
   const adultsRaw = ospite?.adulti ?? ospite?.adults ?? 0;
   const adults = Math.max(0, parseInt(adultsRaw, 10) || 0);
 
   const nNights = Math.max(0, parseInt(nights, 10) || 0);
-  const taxableDays = Math.min(nNights, 3);
+  const maxTaxableNightsRaw = (state.settings && state.settings.loaded) ? getSettingNumber("tassa_soggiorno_max_notti", 3) : 3;
+  const maxTaxableNights = Math.max(0, parseInt(maxTaxableNightsRaw, 10) || 0);
+  const taxableDays = Math.min(nNights, maxTaxableNights);
 
   const rate = (state.settings && state.settings.loaded) ? getSettingNumber("tassa_soggiorno", (typeof TOURIST_TAX_EUR_PPN !== "undefined" ? TOURIST_TAX_EUR_PPN : 0)) : ((typeof TOURIST_TAX_EUR_PPN !== "undefined") ? Number(TOURIST_TAX_EUR_PPN) : 0);
   const r = isFinite(rate) ? Math.max(0, rate) : 0;
@@ -1484,23 +6290,37 @@ function setPresetValue(value){
 
 function presetToRange(value){
   const today = todayISO();
-  if (value === "this_month") return monthRangeISO(new Date());
+  const ySel = Number(state.exerciseYear || new Date().getFullYear());
+  const y = (isFinite(ySel) && ySel >= 2000 && ySel <= 2100) ? ySel : new Date().getFullYear();
+
+  // Helpers: month range for selected exercise year
+  const monthRangeForExerciseYear = (dateObj)=>{
+    const d = new Date(dateObj);
+    try{ d.setFullYear(y); }catch(_){}
+    return monthRangeISO(d);
+  };
+
+  if (value === "this_month") return monthRangeForExerciseYear(new Date());
+
   if (value === "last_month"){
     const d = new Date();
     d.setMonth(d.getMonth()-1);
-    return monthRangeISO(d);
+    return monthRangeForExerciseYear(d);
   }
+
   if (value === "last_7") return [addDaysISO(today, -6), today];
   if (value === "last_30") return [addDaysISO(today, -29), today];
-  if (value === "ytd"){
-    const y = new Date().getFullYear();
-    return [`${y}-01-01`, today];
+
+  // "Anno corrente" = anno di esercizio selezionato (tutto l'anno)
+  if (value === "ytd" || value === "all"){
+    return [`${y}-01-01`, `${y}-12-31`];
   }
-  if (value === "all") return ["2000-01-01", today];
+
   if (value && value.startsWith("month:")){
-    const ym = value.split(":")[1];
+    const ym = value.split(":")[1]; // YYYY-MM
     return monthRangeFromYM(ym);
   }
+
   return null;
 }
 
@@ -1554,6 +6374,11 @@ async function api(action, { method="GET", params={}, body=null, showLoader=true
   if (showLoader) beginRequest();
   let realMethod = method; // definito subito per evitare ReferenceError nel finally
   try {
+  // LOCAL: nessuna chiamata a Google/Apps Script
+  if (typeof __LOCAL_MODE__ !== "undefined" && __LOCAL_MODE__) {
+    try{ __syncLedBegin(realMethod); }catch(_){ }
+    return await __localApi__(action, { method: realMethod, params: (params||{}), body });
+  }
   if (!API_BASE_URL || API_BASE_URL.includes("INCOLLA_QUI")) {
     throw new Error("Config mancante: imposta API_BASE_URL in config.js");
   }
@@ -1692,6 +6517,7 @@ return json.data;
 // - tariffa_oraria -> value (number)
 // - costo_benzina  -> value (number)
 // - tassa_soggiorno -> value (number)
+// - tassa_soggiorno_max_notti -> value (integer, max notti tassabili)
 // =========================
 
 function __normKey(k) {
@@ -1730,12 +6556,566 @@ function getSettingNumber(key, fallback = 0) {
   return isFinite(n) ? n : (Number(fallback) || 0);
 }
 
+const __LAUNDRY_DEFAULT_COMPONENTS__ = [
+  { id: "lc-mat", titolo: "Lenzuolo Matrimoniale", abbreviazione: "MAT", prezzo: 0, colore: "blue" },
+  { id: "lc-sin", titolo: "Lenzuolo Singolo", abbreviazione: "SIN", prezzo: 0, colore: "blue" },
+  { id: "lc-fed", titolo: "Federe", abbreviazione: "FED", prezzo: 0, colore: "blue" },
+  { id: "lc-tdo", titolo: "Telo Doccia", abbreviazione: "TDO", prezzo: 0, colore: "orange" },
+  { id: "lc-tfa", titolo: "Telo Faccia", abbreviazione: "TFA", prezzo: 0, colore: "orange" },
+  { id: "lc-tbi", titolo: "Telo Bidet", abbreviazione: "TBI", prezzo: 0, colore: "orange" },
+  { id: "lc-tap", titolo: "Tappeto", abbreviazione: "TAP", prezzo: 0, colore: "sand" },
+  { id: "lc-tpi", titolo: "Telo Piscina", abbreviazione: "TPI", prezzo: 0, colore: "purple" },
+];
+
+const __LAUNDRY_COMPONENT_TRANSLATIONS__ = {
+  MAT: { it: "Lenzuolo Matrimoniale", en: "Double Bed Sheet", fr: "Drap Double", de: "Doppelbettlaken", es: "Sábana Matrimonial" },
+  SIN: { it: "Lenzuolo Singolo", en: "Single Bed Sheet", fr: "Drap Simple", de: "Einzelbettlaken", es: "Sábana Individual" },
+  FED: { it: "Federe", en: "Pillowcases", fr: "Taies d'oreiller", de: "Kissenbezüge", es: "Fundas de Almohada" },
+  TDO: { it: "Telo Doccia", en: "Bath Towel", fr: "Serviette de Douche", de: "Duschtuch", es: "Toalla de Ducha" },
+  TFA: { it: "Telo Faccia", en: "Face Towel", fr: "Serviette Visage", de: "Handtuch", es: "Toalla de Cara" },
+  TBI: { it: "Telo Bidet", en: "Bidet Towel", fr: "Serviette Bidet", de: "Bidettuch", es: "Toalla de Bidé" },
+  TAP: { it: "Tappeto", en: "Bath Mat", fr: "Tapis de Bain", de: "Badematte", es: "Alfombra de Baño" },
+  TPI: { it: "Telo Piscina", en: "Pool Towel", fr: "Serviette Piscine", de: "Poolhandtuch", es: "Toalla de Piscina" },
+};
+
+function __laundryDisplayTitle__(itemOrCode, fallbackTitle = ""){
+  const code = __normalizeLaundryCode__(typeof itemOrCode === 'string' ? itemOrCode : (itemOrCode?.abbreviazione ?? itemOrCode?.code));
+  const base = String(typeof itemOrCode === 'string' ? fallbackTitle : (itemOrCode?.titolo ?? itemOrCode?.nome ?? itemOrCode?.label ?? itemOrCode?.title ?? fallbackTitle) || '').trim();
+  const lang = __getAppLanguage__();
+  const translated = code && __LAUNDRY_COMPONENT_TRANSLATIONS__[code] ? String(__LAUNDRY_COMPONENT_TRANSLATIONS__[code]?.[lang] || __LAUNDRY_COMPONENT_TRANSLATIONS__[code]?.it || '').trim() : '';
+  if (translated) return translated;
+  if (base){
+    try{
+      const next = __translateText__(base);
+      return String(next || base).trim() || base;
+    }catch(_){ return base; }
+  }
+  return code || '';
+}
+
+const __LAUNDRY_RESERVED_KEYS__ = new Set([
+  "id","startdate","start_date","enddate","end_date","from","to","createdat","created_at","updatedat","updated_at","deletedat","deleted_at","isdeleted","is_deleted","deleted","totalcost","laundryprices","laundry_prices","laundrycatalog","laundry_catalog"
+]);
+const __LAUNDRY_CATALOG_CACHE_KEY__ = "ddae_laundry_catalog_v1";
+
+function __persistLaundryCatalogCache__(list){
+  try{
+    const clean = __sanitizeLaundryCatalogList__(list, { fallbackToDefault: false });
+    localStorage.setItem(__LAUNDRY_CATALOG_CACHE_KEY__, JSON.stringify(clean));
+    return clean;
+  }catch(_){ return []; }
+}
+
+function __readLaundryCatalogCache__(){
+  try{
+    const raw = localStorage.getItem(__LAUNDRY_CATALOG_CACHE_KEY__);
+    if (!String(raw || '').trim()) return [];
+    const parsed = JSON.parse(String(raw || '[]'));
+    return __sanitizeLaundryCatalogList__(parsed, { fallbackToDefault: false });
+  }catch(_){ return []; }
+}
+
+function __normalizeLaundryColor__(value){
+  return __normalizeOperatoreColor__(value);
+}
+
+function __normalizeLaundryCode__(value){
+  return String(value || '').trim().toUpperCase().replace(/[^A-Z0-9_]/g, '').slice(0, 10);
+}
+
+function __laundryLegacyPriceMap__(){
+  const row = getSettingRow("laundry_prices");
+  const raw = row ? (row.value ?? row.Value ?? "") : "";
+  const out = {};
+  if (!String(raw || '').trim()) return out;
+  try{
+    const parsed = JSON.parse(String(raw || '{}'));
+    Object.keys(parsed || {}).forEach((key) => {
+      const code = __normalizeLaundryCode__(key);
+      if (!code) return;
+      const n = Number(String(parsed?.[key] ?? '').replace(',', '.'));
+      out[code] = (isFinite(n) && n >= 0) ? Math.round(n * 100) / 100 : 0;
+    });
+  }catch(_){ }
+  return out;
+}
+
+function __defaultLaundryCatalogFromLegacy__(){
+  const priceMap = __laundryLegacyPriceMap__();
+  return __LAUNDRY_DEFAULT_COMPONENTS__.map((item, idx) => ({
+    id: String(item.id || `lc-${idx+1}`),
+    titolo: String(item.titolo || '').trim(),
+    abbreviazione: __normalizeLaundryCode__(item.abbreviazione || item.code || item.sigla),
+    prezzo: (() => { const n = Number(priceMap?.[__normalizeLaundryCode__(item.abbreviazione)] ?? item.prezzo ?? 0); return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0; })(),
+    colore: __normalizeLaundryColor__(item.colore || 'blue'),
+  }));
+}
+
+function __sanitizeLaundryCatalogList__(list, { fallbackToDefault = true } = {}){
+  const baseMap = new Map(__LAUNDRY_DEFAULT_COMPONENTS__.map(item => [__normalizeLaundryCode__(item.abbreviazione), item]));
+  const input = Array.isArray(list) ? list : [];
+  const seen = new Set();
+  const out = [];
+  input.forEach((item, idx) => {
+    const code = __normalizeLaundryCode__(item?.abbreviazione ?? item?.code ?? item?.sigla ?? item?.key);
+    const legacy = code ? baseMap.get(code) : null;
+    const titolo = String(item?.titolo ?? item?.nome ?? item?.label ?? item?.title ?? legacy?.titolo ?? code).trim();
+    if (!code || !titolo || seen.has(code)) return;
+    const rawPrice = item?.prezzo ?? item?.price ?? item?.prezzo_pulizia ?? item?.unitPrice ?? item?.costo;
+    const priceNum = Number(String(rawPrice ?? legacy?.prezzo ?? 0).replace(',', '.'));
+    out.push({
+      id: String(item?.id || `lc-${Date.now()}-${idx}`),
+      titolo,
+      abbreviazione: code,
+      prezzo: isFinite(priceNum) && priceNum >= 0 ? Math.round(priceNum * 100) / 100 : 0,
+      colore: __normalizeLaundryColor__(item?.colore ?? item?.color ?? legacy?.colore ?? 'blue'),
+    });
+    seen.add(code);
+  });
+  return out.length ? out : (fallbackToDefault ? __defaultLaundryCatalogFromLegacy__() : []);
+}
+
+function getLaundryCatalogFromSettings(){
+  const row = getSettingRow("laundry_catalogo");
+  const raw = row ? (row.value ?? row.Value ?? "") : "";
+  if (String(raw || '').trim()){
+    try{
+      const parsed = JSON.parse(String(raw || '[]'));
+      const clean = __sanitizeLaundryCatalogList__(parsed, { fallbackToDefault: true });
+      try{ if (clean && clean.length) __persistLaundryCatalogCache__(clean); }catch(_){ }
+      return clean;
+    }catch(_){ }
+  }
+  const cached = __readLaundryCatalogCache__();
+  if (cached.length) return cached;
+  return __defaultLaundryCatalogFromLegacy__();
+}
+
+function getLaundryComponentCodes(){
+  return getLaundryCatalogFromSettings().map(item => String(item?.abbreviazione || '').trim()).filter(Boolean);
+}
+
+function __laundryCatalogMapByCode__(catalog){
+  const map = new Map();
+  (Array.isArray(catalog) ? catalog : []).forEach((item) => {
+    const code = __normalizeLaundryCode__(item?.abbreviazione ?? item?.code);
+    if (!code || map.has(code)) return;
+    map.set(code, {
+      id: String(item?.id || code),
+      titolo: String(item?.titolo ?? item?.nome ?? item?.label ?? item?.title ?? code).trim() || code,
+      abbreviazione: code,
+      prezzo: (() => { const n = Number(String(item?.prezzo ?? item?.price ?? item?.unitPrice ?? 0).replace(',', '.')); return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0; })(),
+      colore: __normalizeLaundryColor__(item?.colore ?? item?.color ?? 'blue'),
+    });
+  });
+  return map;
+}
+
+function __detectLaundryCodesFromRecord__(it){
+  const set = new Set();
+  try{ getLaundryComponentCodes().forEach(code => { if (code) set.add(code); }); }catch(_){ }
+  Object.keys(it || {}).forEach((rawKey) => {
+    const lowered = String(rawKey || '').trim().toLowerCase();
+    if (!lowered || __LAUNDRY_RESERVED_KEYS__.has(lowered)) return;
+    let candidate = lowered;
+    if (/_resi$/i.test(rawKey)) candidate = lowered.slice(0, -5);
+    else if (/_r$/i.test(rawKey)) candidate = lowered.slice(0, -2);
+    else if (/r$/i.test(rawKey) && lowered.length > 1) candidate = lowered.slice(0, -1);
+    const code = __normalizeLaundryCode__(candidate);
+    if (!code) return;
+    const rawVal = it?.[rawKey];
+    const numeric = Number(rawVal);
+    if (isFinite(numeric) && Math.abs(numeric) <= 0) return;
+    if (!String(rawVal ?? '').trim()) return;
+    set.add(code);
+  });
+  return Array.from(set).filter(Boolean);
+}
+
+function __getLaundryCatalogForRecord__(it){
+  const settingsCatalog = getLaundryCatalogFromSettings();
+  const settingsMap = __laundryCatalogMapByCode__(settingsCatalog);
+  const snapshot = __sanitizeLaundryCatalogList__(Array.isArray(it?.laundryCatalog) ? it.laundryCatalog : (Array.isArray(it?.laundry_catalog) ? it.laundry_catalog : []), { fallbackToDefault: false });
+  const snapshotMap = __laundryCatalogMapByCode__(snapshot);
+  const sourceList = snapshot.length ? snapshot : settingsCatalog;
+  const map = __laundryCatalogMapByCode__(sourceList);
+  const extras = __detectLaundryCodesFromRecord__(it);
+  extras.forEach((code, idx) => {
+    if (map.has(code)) return;
+    const fromSnapshot = snapshotMap.get(code);
+    const fromSettings = settingsMap.get(code);
+    const source = fromSnapshot || fromSettings || null;
+    map.set(code, {
+      id: String(source?.id || `lc-extra-${idx}`),
+      titolo: String(source?.titolo || code).trim() || code,
+      abbreviazione: code,
+      prezzo: (() => { const n = Number(source?.prezzo ?? 0); return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0; })(),
+      colore: __normalizeLaundryColor__(source?.colore || 'blue'),
+    });
+  });
+  const ordered = [];
+  const pushFrom = (arr) => {
+    (Array.isArray(arr) ? arr : []).forEach((item) => {
+      const code = __normalizeLaundryCode__(item?.abbreviazione ?? item?.code);
+      if (!code || !map.has(code) || ordered.some(row => row.abbreviazione === code)) return;
+      ordered.push(map.get(code));
+    });
+  };
+  pushFrom(sourceList);
+  Array.from(map.keys()).forEach((code) => {
+    if (!ordered.some(row => row.abbreviazione === code)) ordered.push(map.get(code));
+  });
+  return ordered.filter(item => item && item.abbreviazione);
+}
+
+function getLaundryPricesFromSettings(){
+  const out = {};
+  getLaundryCatalogFromSettings().forEach((item) => {
+    const code = __normalizeLaundryCode__(item?.abbreviazione);
+    if (!code) return;
+    const n = Number(item?.prezzo || 0);
+    out[code] = isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0;
+  });
+  return out;
+}
+
+async function saveLaundryCatalogToSettings(list){
+  const clean = __sanitizeLaundryCatalogList__(list, { fallbackToDefault: false });
+  try{ __persistLaundryCatalogCache__(clean); }catch(_){ }
+  const priceMap = {};
+  clean.forEach((item) => {
+    priceMap[item.abbreviazione] = Math.round((Number(item.prezzo || 0) || 0) * 100) / 100;
+  });
+  await api("impostazioni", {
+    method: "POST",
+    body: {
+      laundry_catalogo: clean,
+      laundry_prices: priceMap,
+    },
+    showLoader: true,
+  });
+  await ensureSettingsLoaded({ force: true, showLoader: false });
+  return clean;
+}
+
+async function saveLaundryPricesToSettings(prices){
+  const map = prices && typeof prices === 'object' ? prices : {};
+  const next = getLaundryCatalogFromSettings().map((item) => {
+    const code = __normalizeLaundryCode__(item?.abbreviazione);
+    const raw = Number(String(map?.[code] ?? item?.prezzo ?? 0).replace(',', '.'));
+    return { ...item, prezzo: isFinite(raw) && raw >= 0 ? Math.round(raw * 100) / 100 : 0 };
+  });
+  await saveLaundryCatalogToSettings(next);
+  return getLaundryPricesFromSettings();
+}
+
+function __laundryMoneyFmt__(value){
+  const n = Number(value || 0);
+  return euro(isFinite(n) ? n : 0);
+}
+
+function __laundryComputeTotalCost__(item, prices){
+  const priceMap = (prices && typeof prices === 'object') ? prices : getLaundryPricesFromSettings();
+  const defs = __getLaundryCatalogForRecord__(item);
+  let total = 0;
+  defs.forEach((def) => {
+    const code = String(def?.abbreviazione || '').trim();
+    if (!code) return;
+    const qty = Math.max(0, Number(item?.[code] || 0) || 0);
+    const unit = Math.max(0, Number(priceMap?.[code] ?? def?.prezzo ?? 0) || 0);
+    total += qty * unit;
+  });
+  return Math.round(total * 100) / 100;
+}
+
 function getOperatorNamesFromSettings() {
+  try{
+    const catalog = getOperatoriCatalogFromSettings ? getOperatoriCatalogFromSettings() : [];
+    const names = (Array.isArray(catalog) ? catalog : []).map(item => String(item?.nome || '').trim()).filter(Boolean);
+    if (names.length) return names;
+  }catch(_){ }
   const row = getSettingRow("operatori");
   const op1 = String(row?.operatore_1 ?? row?.Operatore_1 ?? row?.operatore1 ?? "").trim();
   const op2 = String(row?.operatore_2 ?? row?.Operatore_2 ?? row?.operatore2 ?? "").trim();
   const op3 = String(row?.operatore_3 ?? row?.Operatore_3 ?? row?.operatore3 ?? "").trim();
-  return [op1, op2, op3];
+  return [op1, op2, op3].filter(Boolean);
+}
+
+
+
+const __OPERATORI_COLOR_KEYS__ = ["blue","orange","green","red","purple","sand"];
+const __OPERATORI_COLOR_SHADE_COUNT__ = 3;
+const __OPERATORI_COLOR_DEFAULT_SHADE__ = 2;
+const __OPERATORI_COLOR_TONES__ = {
+  blue:   ["#c7d6ff", "#6f8cff", "#2348c8"],
+  orange: ["#ffd7a8", "#f5a247", "#bf6200"],
+  green:  ["#c3ecd0", "#56b97b", "#1f7a48"],
+  red:    ["#f5bcc4", "#df6e81", "#a62e46"],
+  purple: ["#dcc9ff", "#9670ee", "#5b30b8"],
+  sand:   ["#ead8bf", "#c59b62", "#8e6028"],
+};
+
+function __parseOperatoreColorSpec__(value){
+  const raw = String(value || "").trim().toLowerCase();
+  const m = raw.match(/^([a-z]+)(?:[-_: ]?([1-3]))?$/i);
+  const base = (m && __OPERATORI_COLOR_KEYS__.includes(String(m[1] || '').toLowerCase())) ? String(m[1]).toLowerCase() : 'blue';
+  const shade = Math.min(__OPERATORI_COLOR_SHADE_COUNT__, Math.max(1, parseInt((m && m[2]) || String(__OPERATORI_COLOR_DEFAULT_SHADE__), 10) || __OPERATORI_COLOR_DEFAULT_SHADE__));
+  return { base, shade, spec: `${base}-${shade}` };
+}
+
+function __normalizeOperatoreColor__(value){
+  return __parseOperatoreColorSpec__(value).spec;
+}
+
+function __operatoreColorBase__(value){
+  return __parseOperatoreColorSpec__(value).base;
+}
+
+function __operatoreColorShade__(value){
+  return __parseOperatoreColorSpec__(value).shade;
+}
+
+function __operatoreColorHex__(color){
+  const { base, shade } = __parseOperatoreColorSpec__(color);
+  const tones = __OPERATORI_COLOR_TONES__[base] || __OPERATORI_COLOR_TONES__.blue;
+  return tones[Math.max(0, Math.min(tones.length - 1, shade - 1))] || tones[1] || '#6f84c8';
+}
+
+function __laundryColorTokens__(value){
+  const spec = __normalizeLaundryColor__(value || 'blue');
+  const parsed = __parseOperatoreColorSpec__(spec);
+  const main = __operatoreColorHex__(spec);
+  const light = __operatoreColorHex__(`${parsed.base}-1`);
+  const dark = __operatoreColorHex__(`${parsed.base}-3`);
+  return {
+    spec,
+    base: parsed.base,
+    shade: parsed.shade,
+    rowBg: hexToRgba(main, 0.10),
+    rowBorder: hexToRgba(main, 0.22),
+    badgePrimaryBg: main,
+    badgePrimaryText: '#ffffff',
+    badgeSecondaryBg: light,
+    badgeSecondaryText: '#0b1f3a',
+    label: dark,
+    meta: hexToRgba(dark, 0.72),
+    price: dark,
+  };
+}
+
+function __laundryEscapeAttr__(value){
+  return String(value || '')
+    .replaceAll('&', '&amp;')
+    .replaceAll('"', '&quot;')
+    .replaceAll('<', '&lt;')
+    .replaceAll('>', '&gt;');
+}
+
+function __normalizeOperatoreNameKey__(value){
+  return String(value || '').trim().toLowerCase().replace(/\s+/g, ' ');
+}
+
+function __operatoreCatalogMapByName__(){
+  const map = new Map();
+  try{
+    (getOperatoriCatalogFromSettings() || []).forEach((item) => {
+      const name = String(item?.nome || '').trim();
+      const key = __normalizeOperatoreNameKey__(name);
+      if (!key) return;
+      map.set(key, { ...item, nome: name });
+    });
+  }catch(_){ }
+  return map;
+}
+
+function getActiveOperatorNames(){
+  return Array.from(__operatoreCatalogMapByName__().values()).map(item => String(item?.nome || '').trim()).filter(Boolean);
+}
+
+function getCanonicalActiveOperatorName(name){
+  const key = __normalizeOperatoreNameKey__(name);
+  if (!key) return '';
+  try{
+    const map = __operatoreCatalogMapByName__();
+    if (map.has(key)) return String(map.get(key)?.nome || '').trim();
+  }catch(_){ }
+  return '';
+}
+
+function isActiveOperatorName(name){
+  return !!getCanonicalActiveOperatorName(name);
+}
+
+function getOperatoreCatalogItemByName(name){
+  const key = String(name || '').trim().toLowerCase();
+  if (!key) return null;
+  try{
+    const map = __operatoreCatalogMapByName__();
+    if (map.has(key)) return map.get(key) || null;
+    for (const [k, item] of map.entries()){
+      if (!k) continue;
+      if (k === key || k.includes(key) || key.includes(k)) return item || null;
+    }
+  }catch(_){ }
+  return null;
+}
+
+function getOperatoreColorHexByName(name, fallbackColor){
+  const item = getOperatoreCatalogItemByName(name);
+  return __operatoreColorHex__(item?.colore || fallbackColor || 'blue');
+}
+
+function getOperatoreTariffaByName(name, fallbackValue = 0){
+  const item = getOperatoreCatalogItemByName(name);
+  const val = Number(item?.tariffa);
+  if (isFinite(val) && val >= 0) return Math.round(val * 100) / 100;
+  const fb = Number(fallbackValue || 0);
+  return isFinite(fb) && fb >= 0 ? Math.round(fb * 100) / 100 : 0;
+}
+
+function getOperatoreBenzinaByName(name, fallbackValue = 0){
+  const item = getOperatoreCatalogItemByName(name);
+  const val = Number(item?.benzina);
+  if (isFinite(val) && val >= 0) return Math.round(val * 100) / 100;
+  const fb = Number(fallbackValue || 0);
+  return isFinite(fb) && fb >= 0 ? Math.round(fb * 100) / 100 : 0;
+}
+
+
+function __normalizeChannelColor__(color){
+  return __normalizeOperatoreColor__(color || 'orange-2');
+}
+
+function __channelInitialFromName__(name){
+  const clean = String(name || '').trim();
+  return clean ? clean.charAt(0).toUpperCase() : 'C';
+}
+
+function getChannelCatalogFromSettings(){
+  const row = getSettingRow("channel_catalogo");
+  const raw = row ? (row.value ?? row.Value ?? "") : "";
+  if (!String(raw || "").trim()) return [];
+  try{
+    const parsed = JSON.parse(String(raw || '[]'));
+    if (!Array.isArray(parsed)) return [];
+    return parsed.map((item, idx) => ({
+      id: String(item?.id || `ch-${idx+1}-${Date.now()}`),
+      nome: String(item?.nome || item?.name || '').trim(),
+      commissione: (() => { const n = Number(String(item?.commissione ?? item?.commission ?? item?.percentuale ?? '').replace(',', '.')); return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0; })(),
+      iniziale: String(item?.iniziale || item?.initial || '').trim().slice(0,1).toUpperCase(),
+      colore: __normalizeChannelColor__(item?.colore),
+    })).filter(item => item.nome).map(item => ({ ...item, iniziale: item.iniziale || __channelInitialFromName__(item.nome) }));
+  }catch(_){
+    return [];
+  }
+}
+
+async function saveChannelCatalogToSettings(list){
+  const clean = (Array.isArray(list) ? list : []).map((item, idx) => ({
+    id: String(item?.id || `ch-${Date.now()}-${idx}`),
+    nome: String(item?.nome || '').trim(),
+    commissione: (() => { const n = Number(String(item?.commissione ?? item?.commission ?? '').replace(',', '.')); return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0; })(),
+    iniziale: String(item?.iniziale || item?.initial || '').trim().slice(0,1).toUpperCase() || __channelInitialFromName__(item?.nome),
+    colore: __normalizeChannelColor__(item?.colore),
+  })).filter(item => item.nome);
+  await api("impostazioni", { method:"POST", body:{ channel_catalogo: clean }, showLoader:true });
+  await ensureSettingsLoaded({ force:true, showLoader:false });
+  try{ populateGuestChannelOptions(); }catch(_){ }
+  return clean;
+}
+
+function getChannelCatalogItemById(id){
+  const key = String(id || '').trim();
+  if (!key) return null;
+  return getChannelCatalogFromSettings().find(item => String(item.id) === key) || null;
+}
+
+function populateGuestChannelOptions(selectedId = null){
+  const sel = document.getElementById('guestChannel');
+  if (!sel) return;
+  const current = (selectedId == null) ? String(sel.value || '').trim() : String(selectedId || '').trim();
+  const items = getChannelCatalogFromSettings();
+  sel.innerHTML = `<option value="">Seleziona…</option>` + items.map(item => `<option value="${String(item.id).replace(/[&<>"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s]||s))}">${String(item.nome || '').replace(/[&<>"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s]||s))}</option>`).join('');
+  if (current && items.some(item => String(item.id) === current)) sel.value = current;
+}
+
+function applySelectedChannelToGuestForm(channelId, { preserveManual=false } = {}){
+  const sel = document.getElementById('guestChannel');
+  const pctEl = document.getElementById('guestChannelCommission');
+  const item = getChannelCatalogItemById(channelId || sel?.value || '');
+  if (sel && item) sel.value = String(item.id);
+  if (pctEl) pctEl.value = item ? String(item.commissione) : '';
+  try{ state.guestChannelId = item ? String(item.id) : ''; }catch(_){ }
+  try{ state.guestChannelName = item ? String(item.nome) : ''; }catch(_){ }
+  try{ state.guestChannelColor = item ? String(item.colore) : ''; }catch(_){ }
+  try{ state.guestChannelInitial = item ? String(item.iniziale || __channelInitialFromName__(item.nome)) : ''; }catch(_){ }
+  try{ state.guestChannelCommissionPct = item ? Number(item.commissione || 0) : 0; }catch(_){ }
+  try{ recalcGuestCommission(); }catch(_){ }
+  if (!preserveManual){ try{ refreshFloatingLabels(); }catch(_){ } }
+}
+
+function getGuestChannelBadgeData(item){
+  const id = String(item?.channel_id ?? item?.channelId ?? '').trim();
+  const catalogItem = id ? getChannelCatalogItemById(id) : null;
+  const color = __normalizeChannelColor__(catalogItem?.colore || item?.channel_colore || item?.channelColor || 'orange');
+  const initial = String(catalogItem?.iniziale || item?.channel_iniziale || item?.channelInitial || __channelInitialFromName__(catalogItem?.nome || item?.channel_nome || item?.channelName || '')).trim().slice(0,1).toUpperCase() || 'C';
+  const name = String(catalogItem?.nome || item?.channel_nome || item?.channelName || '').trim();
+  return { color, initial, name };
+}
+
+function __operatoriCatalogDefaultFromLegacy__(){
+  const names = getOperatorNamesFromSettings().filter(Boolean);
+  if (!names.length) return [];
+  const tariffa = getSettingNumber("tariffa_oraria", 0);
+  const benzina = getSettingNumber("costo_benzina", 0);
+  return names.map((nome, idx) => ({
+    id: `legacy-${idx+1}`,
+    nome,
+    tariffa,
+    benzina,
+    colore: __OPERATORI_COLOR_KEYS__[idx] || "blue",
+  }));
+}
+
+function getOperatoriCatalogFromSettings(){
+  const row = getSettingRow("operatori_catalogo");
+  const raw = row ? (row.value ?? row.Value ?? "") : "";
+  if (!String(raw || "").trim()) return __operatoriCatalogDefaultFromLegacy__();
+  try{
+    const parsed = JSON.parse(String(raw || "[]"));
+    if (!Array.isArray(parsed)) return __operatoriCatalogDefaultFromLegacy__();
+    return parsed.map((item, idx) => ({
+      id: String(item?.id || `op-${idx+1}-${Date.now()}`),
+      nome: String(item?.nome || item?.name || "").trim(),
+      tariffa: (() => { const n = Number(String(item?.tariffa ?? "").replace(",", ".")); return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0; })(),
+      benzina: (() => { const n = Number(String(item?.benzina ?? "").replace(",", ".")); return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0; })(),
+      colore: __normalizeOperatoreColor__(item?.colore),
+    })).filter(item => item.nome);
+  }catch(_){
+    return __operatoriCatalogDefaultFromLegacy__();
+  }
+}
+
+async function saveOperatoriCatalogToSettings(list){
+  const clean = (Array.isArray(list) ? list : []).map((item, idx) => ({
+    id: String(item?.id || `op-${Date.now()}-${idx}`),
+    nome: String(item?.nome || "").trim(),
+    tariffa: (() => { const n = Number(String(item?.tariffa ?? "").replace(",", ".")); return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0; })(),
+    benzina: (() => { const n = Number(String(item?.benzina ?? "").replace(",", ".")); return isFinite(n) && n >= 0 ? Math.round(n * 100) / 100 : 0; })(),
+    colore: __normalizeOperatoreColor__(item?.colore),
+  })).filter(item => item.nome);
+  const firstThree = clean.slice(0, 3).map(item => item.nome);
+  await api("impostazioni", {
+    method: "POST",
+    body: {
+      operatori_catalogo: clean,
+      operatori: firstThree,
+    },
+    showLoader: true,
+  });
+  await ensureSettingsLoaded({ force: true, showLoader: false });
+  try{ if (window.__syncCleanOperators__) window.__syncCleanOperators__(); }catch(_){ }
+  return clean;
 }
 
 async function ensureSettingsLoaded({ force = false, showLoader = false } = {}) {
@@ -1745,65 +7125,19 @@ async function ensureSettingsLoaded({ force = false, showLoader = false } = {}) 
     const rows = data?.rows || data?.items || [];
     state.settings.rows = Array.isArray(rows) ? rows : [];
     state.settings.byKey = __parseSettingsRows(state.settings.rows);
+    try{ __persistLaundryCatalogCache__(getLaundryCatalogFromSettings()); }catch(_){ }
     state.settings.loaded = true;
     state.settings.loadedAt = Date.now();
 
-    // Se esistono campi operatori (pulizie), mostra i nomi salvati (non editabili)
-    try {
-      const names = getOperatorNamesFromSettings(); // [op1, op2, op3]
-const ids = ["op1Name","op2Name","op3Name"];
-ids.forEach((id, idx) => {
-  const el = document.getElementById(id);
-  if (!el) return;
-  const name = String(names[idx] || "").trim();
-
-  // Nascondi completamente l'operatore se non è impostato
-  const row = el.closest ? el.closest(".clean-op-row") : null;
-  if (!name) {
-    if (row) row.style.display = "none";
-    el.textContent = "";
-    el.classList.remove("is-placeholder");
-    return;
-  } else {
-    if (row) row.style.display = "";
-  }
-
-  // Se è un input (compat), rendilo readOnly e compila
-  if (String(el.tagName || "").toUpperCase() === "INPUT") {
-    el.readOnly = true;
-    el.setAttribute("readonly", "");
-    el.value = name;
-    return;
-  }
-
-  // Altrimenti è un testo (div/span)
-  el.textContent = name;
-  el.classList.remove("is-placeholder");
-});
-
-
-
-// Se sessione OPERATORE: in Pulizie mostra solo il nome dell'operatore loggato
-try{
-  if (state && state.session && isOperatoreSession(state.session)){
-    const rawU = String(state.session._op_local || state.session.username || state.session.user || state.session.nome || state.session.name || state.session.email || "").trim();
-    const normU = rawU.toLowerCase();
-    if (normU){
-      const names2 = names;
-      const active = (names2||[]).find(n => String(n||"").trim().toLowerCase() === normU) || rawU;
-      (names2||[]).forEach((nm, idx)=>{
-        const nm2 = String(nm||"").trim();
-        if (!nm2) return;
-        const rowEl = document.getElementById(ids[idx])?.closest?.('.clean-op-row');
-        if (!rowEl) return;
-        const show = nm2.toLowerCase() === String(active||"").trim().toLowerCase();
-        rowEl.style.display = show ? '' : 'none';
-      });
-    }
-  }
-}catch(_){}
-refreshFloatingLabels();
-    } catch(_) {}
+    try{ if (typeof window.__syncCleanOperators__ === "function") window.__syncCleanOperators__(); }catch(_){ }
+    try{ refreshFloatingLabels(); }catch(_){ }
+    try{ updateSettingsRoomsButtonLabel(); }catch(_){ }
+    try{ ensureRoomsPickerButtons(); }catch(_){ }
+    try{ populateGuestChannelOptions(); }catch(_){ }
+    try{ __hydrateAppLanguageFromSettings__(); }catch(_){ }
+    try{ if (state && state.page === "pulizie") window.__ddae_refreshPulizieGrid?.({ forceReload:true }); }catch(_){ }
+    try{ if (state && state.page === "lavanderia") renderLaundry_(state?.laundry?.current || null); }catch(_){ }
+    try{ if (state && state.page === "laundrycatalog") renderLaundryCatalogPage(); }catch(_){ }
 
     return state.settings;
   } catch (e) {
@@ -1813,28 +7147,114 @@ refreshFloatingLabels();
   }
 }
 
+const __settingsTaxCapUi = {
+  value: 0,
+  holdTimer: null,
+  holdTriggered: false,
+  holdDelay: 500,
+};
+
+function getTouristTaxMaxNightsSetting(fallback = 3) {
+  const raw = getSettingNumber("tassa_soggiorno_max_notti", fallback);
+  return Math.max(0, parseInt(raw, 10) || 0);
+}
+
+function renderTassaMaxNottiButton() {
+  const btn = document.getElementById("setTassaMaxNottiBtn");
+  const val = document.getElementById("setTassaMaxNottiVal");
+  const n = Math.max(0, parseInt(__settingsTaxCapUi.value, 10) || 0);
+  if (btn) {
+    btn.dataset.value = String(n);
+    btn.classList.toggle("is-empty", n <= 0);
+  }
+  if (val) val.textContent = n > 0 ? String(n) : "—";
+}
+
+function setTassaMaxNottiValue(next, { silent = false } = {}) {
+  __settingsTaxCapUi.value = Math.max(0, parseInt(next, 10) || 0);
+  renderTassaMaxNottiButton();
+  if (!silent) refreshFloatingLabels();
+}
+
+function bindTassaMaxNottiButton() {
+  const btn = document.getElementById("setTassaMaxNottiBtn");
+  if (!btn || btn.dataset.bound === "1") return;
+  btn.dataset.bound = "1";
+
+  const clearHold = () => {
+    if (__settingsTaxCapUi.holdTimer) {
+      clearTimeout(__settingsTaxCapUi.holdTimer);
+      __settingsTaxCapUi.holdTimer = null;
+    }
+  };
+
+  const startHold = () => {
+    clearHold();
+    __settingsTaxCapUi.holdTriggered = false;
+    __settingsTaxCapUi.holdTimer = setTimeout(() => {
+      __settingsTaxCapUi.holdTriggered = true;
+      setTassaMaxNottiValue(0);
+      try { toast("Massimo notti azzerato"); } catch(_) {}
+    }, __settingsTaxCapUi.holdDelay);
+  };
+
+  const endHold = () => {
+    clearHold();
+    setTimeout(() => { __settingsTaxCapUi.holdTriggered = false; }, 0);
+  };
+
+  btn.addEventListener("pointerdown", startHold, { passive: true });
+  btn.addEventListener("pointerup", endHold, { passive: true });
+  btn.addEventListener("pointerleave", endHold, { passive: true });
+  btn.addEventListener("pointercancel", endHold, { passive: true });
+
+  btn.addEventListener("click", () => {
+    if (__settingsTaxCapUi.holdTriggered) return;
+    setTassaMaxNottiValue((__settingsTaxCapUi.value || 0) + 1);
+  });
+}
+
+function __openSettingsConfigModal__(){
+  const modal = document.getElementById("settingsConfigModal");
+  if (!modal) return;
+  modal.hidden = false;
+  modal.setAttribute("aria-hidden", "false");
+  try{ loadImpostazioniPage({ force:false }); }catch(_){ }
+  try{ refreshFloatingLabels(); }catch(_){ }
+}
+
+function __closeSettingsConfigModal__(){
+  const modal = document.getElementById("settingsConfigModal");
+  if (!modal) return;
+  modal.hidden = true;
+  modal.setAttribute("aria-hidden", "true");
+}
+
+function __openSettingsBackupModal__(){
+  const modal = document.getElementById("settingsBackupModal");
+  if (!modal) return;
+  modal.hidden = false;
+  modal.setAttribute("aria-hidden", "false");
+}
+
+function __closeSettingsBackupModal__(){
+  const modal = document.getElementById("settingsBackupModal");
+  if (!modal) return;
+  modal.hidden = true;
+  modal.setAttribute("aria-hidden", "true");
+}
+
 async function loadImpostazioniPage({ force = false } = {}) {
   await ensureSettingsLoaded({ force, showLoader: true });
   try {
-    const rOps = getSettingRow("operatori") || {};
-    const op1 = String(rOps.operatore_1 ?? "").trim();
-    const op2 = String(rOps.operatore_2 ?? "").trim();
-    const op3 = String(rOps.operatore_3 ?? "").trim();
-
-    const el1 = document.getElementById("setOp1");
-    const el2 = document.getElementById("setOp2");
-    const el3 = document.getElementById("setOp3");
-    if (el1) el1.value = op1;
-    if (el2) el2.value = op2;
-    if (el3) el3.value = op3;
-
-    const t = document.getElementById("setTariffa");
-    const b = document.getElementById("setBenzina");
     const ts = document.getElementById("setTassa");
-
-    if (t) t.value = String(getSettingNumber("tariffa_oraria", 0) || "");
-    if (b) b.value = String(getSettingNumber("costo_benzina", 0) || "");
     if (ts) ts.value = String(getSettingNumber("tassa_soggiorno", (typeof TOURIST_TAX_EUR_PPN !== "undefined" ? TOURIST_TAX_EUR_PPN : 0)) || "");
+
+    bindTassaMaxNottiButton();
+    setTassaMaxNottiValue(getTouristTaxMaxNightsSetting(3), { silent: true });
+    try{ updateSettingsAccountName(); }catch(_){ }
+    try{ updateSettingsRoomsButtonLabel(); }catch(_){ }
+    try{ ensureRoomsPickerButtons(); }catch(_){ }
 
     refreshFloatingLabels();
   } catch (e) {
@@ -1852,78 +7272,949 @@ function __readNumInput(id) {
 }
 
 async function saveImpostazioniPage() {
-  const op1 = String(document.getElementById("setOp1")?.value || "").trim();
-  const op2 = String(document.getElementById("setOp2")?.value || "").trim();
-  const op3 = String(document.getElementById("setOp3")?.value || "").trim();
-
-  const tariffa = __readNumInput("setTariffa");
-  const benzina = __readNumInput("setBenzina");
   const tassa = __readNumInput("setTassa");
+  const tassaMaxNotti = Math.max(0, parseInt(__settingsTaxCapUi.value, 10) || 0);
 
   const payload = {
-    operatori: [op1, op2, op3],
-    tariffa_oraria: tariffa,
-    costo_benzina: benzina,
     tassa_soggiorno: tassa,
+    tassa_soggiorno_max_notti: tassaMaxNotti,
   };
 
   await api("impostazioni", { method: "POST", body: payload, showLoader: true });
   await ensureSettingsLoaded({ force: true, showLoader: false });
 
+  try{ __closeSettingsConfigModal__(); }catch(_){ }
   toast("Impostazioni salvate");
 }
 
+const __operatoriPageUi = {
+  color: "blue-2",
+  editingId: "",
+  tones: {},
+};
+
+function __operatoriFormatMoney__(value){
+  const n = Number(value || 0);
+  const safe = isFinite(n) ? n : 0;
+  return `€ ${safe.toFixed(2)}`;
+}
+
+function __initColorToneMap__(ui, fallbackBase = 'blue'){
+  try{
+    if (!ui.tones || typeof ui.tones !== 'object') ui.tones = {};
+    __OPERATORI_COLOR_KEYS__.forEach((base) => {
+      ui.tones[base] = __OPERATORI_COLOR_DEFAULT_SHADE__;
+    });
+    const parsed = __parseOperatoreColorSpec__(ui.color || `${fallbackBase}-${__OPERATORI_COLOR_DEFAULT_SHADE__}`);
+    ui.tones[parsed.base] = parsed.shade;
+    ui.color = parsed.spec;
+  }catch(_){ }
+}
+
+function __updateColorButtonGrid__(selector, ui){
+  try{
+    const selected = __parseOperatoreColorSpec__(ui.color || 'blue-2');
+    document.querySelectorAll(`${selector} .operatori-color-option`).forEach((btn) => {
+      const base = String(btn.dataset.color || 'blue').trim().toLowerCase();
+      const shade = Math.min(3, Math.max(1, parseInt(ui?.tones?.[base] || __OPERATORI_COLOR_DEFAULT_SHADE__, 10) || __OPERATORI_COLOR_DEFAULT_SHADE__));
+      const hex = __operatoreColorHex__(`${base}-${shade}`);
+      btn.classList.toggle('is-selected', base === selected.base);
+      btn.dataset.shade = String(shade);
+      btn.dataset.spec = `${base}-${shade}`;
+      btn.style.background = hex;
+      btn.textContent = String(shade);
+    });
+  }catch(_){ }
+}
+
+
+function __operatoriSetSelectedColor__(color){
+  const parsed = __parseOperatoreColorSpec__(color || 'blue-2');
+  __operatoriPageUi.color = parsed.spec;
+  if (!__operatoriPageUi.tones || typeof __operatoriPageUi.tones !== 'object') __operatoriPageUi.tones = {};
+  __OPERATORI_COLOR_KEYS__.forEach((base) => {
+    if (!__operatoriPageUi.tones[base]) __operatoriPageUi.tones[base] = __OPERATORI_COLOR_DEFAULT_SHADE__;
+  });
+  __operatoriPageUi.tones[parsed.base] = parsed.shade;
+  __updateColorButtonGrid__('#operatoriColorGrid', __operatoriPageUi);
+}
+
+function __operatoriOpenModal__(item){
+  const modal = document.getElementById('operatoriEditorModal');
+  if (!modal) return;
+  const current = item || null;
+  __operatoriPageUi.editingId = current?.id ? String(current.id) : '';
+  const title = document.getElementById('operatoriEditorTitle');
+  const idEl = document.getElementById('operatoriEditorId');
+  const nomeEl = document.getElementById('operatoriEditorNome');
+  const tariffaEl = document.getElementById('operatoriEditorTariffa');
+  const benzinaEl = document.getElementById('operatoriEditorBenzina');
+  const delBtn = document.getElementById('operatoriEditorDelete');
+  if (title) title.textContent = current ? 'Modifica operatore' : 'Nuovo operatore';
+  if (idEl) idEl.value = current?.id ? String(current.id) : '';
+  if (nomeEl) nomeEl.value = current?.nome ? String(current.nome) : '';
+  if (tariffaEl) tariffaEl.value = current && isFinite(Number(current.tariffa)) ? String(Number(current.tariffa)) : '';
+  if (benzinaEl) benzinaEl.value = current && isFinite(Number(current.benzina)) ? String(Number(current.benzina)) : '';
+  if (!__operatoriPageUi.tones || !Object.keys(__operatoriPageUi.tones).length) __initColorToneMap__(__operatoriPageUi, 'blue');
+  if (delBtn) delBtn.hidden = !current;
+  __operatoriSetSelectedColor__(current?.colore || 'blue-2');
+  modal.hidden = false;
+  modal.setAttribute('aria-hidden', 'false');
+  try{ refreshFloatingLabels(); }catch(_){ }
+}
+
+function __operatoriCloseModal__(){
+  const modal = document.getElementById('operatoriEditorModal');
+  if (!modal) return;
+  modal.hidden = true;
+  modal.setAttribute('aria-hidden', 'true');
+  const ids = ['operatoriEditorId','operatoriEditorNome','operatoriEditorTariffa','operatoriEditorBenzina'];
+  ids.forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  __operatoriPageUi.editingId = '';
+  __initColorToneMap__(__operatoriPageUi, 'blue');
+  __operatoriSetSelectedColor__('blue-2');
+}
+
+async function renderOperatoriPage(){
+  await ensureSettingsLoaded({ force:false, showLoader:false });
+  const listEl = document.getElementById('operatoriList');
+  const emptyEl = document.getElementById('operatoriEmpty');
+  if (!listEl) return;
+  const items = getOperatoriCatalogFromSettings();
+  if (!items.length){
+    listEl.innerHTML = '';
+    if (emptyEl) emptyEl.hidden = false;
+    return;
+  }
+  if (emptyEl) emptyEl.hidden = true;
+  listEl.innerHTML = items.map((item) => `
+    <article class="operatori-item" data-id="${item.id}">
+      <div class="operatori-item-top">
+        <div class="operatori-item-left">
+          <span class="operatori-tag color-${item.colore}"></span>
+          <div class="operatori-name">${String(item.nome || '').replace(/[&<>"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s]))}</div>
+        </div>
+        <div class="operatori-item-actions">
+          <button aria-label="Modifica operatore" class="operatori-mini-btn" data-action="edit" type="button"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path></svg></button>
+          <button aria-label="Elimina operatore" class="operatori-mini-btn is-delete" data-action="delete" type="button"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M6 6l1 16h10l1-16"></path><path d="M10 11v6M14 11v6"></path></svg></button>
+        </div>
+      </div>
+      <div class="operatori-metrics">
+        <div class="operatori-metric">
+          <div class="operatori-metric-label">Tariffa</div>
+          <div class="operatori-metric-value">${__operatoriFormatMoney__(item.tariffa)}</div>
+        </div>
+        <div class="operatori-metric">
+          <div class="operatori-metric-label">Benzina</div>
+          <div class="operatori-metric-value">${__operatoriFormatMoney__(item.benzina)}</div>
+        </div>
+      </div>
+    </article>
+  `).join('');
+}
+
+async function loadOperatoriPage(){
+  __initColorToneMap__(__operatoriPageUi, 'blue');
+  await renderOperatoriPage();
+}
+
+function setupOperatoriPage(){
+  const goBtn = document.getElementById('settingsOperatoriBtn');
+  if (goBtn) bindFastTap(goBtn, () => { hideLauncher(); showPage('operatori'); });
+
+  const addBtn = document.getElementById('btnAddOperatoreCard');
+  if (addBtn) bindFastTap(addBtn, () => { __operatoriOpenModal__(null); });
+
+  const closeBtn = document.getElementById('operatoriEditorClose');
+  if (closeBtn) bindFastTap(closeBtn, __operatoriCloseModal__);
+  const cancelBtn = document.getElementById('operatoriEditorCancel');
+  if (cancelBtn) bindFastTap(cancelBtn, __operatoriCloseModal__);
+
+  try{
+    document.querySelectorAll('#operatoriColorGrid .operatori-color-option').forEach(btn => {
+      bindFastTap(btn, () => {
+        const base = String(btn.dataset.color || 'blue').trim().toLowerCase();
+        const current = __parseOperatoreColorSpec__(__operatoriPageUi.color || 'blue-2');
+        if (!__operatoriPageUi.tones || typeof __operatoriPageUi.tones !== 'object') __operatoriPageUi.tones = {};
+        if (!__operatoriPageUi.tones[base]) __operatoriPageUi.tones[base] = __OPERATORI_COLOR_DEFAULT_SHADE__;
+        if (current.base === base) {
+          __operatoriPageUi.tones[base] = (__operatoriPageUi.tones[base] % __OPERATORI_COLOR_SHADE_COUNT__) + 1;
+        }
+        __operatoriSetSelectedColor__(`${base}-${__operatoriPageUi.tones[base]}`);
+      });
+    });
+  }catch(_){ }
+
+  const saveBtn = document.getElementById('operatoriEditorSave');
+  if (saveBtn) bindFastTap(saveBtn, async () => {
+    try{
+      const nome = String(document.getElementById('operatoriEditorNome')?.value || '').trim();
+      if (!nome){ toast('Inserisci il nome operatore'); return; }
+      const tariffaRaw = String(document.getElementById('operatoriEditorTariffa')?.value || '').trim().replace(',', '.');
+      const benzinaRaw = String(document.getElementById('operatoriEditorBenzina')?.value || '').trim().replace(',', '.');
+      const tariffa = tariffaRaw ? Number(tariffaRaw) : 0;
+      const benzina = benzinaRaw ? Number(benzinaRaw) : 0;
+      if (!isFinite(tariffa) || tariffa < 0){ toast('Tariffa non valida'); return; }
+      if (!isFinite(benzina) || benzina < 0){ toast('Benzina non valida'); return; }
+      const id = String(document.getElementById('operatoriEditorId')?.value || '').trim();
+      const list = getOperatoriCatalogFromSettings();
+      const nextItem = {
+        id: id || `op-${Date.now()}`,
+        nome,
+        tariffa: Math.round(tariffa * 100) / 100,
+        benzina: Math.round(benzina * 100) / 100,
+        colore: __operatoriPageUi.color || 'blue',
+      };
+      const idx = list.findIndex(item => String(item.id) === nextItem.id);
+      if (idx >= 0) list[idx] = nextItem;
+      else list.push(nextItem);
+      await saveOperatoriCatalogToSettings(list);
+      __operatoriCloseModal__();
+      await renderOperatoriPage();
+      toast('Operatore salvato');
+    }catch(e){
+      toast(e?.message || 'Errore');
+    }
+  });
+
+  const deleteBtn = document.getElementById('operatoriEditorDelete');
+  if (deleteBtn) bindFastTap(deleteBtn, async () => {
+    try{
+      const id = String(document.getElementById('operatoriEditorId')?.value || '').trim();
+      if (!id) return;
+      const ok = confirm('Eliminare questo operatore?');
+      if (!ok) return;
+      const list = getOperatoriCatalogFromSettings().filter(item => String(item.id) !== id);
+      await saveOperatoriCatalogToSettings(list);
+      __operatoriCloseModal__();
+      await renderOperatoriPage();
+      toast('Operatore eliminato');
+    }catch(e){
+      toast(e?.message || 'Errore');
+    }
+  });
+
+  const listEl = document.getElementById('operatoriList');
+  if (listEl) listEl.addEventListener('click', async (ev) => {
+    const btn = ev.target.closest?.('button[data-action]');
+    const card = ev.target.closest?.('.operatori-item');
+    if (!card) return;
+    const id = String(card.getAttribute('data-id') || '').trim();
+    const item = getOperatoriCatalogFromSettings().find(row => String(row.id) === id);
+    if (!item) return;
+    const action = btn ? String(btn.getAttribute('data-action') || '') : 'edit';
+    if (action === 'delete'){
+      const ok = confirm('Eliminare questo operatore?');
+      if (!ok) return;
+      const list = getOperatoriCatalogFromSettings().filter(row => String(row.id) !== id);
+      await saveOperatoriCatalogToSettings(list);
+      await renderOperatoriPage();
+      toast('Operatore eliminato');
+      return;
+    }
+    __operatoriOpenModal__(item);
+  });
+}
+
+
+const __channelPageUi = {
+  color: "orange-2",
+  editingId: "",
+  tones: {},
+};
+
+function __channelFormatPct__(value){
+  const n = Number(value || 0);
+  const safe = isFinite(n) ? n : 0;
+  return `${safe.toFixed(2)}%`;
+}
+
+function __channelSetSelectedColor__(color){
+  const parsed = __parseOperatoreColorSpec__(color || 'orange-2');
+  __channelPageUi.color = parsed.spec;
+  if (!__channelPageUi.tones || typeof __channelPageUi.tones !== 'object') __channelPageUi.tones = {};
+  __OPERATORI_COLOR_KEYS__.forEach((base) => {
+    if (!__channelPageUi.tones[base]) __channelPageUi.tones[base] = __OPERATORI_COLOR_DEFAULT_SHADE__;
+  });
+  __channelPageUi.tones[parsed.base] = parsed.shade;
+  __updateColorButtonGrid__('#channelColorGrid', __channelPageUi);
+}
+
+function __channelOpenModal__(item){
+  const modal = document.getElementById('channelEditorModal');
+  if (!modal) return;
+  const current = item || null;
+  __channelPageUi.editingId = current?.id ? String(current.id) : '';
+  const title = document.getElementById('channelEditorTitle');
+  const idEl = document.getElementById('channelEditorId');
+  const nomeEl = document.getElementById('channelEditorNome');
+  const commEl = document.getElementById('channelEditorCommission');
+  const iniEl = document.getElementById('channelEditorInitial');
+  const delBtn = document.getElementById('channelEditorDelete');
+  if (title) title.textContent = current ? 'Modifica channel' : 'Nuovo channel';
+  if (idEl) idEl.value = current?.id ? String(current.id) : '';
+  if (nomeEl) nomeEl.value = current?.nome ? String(current.nome) : '';
+  if (commEl) commEl.value = current && isFinite(Number(current.commissione)) ? String(Number(current.commissione)) : '';
+  if (iniEl) iniEl.value = current?.iniziale ? String(current.iniziale).slice(0,1).toUpperCase() : '';
+  if (!__channelPageUi.tones || !Object.keys(__channelPageUi.tones).length) __initColorToneMap__(__channelPageUi, 'orange');
+  if (delBtn) delBtn.hidden = !current;
+  __channelSetSelectedColor__(current?.colore || 'orange-2');
+  modal.hidden = false;
+  modal.setAttribute('aria-hidden', 'false');
+  try{ refreshFloatingLabels(); }catch(_){ }
+}
+
+function __channelCloseModal__(){
+  const modal = document.getElementById('channelEditorModal');
+  if (!modal) return;
+  modal.hidden = true;
+  modal.setAttribute('aria-hidden', 'true');
+  ['channelEditorId','channelEditorNome','channelEditorCommission','channelEditorInitial'].forEach(id => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  __channelPageUi.editingId = '';
+  __initColorToneMap__(__channelPageUi, 'orange');
+  __channelSetSelectedColor__('orange-2');
+}
+
+async function renderChannelPage(){
+  await ensureSettingsLoaded({ force:false, showLoader:false });
+  const listEl = document.getElementById('channelList');
+  const emptyEl = document.getElementById('channelEmpty');
+  if (!listEl) return;
+  const items = getChannelCatalogFromSettings();
+  if (!items.length){
+    listEl.innerHTML = '';
+    if (emptyEl) emptyEl.hidden = false;
+    return;
+  }
+  if (emptyEl) emptyEl.hidden = true;
+  listEl.innerHTML = items.map((item) => `
+    <article class="operatori-item channel-item" data-id="${item.id}">
+      <div class="operatori-item-top">
+        <div class="operatori-item-left">
+          <span class="operatori-tag color-${item.colore}"><span class="channel-tag-letter">${String(item.iniziale || __channelInitialFromName__(item.nome)).slice(0,1).toUpperCase()}</span></span>
+          <div class="operatori-name">${String(item.nome || '').replace(/[&<>"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s]||s))}</div>
+        </div>
+        <div class="operatori-item-actions">
+          <button aria-label="Modifica channel" class="operatori-mini-btn" data-action="edit" type="button"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path></svg></button>
+          <button aria-label="Elimina channel" class="operatori-mini-btn is-delete" data-action="delete" type="button"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M6 6l1 16h10l1-16"></path><path d="M10 11v6M14 11v6"></path></svg></button>
+        </div>
+      </div>
+      <div class="operatori-metrics channel-metrics-single">
+        <div class="operatori-metric">
+          <div class="operatori-metric-label">Commissione</div>
+          <div class="operatori-metric-value">${__channelFormatPct__(item.commissione)}</div>
+        </div>
+      </div>
+    </article>
+  `).join('');
+}
+
+async function loadChannelPage(){
+  __initColorToneMap__(__channelPageUi, 'orange');
+  await renderChannelPage();
+}
+
+function setupChannelPage(){
+  const goBtn = document.getElementById('settingsChannelBtn');
+  if (goBtn) bindFastTap(goBtn, () => { hideLauncher(); showPage('channel'); });
+  const addBtn = document.getElementById('btnAddChannelCard');
+  if (addBtn) bindFastTap(addBtn, () => { __channelOpenModal__(null); });
+  const closeBtn = document.getElementById('channelEditorClose');
+  if (closeBtn) bindFastTap(closeBtn, __channelCloseModal__);
+  const cancelBtn = document.getElementById('channelEditorCancel');
+  if (cancelBtn) bindFastTap(cancelBtn, __channelCloseModal__);
+  try{
+    document.querySelectorAll('#channelColorGrid .operatori-color-option').forEach(btn => {
+      bindFastTap(btn, () => {
+        const base = String(btn.dataset.color || 'orange').trim().toLowerCase();
+        const current = __parseOperatoreColorSpec__(__channelPageUi.color || 'orange-2');
+        if (!__channelPageUi.tones || typeof __channelPageUi.tones !== 'object') __channelPageUi.tones = {};
+        if (!__channelPageUi.tones[base]) __channelPageUi.tones[base] = __OPERATORI_COLOR_DEFAULT_SHADE__;
+        if (current.base === base) {
+          __channelPageUi.tones[base] = (__channelPageUi.tones[base] % __OPERATORI_COLOR_SHADE_COUNT__) + 1;
+        }
+        __channelSetSelectedColor__(`${base}-${__channelPageUi.tones[base]}`);
+      });
+    });
+  }catch(_){ }
+  const saveBtn = document.getElementById('channelEditorSave');
+  if (saveBtn) bindFastTap(saveBtn, async () => {
+    try{
+      const nome = String(document.getElementById('channelEditorNome')?.value || '').trim();
+      if (!nome){ toast('Inserisci il nome channel'); return; }
+      const commissionRaw = String(document.getElementById('channelEditorCommission')?.value || '').trim().replace(',', '.');
+      const commissione = commissionRaw ? Number(commissionRaw) : 0;
+      if (!isFinite(commissione) || commissione < 0){ toast('Commissione non valida'); return; }
+      const id = String(document.getElementById('channelEditorId')?.value || '').trim();
+      const initialRaw = String(document.getElementById('channelEditorInitial')?.value || '').trim();
+      const list = getChannelCatalogFromSettings();
+      const nextItem = {
+        id: id || `ch-${Date.now()}`,
+        nome,
+        commissione: Math.round(commissione * 100) / 100,
+        iniziale: (initialRaw || __channelInitialFromName__(nome)).slice(0,1).toUpperCase(),
+        colore: __channelPageUi.color || 'orange',
+      };
+      const idx = list.findIndex(item => String(item.id) === nextItem.id);
+      if (idx >= 0) list[idx] = nextItem;
+      else list.push(nextItem);
+      await saveChannelCatalogToSettings(list);
+      __channelCloseModal__();
+      await renderChannelPage();
+      toast('Channel salvato');
+    }catch(e){ toast(e?.message || 'Errore'); }
+  });
+  const deleteBtn = document.getElementById('channelEditorDelete');
+  if (deleteBtn) bindFastTap(deleteBtn, async () => {
+    try{
+      const id = String(document.getElementById('channelEditorId')?.value || '').trim();
+      if (!id) return;
+      if (!confirm('Eliminare questo channel?')) return;
+      const list = getChannelCatalogFromSettings().filter(item => String(item.id) !== id);
+      await saveChannelCatalogToSettings(list);
+      __channelCloseModal__();
+      await renderChannelPage();
+      toast('Channel eliminato');
+    }catch(e){ toast(e?.message || 'Errore'); }
+  });
+  const listEl = document.getElementById('channelList');
+  if (listEl) listEl.addEventListener('click', async (ev) => {
+    const btn = ev.target.closest?.('button[data-action]');
+    const card = ev.target.closest?.('.channel-item');
+    if (!card) return;
+    const id = String(card.getAttribute('data-id') || '').trim();
+    const item = getChannelCatalogFromSettings().find(row => String(row.id) === id);
+    if (!item) return;
+    const action = btn ? String(btn.getAttribute('data-action') || '') : 'edit';
+    if (action === 'delete'){
+      if (!confirm('Eliminare questo channel?')) return;
+      const list = getChannelCatalogFromSettings().filter(row => String(row.id) !== id);
+      await saveChannelCatalogToSettings(list);
+      await renderChannelPage();
+      toast('Channel eliminato');
+      return;
+    }
+    __channelOpenModal__(item);
+  });
+}
+
+function __applyHomeIconGradients__(){
+  try{
+    document.querySelectorAll('#page-home .home-grid .home-main svg.ui-ico').forEach((svg) => {
+      svg.querySelectorAll('defs').forEach((d) => d.remove());
+      svg.querySelectorAll('path, circle, rect, line, polyline, polygon, ellipse').forEach((node) => {
+        node.style.stroke = 'currentColor';
+        node.style.fill = 'none';
+      });
+    });
+  }catch(_){ }
+}
+
+const __laundryCatalogPageUi = {
+  color: "blue-2",
+  editingId: "",
+  tones: {},
+};
+
+function __laundryCatalogSetSelectedColor__(color){
+  const parsed = __parseOperatoreColorSpec__(color || 'blue-2');
+  __laundryCatalogPageUi.color = parsed.spec;
+  if (!__laundryCatalogPageUi.tones || typeof __laundryCatalogPageUi.tones !== 'object') __laundryCatalogPageUi.tones = {};
+  __OPERATORI_COLOR_KEYS__.forEach((base) => {
+    if (!__laundryCatalogPageUi.tones[base]) __laundryCatalogPageUi.tones[base] = __OPERATORI_COLOR_DEFAULT_SHADE__;
+  });
+  __laundryCatalogPageUi.tones[parsed.base] = parsed.shade;
+  __updateColorButtonGrid__('#laundryCatalogColorGrid', __laundryCatalogPageUi);
+}
+
+function __laundryCatalogOpenModal__(item){
+  const modal = document.getElementById('laundryCatalogEditorModal');
+  if (!modal) return;
+  const current = item || null;
+  __laundryCatalogPageUi.editingId = current?.id ? String(current.id) : '';
+  const title = document.getElementById('laundryCatalogEditorTitle');
+  const idEl = document.getElementById('laundryCatalogEditorId');
+  const titleEl = document.getElementById('laundryCatalogEditorTitleInput');
+  const codeEl = document.getElementById('laundryCatalogEditorCode');
+  const priceEl = document.getElementById('laundryCatalogEditorPrice');
+  const delBtn = document.getElementById('laundryCatalogEditorDelete');
+  if (title) title.textContent = current ? 'Modifica componente lavanderia' : 'Nuovo componente lavanderia';
+  if (idEl) idEl.value = current?.id ? String(current.id) : '';
+  if (titleEl) titleEl.value = current?.titolo ? String(current.titolo) : ''; // editor keeps base title
+  if (codeEl) codeEl.value = current?.abbreviazione ? String(current.abbreviazione) : '';
+  if (priceEl) priceEl.value = current && isFinite(Number(current.prezzo)) ? String(Number(current.prezzo)) : '';
+  if (!__laundryCatalogPageUi.tones || !Object.keys(__laundryCatalogPageUi.tones).length) __initColorToneMap__(__laundryCatalogPageUi, 'blue');
+  if (delBtn) delBtn.hidden = !current;
+  __laundryCatalogSetSelectedColor__(current?.colore || 'blue-2');
+  modal.hidden = false;
+  modal.setAttribute('aria-hidden', 'false');
+  try{ refreshFloatingLabels(); }catch(_){ }
+}
+
+function __laundryCatalogCloseModal__(){
+  const modal = document.getElementById('laundryCatalogEditorModal');
+  if (!modal) return;
+  modal.hidden = true;
+  modal.setAttribute('aria-hidden', 'true');
+  ['laundryCatalogEditorId','laundryCatalogEditorTitleInput','laundryCatalogEditorCode','laundryCatalogEditorPrice'].forEach((id) => {
+    const el = document.getElementById(id);
+    if (el) el.value = '';
+  });
+  __laundryCatalogPageUi.editingId = '';
+  __initColorToneMap__(__laundryCatalogPageUi, 'blue');
+  __laundryCatalogSetSelectedColor__('blue-2');
+}
+
+async function renderLaundryCatalogPage(){
+  await ensureSettingsLoaded({ force:false, showLoader:false });
+  const listEl = document.getElementById('laundryCatalogList');
+  const emptyEl = document.getElementById('laundryCatalogEmpty');
+  if (!listEl) return;
+  const items = getLaundryCatalogFromSettings();
+  if (!items.length){
+    listEl.innerHTML = '';
+    if (emptyEl) emptyEl.hidden = false;
+    return;
+  }
+  if (emptyEl) emptyEl.hidden = true;
+  listEl.innerHTML = items.map((item) => `
+    <article class="operatori-item laundry-component-item" data-id="${item.id}">
+      <div class="operatori-item-top">
+        <div class="operatori-item-left">
+          <span class="operatori-tag color-${item.colore}"></span>
+          <div class="operatori-name">${String(__laundryDisplayTitle__(item, item?.titolo || '') || '').replace(/[&<>"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s]))}</div>
+        </div>
+        <div class="operatori-item-actions">
+          <button aria-label="Modifica componente lavanderia" class="operatori-mini-btn" data-action="edit" type="button"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24"><path d="M12 20h9"></path><path d="M16.5 3.5a2.1 2.1 0 0 1 3 3L7 19l-4 1 1-4 12.5-12.5z"></path></svg></button>
+          <button aria-label="Elimina componente lavanderia" class="operatori-mini-btn is-delete" data-action="delete" type="button"><svg aria-hidden="true" class="ui-ico" viewbox="0 0 24 24"><path d="M3 6h18"></path><path d="M8 6V4h8v2"></path><path d="M6 6l1 16h10l1-16"></path><path d="M10 11v6M14 11v6"></path></svg></button>
+        </div>
+      </div>
+      <div class="operatori-metrics">
+        <div class="operatori-metric">
+          <div class="operatori-metric-label">Abbreviazione</div>
+          <div class="operatori-metric-value">${String(item.abbreviazione || '').replace(/[&<>"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s]))}</div>
+        </div>
+        <div class="operatori-metric">
+          <div class="operatori-metric-label">Prezzo pulizia</div>
+          <div class="operatori-metric-value">${__laundryMoneyFmt__(item.prezzo)}</div>
+        </div>
+      </div>
+    </article>
+  `).join('');
+}
+
+async function loadLaundryCatalogPage(){
+  __initColorToneMap__(__laundryCatalogPageUi, 'blue');
+  await renderLaundryCatalogPage();
+}
+
+function setupLaundryCatalogPage(){
+  const goBtn = document.getElementById('settingsLaundryCatalogBtn');
+  if (goBtn) bindFastTap(goBtn, () => { hideLauncher(); showPage('laundrycatalog'); });
+  const addBtn = document.getElementById('btnAddLaundryComponentCard');
+  if (addBtn) bindFastTap(addBtn, () => { __laundryCatalogOpenModal__(null); });
+  const closeBtn = document.getElementById('laundryCatalogEditorClose');
+  if (closeBtn) bindFastTap(closeBtn, __laundryCatalogCloseModal__);
+  const cancelBtn = document.getElementById('laundryCatalogEditorCancel');
+  if (cancelBtn) bindFastTap(cancelBtn, __laundryCatalogCloseModal__);
+  try{
+    document.querySelectorAll('#laundryCatalogColorGrid .operatori-color-option').forEach((btn) => {
+      bindFastTap(btn, () => {
+        const base = String(btn.dataset.color || 'blue').trim().toLowerCase();
+        const current = __parseOperatoreColorSpec__(__laundryCatalogPageUi.color || 'blue-2');
+        if (!__laundryCatalogPageUi.tones || typeof __laundryCatalogPageUi.tones !== 'object') __laundryCatalogPageUi.tones = {};
+        if (!__laundryCatalogPageUi.tones[base]) __laundryCatalogPageUi.tones[base] = __OPERATORI_COLOR_DEFAULT_SHADE__;
+        if (current.base === base) {
+          __laundryCatalogPageUi.tones[base] = (__laundryCatalogPageUi.tones[base] % __OPERATORI_COLOR_SHADE_COUNT__) + 1;
+        }
+        __laundryCatalogSetSelectedColor__(`${base}-${__laundryCatalogPageUi.tones[base]}`);
+      });
+    });
+  }catch(_){ }
+  const saveBtn = document.getElementById('laundryCatalogEditorSave');
+  if (saveBtn) bindFastTap(saveBtn, async () => {
+    try{
+      const titolo = String(document.getElementById('laundryCatalogEditorTitleInput')?.value || '').trim();
+      const abbreviazione = __normalizeLaundryCode__(document.getElementById('laundryCatalogEditorCode')?.value || '');
+      const priceRaw = String(document.getElementById('laundryCatalogEditorPrice')?.value || '').trim().replace(',', '.');
+      const prezzo = priceRaw ? Number(priceRaw) : 0;
+      if (!titolo){ toast('Inserisci il titolo componente'); return; }
+      if (!abbreviazione){ toast("Inserisci l'abbreviazione"); return; }
+      if (!isFinite(prezzo) || prezzo < 0){ toast('Prezzo non valido'); return; }
+      const id = String(document.getElementById('laundryCatalogEditorId')?.value || '').trim();
+      const list = getLaundryCatalogFromSettings();
+      const duplicate = list.find((item) => String(item.id) !== id && String(item.abbreviazione || '').trim().toUpperCase() === abbreviazione);
+      if (duplicate){ toast('Abbreviazione già presente'); return; }
+      const nextItem = {
+        id: id || `lc-${Date.now()}`,
+        titolo,
+        abbreviazione,
+        prezzo: Math.round(prezzo * 100) / 100,
+        colore: __laundryCatalogPageUi.color || 'blue',
+      };
+      const idx = list.findIndex((item) => String(item.id) === nextItem.id);
+      if (idx >= 0) list[idx] = nextItem;
+      else list.push(nextItem);
+      await saveLaundryCatalogToSettings(list);
+      __laundryCatalogCloseModal__();
+      await renderLaundryCatalogPage();
+      try{ window.__ddae_refreshPulizieGrid?.({ forceReload:true }); }catch(_){ }
+      try{ if (state && state.page === 'lavanderia') await loadLavanderia(); }catch(_){ }
+      toast('Componente lavanderia salvato');
+    }catch(e){ toast(e?.message || 'Errore'); }
+  });
+  const deleteBtn = document.getElementById('laundryCatalogEditorDelete');
+  if (deleteBtn) bindFastTap(deleteBtn, async () => {
+    try{
+      const id = String(document.getElementById('laundryCatalogEditorId')?.value || '').trim();
+      if (!id) return;
+      if (!confirm('Eliminare questo componente lavanderia?')) return;
+      const list = getLaundryCatalogFromSettings().filter((item) => String(item.id) !== id);
+      await saveLaundryCatalogToSettings(list);
+      __laundryCatalogCloseModal__();
+      await renderLaundryCatalogPage();
+      try{ window.__ddae_refreshPulizieGrid?.({ forceReload:true }); }catch(_){ }
+      try{ if (state && state.page === 'lavanderia') await loadLavanderia(); }catch(_){ }
+      toast('Componente lavanderia eliminato');
+    }catch(e){ toast(e?.message || 'Errore'); }
+  });
+  const listEl = document.getElementById('laundryCatalogList');
+  if (listEl) listEl.addEventListener('click', async (ev) => {
+    const btn = ev.target.closest?.('button[data-action]');
+    const card = ev.target.closest?.('.laundry-component-item');
+    if (!card) return;
+    const id = String(card.getAttribute('data-id') || '').trim();
+    const item = getLaundryCatalogFromSettings().find((row) => String(row.id) === id);
+    if (!item) return;
+    const action = btn ? String(btn.getAttribute('data-action') || '') : 'edit';
+    if (action === 'delete'){
+      if (!confirm('Eliminare questo componente lavanderia?')) return;
+      const list = getLaundryCatalogFromSettings().filter((row) => String(row.id) !== id);
+      await saveLaundryCatalogToSettings(list);
+      await renderLaundryCatalogPage();
+      try{ window.__ddae_refreshPulizieGrid?.({ forceReload:true }); }catch(_){ }
+      try{ if (state && state.page === 'lavanderia') await loadLavanderia(); }catch(_){ }
+      toast('Componente lavanderia eliminato');
+      return;
+    }
+    __laundryCatalogOpenModal__(item);
+  });
+}
+
+const __DARK_MODE_KEY__ = "dDAE_dark_mode";
+
+function __isDarkModeEnabled__(){
+  try{
+    return localStorage.getItem(__DARK_MODE_KEY__) === "1";
+  }catch(_){
+    return false;
+  }
+}
+
+function __updateThemeMeta__(isDark){
+  try{
+    const meta = document.querySelector('meta[name="theme-color"]');
+    if (meta) meta.setAttribute('content', isDark ? '#0f172a' : '#ffffff');
+  }catch(_){ }
+}
+
+function __syncDarkModeButtons__(){
+  const enabled = __isDarkModeEnabled__();
+  ["settingsSaveBtn","opSettingsDarkBtn"].forEach((id) => {
+    const btn = document.getElementById(id);
+    if (!btn) return;
+    btn.setAttribute('aria-pressed', enabled ? 'true' : 'false');
+    btn.classList.toggle('is-active', enabled);
+    const label = btn.querySelector('.settings-btn-label');
+    if (label) label.textContent = 'Dark Mode';
+    btn.title = enabled ? 'Dark Mode attiva' : 'Dark Mode disattivata';
+  });
+}
+
+function __applyDarkMode__(enabled){
+  try{
+    document.body.classList.toggle('ddae-dark', !!enabled);
+    document.documentElement.classList.toggle('ddae-dark', !!enabled);
+  }catch(_){ }
+  try{ __updateThemeMeta__(!!enabled); }catch(_){ }
+  try{ __syncDarkModeButtons__(); }catch(_){ }
+}
+
+function __setDarkMode__(enabled){
+  try{ localStorage.setItem(__DARK_MODE_KEY__, enabled ? '1' : '0'); }catch(_){ }
+  __applyDarkMode__(!!enabled);
+}
+
+function __toggleDarkMode__(){
+  const next = !__isDarkModeEnabled__();
+  __setDarkMode__(next);
+  try{ toast(next ? 'Dark Mode attivata' : 'Dark Mode disattivata'); }catch(_){ }
+}
+
 function setupImpostazioni() {
+  try{ setupLanguageModal(); }catch(_){ }
   const back = document.getElementById("settingsBackBtn");
   if (back) back.addEventListener("click", () => showPage("home"));
 
   const save = document.getElementById("settingsSaveBtn");
-  if (save) save.addEventListener("click", async () => {
-    try { await saveImpostazioniPage(); } catch (e) { toast(e.message); }
+  if (save) bindFastTap(save, () => { __toggleDarkMode__(); });
+  const opDarkBtn = document.getElementById("opSettingsDarkBtn");
+  if (opDarkBtn) bindFastTap(opDarkBtn, () => { __toggleDarkMode__(); });
+  try{ __syncDarkModeButtons__(); }catch(_){ }
+
+  const settingsYearPill = document.getElementById("settingsYearPill");
+  if (settingsYearPill && !settingsYearPill.__boundYearTap){
+    settingsYearPill.__boundYearTap = true;
+    bindFastTap(settingsYearPill, () => { __openSettingsYearModal__(); });
+    settingsYearPill.addEventListener("keydown", (e) => {
+      if (e.key === "Enter" || e.key === " "){
+        e.preventDefault();
+        __openSettingsYearModal__();
+      }
+    });
+  }
+
+
+  const operatoriGo = document.getElementById("settingsOperatoriBtn");
+  if (operatoriGo) bindFastTap(operatoriGo, () => { hideLauncher(); showPage("operatori"); });
+  const laundryCatalogGo = document.getElementById("settingsLaundryCatalogBtn");
+  if (laundryCatalogGo) bindFastTap(laundryCatalogGo, () => { hideLauncher(); showPage("laundrycatalog"); });
+  const channelGo = document.getElementById("settingsChannelBtn");
+  if (channelGo) bindFastTap(channelGo, () => { hideLauncher(); showPage("channel"); });
+  const languageBtn = document.getElementById("settingsLanguageBtn");
+  if (languageBtn) bindFastTap(languageBtn, () => { try{ __openLanguageModal__(); }catch(_){ } });
+  const opLanguageBtn = document.getElementById("opSettingsLanguageBtn");
+  if (opLanguageBtn) bindFastTap(opLanguageBtn, () => { try{ __openLanguageModal__(); }catch(_){ } });
+  const opLangBtn = document.getElementById("opSettingsLanguageBtn");
+  if (opLangBtn && !opLangBtn.__boundLangTap){ opLangBtn.__boundLangTap = true; bindFastTap(opLangBtn, () => { try{ __openLanguageModal__(); }catch(_){ } }); }
+  const opCodeBtn = document.getElementById("opSettingsCodeBtn");
+  if (opCodeBtn) bindFastTap(opCodeBtn, async () => {
+    try{ if (__languageModalGhostTapActive__()) return; }catch(_){ }
+    try{ await __qrScanAndLink__(); }catch(e){
+      try{ toast(String((e && e.message) ? e.message : "Errore codice"), "orange"); }catch(_){ }
+      try{ console.error("Operator code error:", e); }catch(_){ }
+    }
   });
-
-  const reload = document.getElementById("settingsReloadBtn");
-  if (reload) reload.addEventListener("click", async () => {
-    try { await loadImpostazioniPage({ force: true }); toast("Impostazioni ricaricate"); } catch (e) { toast(e.message); }
-  });
-
-  const del = document.getElementById("settingsDeleteBtn");
-  if (del) bindFastTap(del, async () => {
-    try{
-      const s = state.session || loadSession();
-      if (!s || !s.username){ toast("Nessun account"); return; }
-
-      const ok = confirm("Eliminare definitivamente questo account e tutti i suoi dati?");
-      if (!ok) return;
-
-      const pwd = prompt("Password dell'account da eliminare:");
-      if (pwd === null) return;
-      const password = String(pwd || "");
-      if (!password) { toast("Password mancante"); return; }
-
-      await api("utenti", { method:"POST", body:{ op:"delete", username: String(s.username||"").trim(), password } , showLoader:true });
-
-      try{ clearSession(); }catch(_){ }
-      try{ state.session = null; }catch(_){ }
-      try{ applyRoleMode(); }catch(_){ }
-      try{ invalidateApiCache(); }catch(_){ }
-      try{ __lsClearAll(); }catch(_){ }
-      toast("Account eliminato");
-      try{ showPage("auth"); }catch(_){ }
-    }catch(e){ toast(e.message || "Errore"); }
-  });
-
-  const logout = document.getElementById("settingsLogoutBtn");
-  if (logout) logout.addEventListener("click", () => {
+  const opLogoutPageBtn = document.getElementById("opSettingsLogoutBtn");
+  if (opLogoutPageBtn) bindFastTap(opLogoutPageBtn, async () => {
+    let ok = false;
+    try{ ok = await confirmYesNo("Vuoi uscire?"); }catch(_){ ok = false; }
+    if (!ok) return;
     try{ clearSession(); }catch(_){ }
     try{ state.session = null; }catch(_){ }
     try{ applyRoleMode(); }catch(_){ }
+    try{ __resetInMemoryData__(); }catch(_){ }
     try{ invalidateApiCache(); }catch(_){ }
     try{ showPage("auth"); }catch(_){ }
   });
 
 
-  // Anno di esercizio
+  // DB Import/Export (LOCAL) - nuovo accesso unico dal pulsante Database (icona verde)
+  try{
+    const dbBtn = document.getElementById("settingsDbBtn");
+    if (dbBtn) bindFastTap(dbBtn, async () => { try{ if (__isAdmin__()) { __openSettingsBackupModal__(); } }catch(e){ try{ toast("Errore backup", "orange"); }catch(_){ } } });
+    const rosterBtn = document.getElementById("settingsExportRosterBtn");
+    if (rosterBtn) bindFastTap(rosterBtn, async () => {
+      try{
+        if (__isAdmin__()) await __adminGenerateCode__();
+        else await __qrScanAndLink__();
+      }catch(e){
+        try{ toast(String((e && e.message) ? e.message : "Errore codice"), "orange"); }catch(_){ }
+        try{ console.error("Roster/Firebase error:", e); }catch(_){ }
+      }
+    });
+
+    // fallback (se presenti in DOM, ma di norma nascosti)
+    const dbA = document.getElementById("dbAdminBtn");
+    if (dbA) bindFastTap(dbA, () => { __openDbPopup__("admin"); });
+    const dbO = document.getElementById("dbOperatorBtn");
+    if (dbO) bindFastTap(dbO, () => { __openDbPopup__("operator"); });
+  }catch(_){ }
+const cfg = document.getElementById("settingsConfigBtn");
+  if (cfg) bindFastTap(cfg, () => { __openSettingsConfigModal__(); });
+
+  const roomsBtn = document.getElementById("settingsRoomsBtn");
+  const langBtn = document.getElementById("settingsLanguageBtn");
+  if (langBtn && !langBtn.__boundLangTap){
+    langBtn.__boundLangTap = true;
+    bindFastTap(langBtn, () => { try{ __openLanguageModal__(); }catch(_){ } });
+  }
+  if (roomsBtn && !roomsBtn.__boundRoomsTap){
+    roomsBtn.__boundRoomsTap = true;
+    let __roomsPressTimer = null;
+    let __roomsLongFired = false;
+    let __roomsTouchAt = 0;
+    const __roomsClearPress = () => {
+      try{ if (__roomsPressTimer) clearTimeout(__roomsPressTimer); }catch(_){ }
+      __roomsPressTimer = null;
+      __roomsLongFired = false;
+    };
+    const __roomsSaveValue = async (next) => {
+      try{
+        const current = getConfiguredRoomsCount(6);
+        if (Number(next) === Number(current)) { updateSettingsRoomsButtonLabel(); return; }
+        await saveRoomsCountSetting(next);
+      }catch(e){ try{ toast(e?.message || 'Errore numero stanze'); }catch(_){ } }
+    };
+    const __roomsTap = async () => {
+      try{ __sfxTap(); }catch(_){ }
+      const current = getConfiguredRoomsCount(6);
+      const next = (current >= 12) ? 1 : (current + 1);
+      await __roomsSaveValue(next);
+    };
+    const __roomsLong = async () => {
+      try{ __sfxGlass(); }catch(_){ }
+      __roomsLongFired = true;
+      await __roomsSaveValue(0);
+    };
+    roomsBtn.addEventListener('touchstart', (e) => {
+      __roomsTouchAt = Date.now();
+      __roomsClearPress();
+      __roomsPressTimer = setTimeout(() => { __roomsLong(); }, 500);
+      try{ e.preventDefault(); e.stopPropagation(); }catch(_){ }
+    }, { passive:false, capture:true });
+    roomsBtn.addEventListener('touchend', async (e) => {
+      try{ if (__roomsPressTimer) clearTimeout(__roomsPressTimer); }catch(_){ }
+      if (!__roomsLongFired) await __roomsTap();
+      __roomsClearPress();
+      try{ e.preventDefault(); e.stopPropagation(); }catch(_){ }
+    }, { passive:false, capture:true });
+    roomsBtn.addEventListener('touchcancel', (e) => {
+      __roomsClearPress();
+      try{ e.preventDefault(); e.stopPropagation(); }catch(_){ }
+    }, { passive:false, capture:true });
+    roomsBtn.addEventListener('click', async (e) => {
+      if (Date.now() - __roomsTouchAt < 450) { try{ e.preventDefault(); e.stopPropagation(); }catch(_){ } return; }
+      await __roomsTap();
+      try{ e.preventDefault(); e.stopPropagation(); }catch(_){ }
+    }, true);
+  }
+
+  const cfgClose = document.getElementById("settingsConfigClose");
+  if (cfgClose) bindFastTap(cfgClose, __closeSettingsConfigModal__);
+  const cfgCancel = document.getElementById("settingsConfigCancel");
+  if (cfgCancel) bindFastTap(cfgCancel, __closeSettingsConfigModal__);
+  const cfgSave = document.getElementById("settingsConfigSave");
+  if (cfgSave) bindFastTap(cfgSave, async () => {
+    try { await saveImpostazioniPage(); __closeSettingsConfigModal__(); } catch (e) { toast(e.message || "Errore"); }
+  });
+  const cfgModal = document.getElementById("settingsConfigModal");
+  if (cfgModal && !cfgModal.__boundClose){
+    cfgModal.__boundClose = true;
+    cfgModal.addEventListener("click", (e) => { if (e.target === cfgModal) __closeSettingsConfigModal__(); });
+  }
+
+  const yearModal = document.getElementById("settingsYearModal");
+  if (yearModal && !yearModal.__boundClose){
+    yearModal.__boundClose = true;
+    yearModal.addEventListener("click", (e) => { if (e.target === yearModal) __closeSettingsYearModal__(); });
+  }
+  const yearWheel = document.getElementById("settingsYearWheel");
+  if (yearWheel && !yearWheel.__boundWheel){
+    yearWheel.__boundWheel = true;
+    yearWheel.addEventListener("scroll", () => {
+      try{ clearTimeout(__settingsYearWheelTimer__); }catch(_){ }
+      const liveYear = __getSettingsYearWheelValue__();
+      __highlightSettingsYearWheel__(liveYear);
+      __settingsYearWheelTimer__ = setTimeout(() => { __applySettingsYearWheelSelection__({ snapOnly:true }); }, 140);
+    }, { passive:true });
+    yearWheel.addEventListener("click", (e) => {
+      const item = e.target && e.target.closest ? e.target.closest('.settings-year-wheel-item') : null;
+      if (!item) return;
+      const year = item.getAttribute('data-year');
+      __scrollSettingsYearWheelTo__(year, 'smooth');
+      try{ clearTimeout(__settingsYearWheelTimer__); }catch(_){ }
+      __settingsYearWheelTimer__ = setTimeout(() => { __applySettingsYearWheelSelection__({ snapOnly:false }); }, 150);
+    });
+    yearWheel.addEventListener("touchend", () => {
+      try{ clearTimeout(__settingsYearWheelTimer__); }catch(_){ }
+      __settingsYearWheelTimer__ = setTimeout(() => { __applySettingsYearWheelSelection__({ snapOnly:false }); }, 170);
+    }, { passive:true });
+    yearWheel.addEventListener("keydown", (e) => {
+      if (e.key === "Escape"){
+        e.preventDefault();
+        __closeSettingsYearModal__();
+        return;
+      }
+      if (e.key === "Enter"){
+        e.preventDefault();
+        __saveSettingsYearModal__();
+        return;
+      }
+      if (e.key === "ArrowDown" || e.key === "ArrowUp"){
+        e.preventDefault();
+        const years = __getSettingsYearValues__();
+        const current = __getSettingsYearWheelValue__();
+        let index = years.indexOf(current);
+        if (index < 0) index = 0;
+        if (e.key === "ArrowDown") index = Math.min(years.length - 1, index + 1);
+        else index = Math.max(0, index - 1);
+        const year = years[index];
+        __scrollSettingsYearWheelTo__(year, 'smooth');
+        try{ clearTimeout(__settingsYearWheelTimer__); }catch(_){ }
+        __settingsYearWheelTimer__ = setTimeout(() => { __applySettingsYearWheelSelection__({ snapOnly:false }); }, 150);
+      }
+    });
+  }
+  const yearCard = document.querySelector('#settingsYearModal .settings-year-wheel-card');
+  if (yearCard && !yearCard.__boundContain){
+    yearCard.__boundContain = true;
+    ['click','touchstart','touchend','pointerdown','pointerup'].forEach((evt) => {
+      yearCard.addEventListener(evt, (e) => { try{ e.stopPropagation(); }catch(_){ } }, { passive:false });
+    });
+  }
+
+  const backupClose = document.getElementById("settingsBackupClose");
+  if (backupClose) bindFastTap(backupClose, __closeSettingsBackupModal__);
+  const backupCancel = document.getElementById("settingsBackupCancel");
+  if (backupCancel) bindFastTap(backupCancel, __closeSettingsBackupModal__);
+  const backupImport = document.getElementById("settingsBackupImport");
+  if (backupImport) bindFastTap(backupImport, async () => {
+    try{
+      __closeSettingsBackupModal__();
+      await __dbImport__("admin");
+    }catch(e){
+      try{ toast("Errore backup", "orange"); }catch(_){ }
+    }
+  });
+  const backupExport = document.getElementById("settingsBackupExport");
+  if (backupExport) bindFastTap(backupExport, async () => {
+    try{
+      __closeSettingsBackupModal__();
+      let w = null; try{ w = window.open("", "_blank"); }catch(_){ w = null; }
+      await __dbExport__("admin", w);
+    }catch(e){
+      try{ toast("Errore backup", "orange"); }catch(_){ }
+    }
+  });
+  const backupModal = document.getElementById("settingsBackupModal");
+  if (backupModal && !backupModal.__boundClose){
+    backupModal.__boundClose = true;
+    backupModal.addEventListener("click", (e) => { if (e.target === backupModal) __closeSettingsBackupModal__(); });
+  }
+
+
+  const logout = document.getElementById("settingsLogoutBtn");
+  if (logout) bindFastTap(logout, async () => {
+    let ok = false;
+    try{ ok = await confirmYesNo("Vuoi uscire?"); }catch(_){ ok = false; }
+    if (!ok) return;
+    try{ clearSession(); }catch(_){ }
+    try{ state.session = null; }catch(_){ }
+    try{ applyRoleMode(); }catch(_){ }
+    try{ __resetInMemoryData__(); }catch(_){ }
+    try{ invalidateApiCache(); }catch(_){ }
+    try{ showPage("auth"); }catch(_){ }
+  });
+
+
+  // Anno di esercizio (gestito dal pulsante calendario in pagina Impostazioni)
   const selAnno = document.getElementById("setAnno");
   if (selAnno){
     const cy = new Date().getFullYear();
@@ -1931,12 +8222,7 @@ function setupImpostazioni() {
     for (let y = cy - 3; y <= cy + 2; y++) years.push(String(y));
     selAnno.innerHTML = years.map(y => `<option value="${y}">${y}</option>`).join("");
     selAnno.value = String(state.exerciseYear || loadExerciseYear());
-    selAnno.addEventListener("change", () => {
-      state.exerciseYear = String(selAnno.value || "");
-      saveExerciseYear(state.exerciseYear);
-      updateYearPill();
-      invalidateApiCache();
-    });
+    selAnno.addEventListener("change", () => { __applyExerciseYearChange__(String(selAnno.value || "")); });
   }
 
   // =========================
@@ -2119,18 +8405,22 @@ function setupAuth(){
   const menu = document.getElementById("authMenu");
   const form = document.getElementById("authForm");
 
-  const btnMenuCreate = document.getElementById("btnMenuCreate");
-  const btnMenuEdit = document.getElementById("btnMenuEdit");
-  const btnMenuAdmin = document.getElementById("btnMenuAdmin");
-  const btnMenuOperator = document.getElementById("btnMenuOperator");
+  // Menu (landing login) — 4 pulsanti
+  const btnCreate = document.getElementById("btnMenuCreate");
+  const btnUpdate = document.getElementById("btnMenuUpdate");
+  const btnLoginAdmin = document.getElementById("btnMenuLoginAdmin");
+  const btnLoginOperator = document.getElementById("btnMenuLoginOperator");
 
   const btnBack = document.getElementById("btnAuthBack");
   const btnSubmit = document.getElementById("btnAuthSubmit");
 
-  const tenantWrap = document.getElementById("authOperatorTenant");
-  const tenantIn = document.getElementById("authTenant");
-  const tenantRemember = document.getElementById("authTenantRemember");
+  // Crea account: selezione tipologia + tag
+  const createRoleWrap = document.getElementById("authCreateRoleWrap");
+  const createRoleAdmin = document.getElementById("authCreateRoleAdmin");
+  const createRoleOperator = document.getElementById("authCreateRoleOperator");
+  const createTypeTag = document.getElementById("authCreateTypeTag");
 
+  const tenantWrap = document.getElementById("authOperatorTenant");
   const credsWrap = document.getElementById("authCredsWrap");
   const u = document.getElementById("authUsername");
   const p = document.getElementById("authPassword");
@@ -2138,231 +8428,153 @@ function setupAuth(){
   const pLabel = document.getElementById("authPasswordLabel");
 
   const extra = document.getElementById("authExtra");
-  const nome = document.getElementById("authNome");
-  const tel = document.getElementById("authTelefono");
-  const email = document.getElementById("authEmail");
-  const p2 = document.getElementById("authPassword2");
   const p2Wrap = document.getElementById("authConfirmPasswordWrap");
-  const np = document.getElementById("authNewPassword");
-  const np2 = document.getElementById("authNewPassword2");
   const npWrap = document.getElementById("authNewPasswordWrap");
+
+  const p2 = document.getElementById("authPassword2");
+  const np1 = document.getElementById("authNewPassword");
+  const np2 = document.getElementById("authNewPassword2");
 
   const hint = document.getElementById("authHint");
   const setHint = (msg)=>{ try{ if (hint) hint.textContent = msg || ""; }catch(_ ){} };
 
-  const LS_TENANT_KEY = "dDAE_lastTenant";
+  let mode = "menu"; // menu | create | update | login_admin | login_operator
 
-  const normalizeTenant = (s)=>{
-    let v = String(s || "").trim().toLowerCase();
-    // rimuovi spazi
-    v = v.replace(/\s+/g, "");
-    // consenti solo [a-z0-9_-]
-    v = v.replace(/[^a-z0-9_-]/g, "");
-    return v;
+  const getCreateRole = ()=>{
+    try{ if (createRoleOperator && createRoleOperator.checked) return "operatore"; }catch(_ ){}
+    return "admin";
   };
 
-  const composeOperatorUsername = (tenant, opUser)=>{
-    const t = normalizeTenant(tenant);
-    const o = String(opUser || "").trim();
-    if (!t || !o) return o;
-    // se già contiene separatore, lascia com'è (compat / avanzato)
-    if (o.includes("__")) return o;
-    return `${t}__${o}`;
+  const syncCreateTag = ()=>{
+    try{
+      if (!createTypeTag) return;
+      const role = getCreateRole();
+      if (role === "operatore"){
+        createTypeTag.textContent = "OPERATORE";
+        createTypeTag.classList.add("is-operator");
+      } else {
+        createTypeTag.textContent = "ADMIN";
+        createTypeTag.classList.remove("is-operator");
+      }
+    }catch(_ ){}
   };
 
-  let mode = "menu"; // menu | create | edit | login_admin | op_tenant | login_operator
-  let opTenant = "";
+  const clearFields = ()=>{
+    try{
+      if (u) u.value = "";
+      if (p) p.value = "";
+      if (p2) p2.value = "";
+      if (np1) np1.value = "";
+      if (np2) np2.value = "";
+      try{ if (createRoleAdmin) createRoleAdmin.checked = true; }catch(_ ){}
+      try{ if (createRoleOperator) createRoleOperator.checked = false; }catch(_ ){}
+      try{ refreshFloatingLabels(); }catch(_ ){}
+    }catch(_ ){}
+  };
 
   const showMenu = ()=>{
     mode = "menu";
-        try{ if (form) form.classList.remove("auth-login-big"); }catch(_ ){}
-if (menu) menu.hidden = false;
-    if (form) form.hidden = true;
+    try{ if (menu) menu.hidden = false; }catch(_ ){}
+    try{ if (form) form.hidden = true; }catch(_ ){}
     setHint("");
+    try{ if (createRoleWrap) createRoleWrap.hidden = true; }catch(_ ){}
     try{ if (tenantWrap) tenantWrap.hidden = true; }catch(_ ){}
     try{ if (extra) extra.hidden = true; }catch(_ ){}
     try{ if (p2Wrap) p2Wrap.hidden = true; }catch(_ ){}
     try{ if (npWrap) npWrap.hidden = true; }catch(_ ){}
-    try{ if (u) u.value = ""; if (p) p.value = ""; }catch(_ ){}
-    try{ if (tenantIn) tenantIn.value = ""; if (tenantRemember) tenantRemember.checked = false; }catch(_ ){}
-    try{ refreshFloatingLabels(); }catch(_ ){}
+    try{ if (credsWrap) credsWrap.hidden = false; }catch(_ ){}
+    clearFields();
   };
 
   const setMode = (m)=>{
     mode = m;
-    if (menu) menu.hidden = true;
-    if (form) form.hidden = false;
+    try{ if (menu) menu.hidden = true; }catch(_ ){}
+    try{ if (form) form.hidden = false; }catch(_ ){}
+    setHint("");
 
-        try{ if (form) form.classList.toggle("auth-login-big", (m === "login_admin" || m === "op_tenant" || m === "login_operator")); }catch(_ ){}
-
-// defaults
+    // base reset
+    try{ if (createRoleWrap) createRoleWrap.hidden = true; }catch(_ ){}
     try{ if (tenantWrap) tenantWrap.hidden = true; }catch(_ ){}
-    try{ if (credsWrap) credsWrap.hidden = false; }catch(_ ){}
     try{ if (extra) extra.hidden = true; }catch(_ ){}
     try{ if (p2Wrap) p2Wrap.hidden = true; }catch(_ ){}
     try{ if (npWrap) npWrap.hidden = true; }catch(_ ){}
-    try{ if (btnSubmit) btnSubmit.textContent = "continua"; }catch(_ ){}
-    try{ if (uLabel) uLabel.textContent = "Username"; }catch(_ ){}
+    try{ if (credsWrap) credsWrap.hidden = false; }catch(_ ){}
+    try{ if (uLabel) uLabel.textContent = "User"; }catch(_ ){}
     try{ if (pLabel) pLabel.textContent = "Password"; }catch(_ ){}
-    setHint("");
+
+    clearFields();
 
     if (m === "create"){
-      try{ if (extra) extra.hidden = false; }catch(_ ){}
-      try{ if (p2Wrap) p2Wrap.hidden = false; }catch(_ ){}
       try{ if (btnSubmit) btnSubmit.textContent = "crea account"; }catch(_ ){}
-      try{ if (uLabel) uLabel.textContent = "Struttura"; }catch(_ ){}
-      try{ if (u) u.autocapitalize = "none"; }catch(_ ){}
+      try{ if (createRoleWrap) createRoleWrap.hidden = false; }catch(_ ){}
+      try{ if (p2Wrap) p2Wrap.hidden = false; }catch(_ ){}
+      try{ syncCreateTag(); }catch(_ ){}
       try{ u && u.focus(); }catch(_ ){}
       return;
     }
 
-    if (m === "edit"){
-      try{ if (extra) extra.hidden = false; }catch(_ ){}
-      try{ if (npWrap) npWrap.hidden = false; }catch(_ ){}
+    if (m === "update"){
       try{ if (btnSubmit) btnSubmit.textContent = "modifica account"; }catch(_ ){}
-      try{ if (uLabel) uLabel.textContent = "Struttura"; }catch(_ ){}
+      try{ if (npWrap) npWrap.hidden = false; }catch(_ ){}
+      try{ if (pLabel) pLabel.textContent = "Password attuale"; }catch(_ ){}
       try{ u && u.focus(); }catch(_ ){}
       return;
     }
 
     if (m === "login_admin"){
       try{ if (btnSubmit) btnSubmit.textContent = "accedi"; }catch(_ ){}
-      try{ if (uLabel) uLabel.textContent = "Username"; }catch(_ ){}
       try{ u && u.focus(); }catch(_ ){}
-      return;
-    }
-
-    if (m === "op_tenant"){
-      try{ if (tenantWrap) tenantWrap.hidden = false; }catch(_ ){}
-      try{ if (credsWrap) credsWrap.hidden = true; }catch(_ ){}
-      try{ if (btnSubmit) btnSubmit.textContent = "continua"; }catch(_ ){}
-      // prefill
-      try{
-        const last = localStorage.getItem(LS_TENANT_KEY);
-        if (tenantIn) tenantIn.value = String(last || "");
-        if (tenantRemember) tenantRemember.checked = !!(last);
-      }catch(_ ){}
-      try{ tenantIn && tenantIn.focus(); }catch(_ ){}
       return;
     }
 
     if (m === "login_operator"){
       try{ if (btnSubmit) btnSubmit.textContent = "accedi"; }catch(_ ){}
-      try{ if (uLabel) uLabel.textContent = "Username operatore"; }catch(_ ){}
-      try{ if (pLabel) pLabel.textContent = "Password operatore"; }catch(_ ){}
       try{ u && u.focus(); }catch(_ ){}
       return;
     }
   };
 
   const goAfterLogin = ()=>{
-    try{ invalidateApiCache(); }catch(_ ){}
-    state.exerciseYear = loadExerciseYear();
-    updateYearPill();
+    try{ state.exerciseYear = loadExerciseYear(); }catch(_ ){}
+    try{ updateYearPill(); }catch(_ ){}
+    try{ __applyContext__({ force:true }); }catch(_ ){}
     try{ applyRoleMode(); }catch(_ ){}
+    try{ __hydrateAppLanguageFromSettings__(); }catch(_ ){}
+    try{ if (window.__syncCleanOperators__) window.__syncCleanOperators__(); }catch(_ ){}
     showPage(isOperatoreSession(state.session) ? "pulizie" : "home");
   };
 
   const mapAuthError = (msg)=>{
     const m = String(msg || "").trim();
-    const low = m.toLowerCase();
-    if (mode === "create" && low.includes("username già esistente")) {
-      return "Nome struttura già in uso. Scegli un nome diverso.";
-    }
     return m || "Errore";
   };
 
-  if (btnMenuCreate) bindFastTap(btnMenuCreate, ()=>setMode("create"));
-  if (btnMenuEdit) bindFastTap(btnMenuEdit, ()=>setMode("edit"));
-  if (btnMenuAdmin) bindFastTap(btnMenuAdmin, ()=>setMode("login_admin"));
-  if (btnMenuOperator) bindFastTap(btnMenuOperator, ()=>setMode("op_tenant"));
-
+  // Bind menu
+  if (btnCreate) bindFastTap(btnCreate, ()=>setMode("create"));
+  if (btnUpdate) bindFastTap(btnUpdate, ()=>setMode("update"));
+  if (btnLoginAdmin) bindFastTap(btnLoginAdmin, ()=>setMode("login_admin"));
+  if (btnLoginOperator) bindFastTap(btnLoginOperator, ()=>setMode("login_operator"));
   if (btnBack) bindFastTap(btnBack, showMenu);
+
+  // Radio create role -> tag
+  try{
+    if (createRoleAdmin) createRoleAdmin.addEventListener("change", syncCreateTag);
+    if (createRoleOperator) createRoleOperator.addEventListener("change", syncCreateTag);
+  }catch(_ ){}
 
   if (btnSubmit) bindFastTap(btnSubmit, async ()=>{
     try{
-      if (mode === "op_tenant"){
-        const t = normalizeTenant(tenantIn ? tenantIn.value : "");
-        if (!t) { setHint("Inserisci il nome struttura"); return; }
-        opTenant = t;
-        try{
-          if (tenantRemember && tenantRemember.checked) localStorage.setItem(LS_TENANT_KEY, opTenant);
-          if (tenantRemember && !tenantRemember.checked) localStorage.removeItem(LS_TENANT_KEY);
-        }catch(_ ){}
-        setMode("login_operator");
-        try{ if (u) u.value = ""; if (p) p.value = ""; }catch(_ ){}
-        try{ refreshFloatingLabels(); }catch(_ ){}
-        return;
-      }
-
-      if (mode === "login_operator"){
-        const opUserLocal = String(u ? u.value : "").trim();
-        const opPass = String(p ? p.value : "");
-        if (!opTenant) { setMode("op_tenant"); return; }
-        if (!opUserLocal || !opPass) { setHint("Inserisci username e password"); return; }
-
-        setHint("...");
-        let data = null;
-        const composed = composeOperatorUsername(opTenant, opUserLocal);
-
-        try{
-          data = await api("utenti", { method:"POST", body:{ op:"login", username: composed, password: opPass } });
-        }catch(e1){
-          const em = String(e1 && e1.message ? e1.message : "");
-          // fallback legacy: username operatore globale
-          const low = em.toLowerCase();
-          if (low.includes("credenziali") || low.includes("non valide")){
-            data = await api("utenti", { method:"POST", body:{ op:"login", username: opUserLocal, password: opPass } });
-          } else {
-            throw e1;
-          }
-        }
-
-        if (!data || !data.user) throw new Error("Credenziali non valide");
-        // in modalità "Operatore" accetta solo account operatore
-        if (!isOperatoreSession(data.user)) { setHint("Questo account è un amministratore. Accedi dal tasto Amministratore."); return; }
-        state.session = data.user;
-        try{ state.session._tenant = opTenant; state.session._op_local = opUserLocal; }catch(_ ){}
-        saveSession(state.session);
-        setHint("");
-        goAfterLogin();
-        return;
-      }
-
-      if (mode === "login_admin"){
-        const username = String(u ? u.value : "").trim();
-        const password = String(p ? p.value : "");
-        if (!username || !password) { setHint("Inserisci username e password"); return; }
-        setHint("...");
-        const data = await api("utenti", { method:"POST", body:{ op:"login", username, password } });
-        if (!data || !data.user) throw new Error("Credenziali non valide");
-        // in modalità "Amministratore" blocca l'accesso agli operatori
-        if (isOperatoreSession(data.user)) { setHint("Questo account è un operatore. Accedi dal tasto Operatore."); return; }
-        state.session = data.user;
-        saveSession(state.session);
-        setHint("");
-        goAfterLogin();
-        return;
-      }
+      const username = String(u ? u.value : "").trim();
+      const password = String(p ? p.value : "");
+      if (!username || !password){ setHint("Inserisci user e password"); return; }
 
       if (mode === "create"){
-        const username = normalizeTenant(u ? u.value : "");
-        const password = String(p ? p.value : "");
-        const password2 = String(p2 ? p2.value : "");
-        if (!username || !password) { setHint("Inserisci struttura e password"); return; }
-        if (password !== password2) { setHint("Le password non coincidono"); return; }
+        const confirm = String(p2 ? p2.value : "");
+        if (!confirm){ setHint("Conferma password"); return; }
+        if (confirm !== password){ setHint("Le password non coincidono"); return; }
         setHint("...");
-        const data = await api("utenti", {
-          method:"POST",
-          body:{
-            op:"create",
-            username,
-            password,
-            nome: String(nome ? nome.value : "").trim(),
-            telefono: String(tel ? tel.value : "").trim(),
-            email: String(email ? email.value : "").trim(),
-          }
-        });
+        const role = getCreateRole();
+        const data = await api("utenti", { method:"POST", body:{ op:"create", role, username, password } });
         if (!data || !data.user) throw new Error("Errore creazione account");
         state.session = data.user;
         saveSession(state.session);
@@ -2371,26 +8583,13 @@ if (menu) menu.hidden = false;
         return;
       }
 
-      if (mode === "edit"){
-        const username = normalizeTenant(u ? u.value : "");
-        const password = String(p ? p.value : "");
-        const newPassword = String(np ? np.value : "");
+      if (mode === "update"){
+        const newPassword = String(np1 ? np1.value : "");
         const newPassword2 = String(np2 ? np2.value : "");
-        if (!username || !password) { setHint("Inserisci struttura e password"); return; }
-        if ((newPassword || newPassword2) && newPassword !== newPassword2) { setHint("Le nuove password non coincidono"); return; }
+        if (!newPassword || !newPassword2){ setHint("Inserisci e conferma la nuova password"); return; }
+        if (newPassword !== newPassword2){ setHint("Le nuove password non coincidono"); return; }
         setHint("...");
-        const data = await api("utenti", {
-          method:"POST",
-          body:{
-            op:"update",
-            username,
-            password,
-            newPassword: newPassword,
-            nome: String(nome ? nome.value : "").trim(),
-            telefono: String(tel ? tel.value : "").trim(),
-            email: String(email ? email.value : "").trim(),
-          }
-        });
+        const data = await api("utenti", { method:"POST", body:{ op:"update", username, password, newPassword } });
         if (!data || !data.user) throw new Error("Errore modifica account");
         state.session = data.user;
         saveSession(state.session);
@@ -2399,19 +8598,27 @@ if (menu) menu.hidden = false;
         return;
       }
 
-      // fallback
+      if (mode === "login_admin" || mode === "login_operator"){
+        setHint("...");
+        const data = await api("utenti", { method:"POST", body:{ op:"login", username, password } });
+        if (!data || !data.user) throw new Error("Credenziali non valide");
+        if (mode === "login_admin" && isOperatoreSession(data.user)) { setHint("Questo account è un operatore. Accedi come operatore."); return; }
+        if (mode === "login_operator" && !isOperatoreSession(data.user)) { setHint("Questo account è un admin. Accedi come admin."); return; }
+        state.session = data.user;
+        saveSession(state.session);
+        setHint("");
+        goAfterLogin();
+        return;
+      }
+
       showMenu();
     }catch(e){
       setHint(mapAuthError(e && e.message ? e.message : e));
     }
   });
 
-  // init
   showMenu();
 }
-
-
-
 // ===== API Cache (speed + dedupe richieste) =====
 const __apiCache = new Map();      // key -> { t:number, data:any }
 const __apiInflight = new Map();   // key -> Promise
@@ -2442,7 +8649,62 @@ function invalidateApiCache(prefix){
       if (!prefix || k.startsWith(prefix)) __apiCache.delete(k);
     }
   } catch (_) {}
-  try{ __lsClearAll(); }catch(_){ }
+  try{ __lsClearCtx(); }catch(_){ }
+}
+
+function __invalidateSyncCaches__(opts = {}){
+  try{ invalidateApiCache(); }catch(_){}
+  try{ __apiInflight.clear(); }catch(_){}
+  try{ if (state && state.calendar) state.calendar.ready = false; }catch(_){}
+  try{
+    if (opts && opts.resetHomeRefresh){
+      __homeRefreshInFlight = false;
+      __homeRefreshLastAt = 0;
+    }
+  }catch(_){}
+}
+
+async function __refreshAfterSync__(restoreState){
+  const targetPage = __sanitizePage(restoreState?.page) || __sanitizePage(state?.page) || "home";
+  try{ __invalidateSyncCaches__({ resetHomeRefresh:true }); }catch(_){}
+  try{ __writeRestoreState(Object.assign({}, restoreState || {}, { page: targetPage })); }catch(_){}
+
+  try{ showPage(targetPage); }catch(_){}
+
+  try{
+    if (targetPage === "pulizie"){
+      try{ if (typeof loadPulizieForDay === "function") await loadPulizieForDay({ clearFirst:false }); }catch(_){}
+      try{ if (typeof loadOperatoriForDay === "function") await loadOperatoriForDay({ clearFirst:false }); }catch(_){}
+      try{ if (typeof renderPuliziePage === "function") renderPuliziePage(); }catch(_){}
+      return true;
+    }
+
+    if (targetPage === "home"){
+      try{ refreshAllDataInBackground(); }catch(_){}
+      try{ updateHomeReceiptsIndicator(); }catch(_){}
+      return true;
+    }
+
+    if (targetPage === "orepulizia"){
+      try{ await initOrePuliziaPage(); }catch(_){}
+      return true;
+    }
+
+    if (targetPage === "calendario"){
+      try{ if (state && state.calendar) state.calendar.ready = false; }catch(_){}
+      try{ await ensureCalendarData({ force:true, showLoader:false }); }catch(_){}
+      try{ renderCalendario(); }catch(_){}
+      return true;
+    }
+
+    if (targetPage === "lavanderia"){
+      try{ await loadLavanderia(); }catch(_){}
+      return true;
+    }
+
+    return true;
+  }catch(_){ }
+  return true;
 }
 
 
@@ -2493,28 +8755,110 @@ function refreshAllDataInBackground(){
 }
 
 // ===== LocalStorage cache (perceived speed on iOS) =====
-const __lsPrefix = "ddae_cache_v1:";
+const __lsPrefixBase = "ddae_local_cache_v2:";
+
+// Context (account + anno esercizio) — serve per isolare cache e DB per anno/account
+function __ctxUid__(){
+  try{
+    const s = (state && state.session) ? state.session : loadSession();
+    const uid = s && (s.user_id !== undefined ? s.user_id : s.id);
+    if (uid !== undefined && uid !== null && String(uid).trim() !== "") return String(uid);
+  }catch(_ ){}
+  return "anon";
+}
+
+function __ctxYear__(){
+  try{
+    const y = String((state && state.exerciseYear) ? state.exerciseYear : loadExerciseYear()).trim();
+    if (y) return y;
+  }catch(_ ){}
+  return String(new Date().getFullYear());
+}
+
+function __ctxSig__(){ return `${__ctxUid__()}|${__ctxYear__()}`; }
+
+
+
+// ===== Year filtering (client-side) =====
+// Some backend endpoints may ignore anno/from/to; enforce exercise year on the client.
+function __yearFromAnyDate__(v){
+  try{
+    if (v === undefined || v === null) return null;
+    const s = String(v).trim();
+    if (!s) return null;
+    // ISO: YYYY-MM-DD or YYYY-MM-DDTHH:mm:ss...
+    const m1 = s.match(/^([0-9]{4})[-\/]/);
+    if (m1) return m1[1];
+    // IT: DD/MM/YYYY
+    const m2 = s.match(/^[0-9]{1,2}[-\/]([0-9]{1,2})[-\/]([0-9]{4})$/);
+    if (m2) return m2[2];
+    // fallback: Date parse
+    const d = new Date(s);
+    if (!isNaN(d.getTime())) return String(d.getFullYear());
+  }catch(_){ }
+  return null;
+}
+
+function __filterByExerciseYear__(rows, year, candidateFields){
+  try{
+    const y = String(year||"").trim();
+    if (!y) return Array.isArray(rows) ? rows : [];
+    const list = Array.isArray(rows) ? rows : [];
+    const fields = Array.isArray(candidateFields) && candidateFields.length ? candidateFields : [];
+    if (!fields.length) return list;
+    return list.filter(r => {
+      if (!r || typeof r !== "object") return false;
+      for (const f of fields){
+        if (!f) continue;
+        const val = r[f];
+        const yr = __yearFromAnyDate__(val);
+        if (yr === y) return true;
+      }
+      return false;
+    });
+  }catch(_){ }
+  return Array.isArray(rows) ? rows : [];
+}
+
+function __lsPrefixNow__(){ return `${__lsPrefixBase}${__ctxUid__()}:${__ctxYear__()}:`; }
+
 function __lsClearAll(){
+  // cancella TUTTE le cache dell'app (tutti account/anni)
   try{
     const keys = [];
-    for (let i=0; i<localStorage.length; i++){
+    for (let i=0; i<localStorage.length; i++) {
       const k = localStorage.key(i);
-      if (k && k.startsWith(__lsPrefix)) keys.push(k);
+      if (k && k.startsWith(__lsPrefixBase)) keys.push(k);
     }
-    keys.forEach(k => { try{ localStorage.removeItem(k); }catch(_){ } });
-  } catch(_){ }
+    keys.forEach(k => { try{ localStorage.removeItem(k); }catch(_ ){} });
+  } catch(_ ){ }
 }
+
+function __lsClearCtx(){
+  // cancella solo la cache del contesto corrente (account+anno)
+  try{
+    const p = __lsPrefixNow__();
+    const keys = [];
+    for (let i=0; i<localStorage.length; i++) {
+      const k = localStorage.key(i);
+      if (k && k.startsWith(p)) keys.push(k);
+    }
+    keys.forEach(k => { try{ localStorage.removeItem(k); }catch(_ ){} });
+  } catch(_ ){ }
+}
+
 function __lsGet(key){
   try{
-    const raw = localStorage.getItem(__lsPrefix + key);
+    const raw = localStorage.getItem(__lsPrefixNow__() + key);
     if (!raw) return null;
     return JSON.parse(raw);
-  } catch(_){ return null; }
+  } catch(_ ){ return null; }
 }
+
 function __lsSet(key, data){
   try{
-    localStorage.setItem(__lsPrefix + key, JSON.stringify({ t: Date.now(), data }));
-  } catch(_){}
+    localStorage.setItem(__lsPrefixNow__() + key, JSON.stringify({ t: Date.now(), data }));
+  } catch(_ ){}
 }
 
 
@@ -2593,8 +8937,35 @@ function bindFastTap(el, fn){
   }
 }
 
+function __forceCloseEditorModal__(btnId){
+  try{
+    if (btnId === 'laundryCatalogEditorCancel') return __laundryCatalogCloseModal__();
+    if (btnId === 'operatoriEditorCancel') return __operatoriCloseModal__();
+    if (btnId === 'channelEditorCancel') return __channelCloseModal__();
+  }catch(_){ }
+}
 
-/* dDAE_2.212 — iOS hardening: Home icons always tappable (fallback binding) */
+(function __bindEditorCancelDelegation__(){
+  if (typeof document === 'undefined') return;
+  try{ if (window.__editorCancelDelegationBound) return; window.__editorCancelDelegationBound = true; }catch(_){ }
+  const selector = '#laundryCatalogEditorCancel,#operatoriEditorCancel,#channelEditorCancel';
+  const handler = (e) => {
+    const btn = e.target && e.target.closest ? e.target.closest(selector) : null;
+    if (!btn) return;
+    try{ e.preventDefault(); }catch(_){ }
+    try{ e.stopPropagation(); }catch(_){ }
+    try{ e.stopImmediatePropagation(); }catch(_){ }
+    try{ __sfxTap(); }catch(_){ }
+    try{ __forceCloseEditorModal__(btn.id); }catch(_){ }
+    return false;
+  };
+  try{ document.addEventListener('pointerup', handler, true); }catch(_){ }
+  try{ document.addEventListener('touchend', handler, true); }catch(_){ }
+  try{ document.addEventListener('click', handler, true); }catch(_){ }
+})();
+
+
+/* dDAE_1.020 — iOS hardening: Home icons always tappable (fallback binding) */
 function bindHomeStrongTap(){
   // evita doppio binding
   try{
@@ -2634,7 +9005,7 @@ function bindHomeStrongTap(){
 }
 
 
-/* dDAE_2.212 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
+/* dDAE_1.020 — Tap counters: Adulti / Bambini <10 (tap increment, long press 0.5s = reset) */
 function bindGuestTapCounters(){
   const ids = ["guestAdults","guestKidsU10"];
   const fireRecalc = ()=>{ try{ updateGuestRemaining(); }catch(_){ } try{ updateGuestTaxTotalPill(); }catch(_){ } };
@@ -2732,7 +9103,7 @@ const lav = e.target.closest && e.target.closest("#goLavanderia") || e.target.cl
     if (lav){ hideLauncher(); showPage("lavanderia"); return; }
 
     const imp = e.target.closest && e.target.closest("#goImpostazioni");
-    if (imp){ hideLauncher(); showPage("impostazioni"); return; }
+    if (imp){ hideLauncher(); showPage((state.session && isOperatoreSession(state.session)) ? "opsettings" : "impostazioni"); return; }
 
     const g = e.target.closest && e.target.closest("#goStatistiche");
     if (g){ hideLauncher(); showPage("statistiche"); return; }
@@ -2793,32 +9164,28 @@ function hideLauncher(){
 
 
 function setSpeseView(view, { render=false } = {}){
-  state.speseView = view;
+  state.speseView = "list";
   const list = document.getElementById("speseViewList");
   const ins = document.getElementById("speseViewInsights");
-  if (list) list.hidden = (view !== "list");
-  if (ins) ins.hidden = (view !== "insights");
+  if (list) list.hidden = false;
+  if (ins) ins.hidden = true;
 
   const btn = document.getElementById("btnSpeseInsights");
   if (btn){
-    btn.setAttribute("aria-pressed", view === "insights" ? "true" : "false");
-    btn.classList.toggle("is-active", view === "insights");
+    btn.setAttribute("aria-pressed", "false");
+    btn.classList.remove("is-active");
+    btn.hidden = true;
   }
 
   if (render){
-    if (view === "list") {
-      try{ renderSpese(); }catch(_){}
-    } else {
-      try{ renderRiepilogo(); }catch(_){}
-      try{ renderGrafico(); }catch(_){}
-    }
+    try{ renderSpese(); }catch(_){}
   }
 }
 
 /* NAV pages (5 pagine interne: home + 4 funzioni) */
 
 
-// dDAE_2.212 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
+// dDAE_1.020 — Fix contrast icone topbar: se un tasto appare bianco su iOS, l'icona bianca diventa invisibile.
 // Applichiamo una classe .is-light ai pulsanti con background chiaro, così CSS forza icone scure.
 function __parseRGBA__(s){
   try{
@@ -2868,7 +9235,7 @@ function showPage(page){
   // Redirect: grafico/riepilogo ora sono dentro "Spese" (videata unica)
   if (page === "riepilogo" || page === "grafico"){
     page = "spese";
-    state.speseView = "insights";
+    state.speseView = "list";
   }
   if (page === "spese" && !state.speseView) state.speseView = "list";
 
@@ -2882,7 +9249,7 @@ function showPage(page){
   // Gate ruolo: operatore vede solo Pulizie / Lavanderia / Calendario
   try{
     if (state.session && isOperatoreSession(state.session)){
-      const allowed = new Set(["home","pulizie","lavanderia","calendario","orepulizia","auth","prodotti","colazione","statistiche","statpiscina"]);
+      const allowed = new Set(["home","pulizie","lavanderia","calendario","auth","prodotti","colazione","statistiche","statpiscina","laundrycatalog","opsettings"]);
       if (!allowed.has(page)) page = "pulizie";
     }
   }catch(_){ }
@@ -2901,10 +9268,26 @@ function showPage(page){
 state.page = page;
   document.body.dataset.page = page;
 
+  // Sync footer: nascosto SOLO in Calendario (admin + operatore)
+  try{
+    const sb = document.getElementById("homeSyncBar");
+    const hideSync = (page === "calendario") || (page === "impostazioni") || (page === "opsettings") || (page === "operatori") || (page === "channel") || (page === "laundrycatalog") || String(page || "").startsWith("stat");
+    if (sb) sb.hidden = !!hideSync;
+  }catch(_){ }
+
+
+  try{ __setTopbarCenterLabel__(); }catch(_){}
+
   try { __rememberPage(page); } catch (_) {}
   document.querySelectorAll(".page").forEach(s => s.hidden = true);
   const el = $(`#page-${page}`);
   if (el) el.hidden = false;
+  if (page === "home"){
+    // HOME: ricalcola sempre la visibilità del SYNC dopo operazioni in Impostazioni (es. generazione codice Roster)
+    try{ __fbLoadLink__(); }catch(_){ }
+    try{ applyRoleMode(); }catch(_){ }
+    try{ setTimeout(()=>{ try{ __fitHomeSyncBtn__(); }catch(_){ } }, 0); }catch(_){ }
+  }
 
   // Init pagine dinamiche (listener)
   if (page === "tassa"){
@@ -2912,8 +9295,18 @@ state.page = page;
   }
 
   // Impostazioni: aggiorna tabs (account + anno)
-  if (page === "impostazioni"){
+  if (page === "impostazioni" || page === "opsettings"){
     try{ updateSettingsTabs(); }catch(_){ }
+    if (page === "impostazioni"){ try{ loadImpostazioniPage({ force:true }); }catch(_){ } }
+  }
+  if (page === "operatori"){
+    try{ loadOperatoriPage(); }catch(_){ }
+  }
+  if (page === "channel"){
+    try{ loadChannelPage(); }catch(_){ }
+  }
+  if (page === "laundrycatalog"){
+    try{ loadLaundryCatalogPage(); }catch(_){ }
   }
 
   // Sotto-viste della pagina Spese (lista ↔ grafico+riepilogo)
@@ -2932,19 +9325,27 @@ state.page = page;
     }
   }
 
-
-
+  try{ setTimeout(() => { try{ __applyAppLanguageToDom__(); }catch(_){ } }, 0); }catch(_){ }
 
   // Topbar: in HOME il tasto "Home" non serve → mostra Impostazioni
   try{
     const hb2 = document.getElementById("hamburgerBtn");
     const hs2 = document.getElementById("homeSettingsTop");
     const leds2 = document.getElementById("prodTopLeds");
+    const authImportTop = document.getElementById("authImportBackupTop");
     const isHome = (page === "home");
+    const isAuth = (page === "auth");
     const isOp = !!(state.session && isOperatoreSession(state.session));
-    if (hb2) hb2.hidden = isHome;
-    if (hs2) hs2.hidden = (!isHome) || isOp;
+    if (hb2) hb2.hidden = isHome || isAuth;
+    if (hs2){
+      hs2.hidden = !isHome;
+      hs2.classList.remove("icon-btn-whiteorange");
+      hs2.classList.add("icon-btn-whiteblue");
+    }
+    if (authImportTop) authImportTop.hidden = !isAuth;
     if (leds2) leds2.hidden = (page !== "home") || isOp;
+    try{ const opImpTop = document.getElementById("opImportRosterTop"); if (opImpTop) opImpTop.hidden = true; }catch(_){ }
+    try{ const opLogoutTopBtn = document.getElementById("opLogoutTop"); if (opLogoutTopBtn) opLogoutTopBtn.hidden = true; }catch(_){ }
 
     // HOME: refresh totale dati in background (non blocca UI)
     try{ if (isHome){ try{ updateProdottiHomeBlink(); }catch(_){ } refreshAllDataInBackground(); } }catch(_){}
@@ -2956,11 +9357,15 @@ state.page = page;
 
   // HOME: ricevute indicator
   try{ updateHomeReceiptsIndicator(); }catch(_){ }
+  try{ refreshTopGuestAlerts({ force:false, keepModal:true }); }catch(_){ }
 
   // Top back button (Ore pulizia + Calendario)
   const backBtnTop = $("#backBtnTop");
   if (backBtnTop){
-    backBtnTop.hidden = !(page === "orepulizia" || page === "calendario");
+    backBtnTop.hidden = !(page === "operatori" || page === "channel" || page === "laundrycatalog");
+    backBtnTop.classList.toggle("icon-btn-whiteblue", page === "operatori" || page === "channel" || page === "laundrycatalog");
+    backBtnTop.classList.toggle("icon-btn-whiteorange", false);
+    try{ backBtnTop.setAttribute("aria-label", "Torna a Impostazioni"); }catch(_){ }
   }
 
   // Top guest list button (solo scheda Ospite) — torna alla lista ospiti accanto al tasto Home
@@ -2969,20 +9374,25 @@ state.page = page;
     guestBackTop.hidden = (page !== "ospite");
   }
 
-  // Logout top (solo HOME operatore)
+  // HOME operatore: top bar con solo il tasto Impostazioni
   try{
     const opLogout = document.getElementById("opLogoutTop");
-    if (opLogout){
-      const isOp = !!(state.session && isOperatoreSession(state.session));
-      opLogout.hidden = !(isOp && page === "home");
-    }
+    if (opLogout) opLogout.hidden = true;
   }catch(_){ }
 
+  try{
+    const opImp = document.getElementById("opImportRosterTop");
+    if (opImp) opImp.hidden = true;
+  }catch(_){ }
 
   // Top tools (solo Pulizie) — lavanderia + ore lavoro accanto al tasto Home
   const pulizieTopTools = $("#pulizieTopTools");
   if (pulizieTopTools){
-    pulizieTopTools.hidden = (page !== "pulizie");
+    pulizieTopTools.hidden = true;
+  }
+  const goOrePulizia = $("#goOrePulizia");
+  if (goOrePulizia){
+    goOrePulizia.hidden = (page !== "pulizie" || (state && state.session && isOperatoreSession(state.session)));
   }
 
   // Top tools (Lavanderia) — genera report accanto al tasto Home
@@ -3145,8 +9555,10 @@ state.page = page;
     Promise.all([
       ensureStatsAllData({ showLoader:true }),
       loadOspiti({ ...(state.period || {}), force:false }),
+      loadOspitiEliminati({ from: `${state.exerciseYear||new Date().getFullYear()}-01-01`, to: `${state.exerciseYear||new Date().getFullYear()}-12-31`, force:true }),
+      __loadOperatoriRows_().catch(()=>[])
     ])
-      .then(()=>{ if (state.navId !== _nav || state.page !== "statprenotazioni") return; renderStatPrenotazioni(); })
+      .then((res)=>{ if (state.navId !== _nav || state.page !== "statprenotazioni") return; renderStatGrafici(Array.isArray(res && res[3]) ? res[3] : []); })
       .catch(e=>toast(e.message));
   }
 
@@ -3192,11 +9604,12 @@ state.page = page;
 if (page === "orepulizia") { initOrePuliziaPage().catch(e=>toast(e.message)); }
 
 
-  // dDAE_2.212: fallback visualizzazione Pulizie
+  // dDAE_1.020: fallback visualizzazione Pulizie
   try{
     if (page === "pulizie"){
       const el = document.getElementById("page-pulizie");
       if (el) el.style.display = "block";
+      try{ if (window.__syncCleanOperators__) window.__syncCleanOperators__(); }catch(_){ }
     }
   }catch(_){}
 
@@ -3210,7 +9623,15 @@ function setupHeader(){
   const hb = $("#hamburgerBtn");
   if (hb) hb.addEventListener("click", () => { hideLauncher(); showPage("home"); });
 
-  // HOME: ricevute mancanti (solo in HOME)
+  const authImportTop = document.getElementById("authImportBackupTop");
+  if (authImportTop) bindFastTap(authImportTop, async () => {
+    try{ await __dbImport__("admin"); }catch(e){ try{ toast("Errore import", "orange"); }catch(_){ } }
+  });
+
+  const opImpRoster = document.getElementById("opImportRosterTop");
+  if (opImpRoster) bindFastTap(opImpRoster, async () => { try{ await __qrScanAndLink__(); }catch(e){ try{ toast("Codice non disponibile", "orange"); }catch(_){ } } });
+
+// HOME: ricevute mancanti (solo in HOME)
   const btnRec = document.getElementById("homeReceiptsTop");
   if (btnRec) bindFastTap(btnRec, () => { openReceiptDueModal(); });
 
@@ -3218,6 +9639,15 @@ function setupHeader(){
   if (recClose) bindFastTap(recClose, () => closeReceiptDueModal());
   const recModal = document.getElementById("receiptDueModal");
   if (recModal) recModal.addEventListener("click", (e)=>{ if (e.target === recModal) closeReceiptDueModal(); });
+
+  const guestLedLeft = document.getElementById("dbLedRead");
+  if (guestLedLeft) bindFastTap(guestLedLeft, () => openGuestAlertModal('left'));
+  const guestLedRight = document.getElementById("dbLedWrite");
+  if (guestLedRight) bindFastTap(guestLedRight, () => openGuestAlertModal('right'));
+  const guestAlertClose = document.getElementById("guestAlertClose");
+  if (guestAlertClose) bindFastTap(guestAlertClose, () => closeGuestAlertModal());
+  const guestAlertModal = document.getElementById("guestAlertModal");
+  if (guestAlertModal) guestAlertModal.addEventListener("click", (e)=>{ if (e.target === guestAlertModal) closeGuestAlertModal(); });
 
   // AMMINISTRATORE: popup dati + grafico
   const btnAdminInputsTop = document.getElementById("btnAdminInputsTop");
@@ -3239,18 +9669,23 @@ function setupHeader(){
 
 
   const opLogout = document.getElementById("opLogoutTop");
-  if (opLogout) bindFastTap(opLogout, () => {
+  if (opLogout) bindFastTap(opLogout, async () => {
+    let ok = false;
+    try{ ok = await confirmYesNo("Vuoi uscire?"); }catch(_){ ok = false; }
+    if (!ok) return;
     try{ clearSession(); }catch(_){ }
     try{ state.session = null; }catch(_){ }
     try{ applyRoleMode(); }catch(_){ }
+    try{ __resetInMemoryData__(); }catch(_){ }
     try{ invalidateApiCache(); }catch(_){ }
     try{ showPage("auth"); }catch(_){ }
   });
 
-  // Back (ore pulizia + calendario)
+  // Back (ore pulizia + calendario + operatori)
   const bb = $("#backBtnTop");
   if (bb) bb.addEventListener("click", () => {
     if (state.page === "orepulizia") { showPage("pulizie"); return; }
+    if (state.page === "operatori" || state.page === "channel" || state.page === "laundrycatalog") { showPage("impostazioni"); return; }
     if (state.page === "calendario") {
       if (state.session && isOperatoreSession(state.session)) { showPage("pulizie"); return; }
       showPage("ospiti");
@@ -3266,29 +9701,25 @@ function setupHome(){
   try{ bindHomeStrongTap(); }catch(_){ }
   // stampa build
   const build = $("#buildText");
-  if (build) build.textContent = `${BUILD_VERSION}`;
+  if (build) build.textContent = `dDAE_${BUILD_VERSION}`;
 
-  // SPESE: pulsante + (nuova spesa) e pulsante grafico+riepilogo
+  
+  // Home: Import/Export SYNC (Firebase) — silente (no file)
+  try{
+    const imp = document.getElementById("goDbImport");
+    if (imp && !imp.__syncBound){ imp.__syncBound = true; bindFastTap(imp, async ()=>{ try{ await __handleSyncImport__(); }catch(e){ try{ toast("Sync non disponibile", "orange"); }catch(_){ } } }); }
+    const exp = document.getElementById("goDbExport");
+    if (exp && !exp.__syncBound){ exp.__syncBound = true; bindFastTap(exp, async ()=>{ try{ await __handleSyncExport__(); }catch(e){ try{ toast("Sync non disponibile", "orange"); }catch(_){ } } }); }
+  }catch(_){ }
+// SPESE: pulsante + (nuova spesa) e pulsante grafico+riepilogo e pulsante grafico+riepilogo
   const btnAdd = $("#btnAddSpesa");
   if (btnAdd){
     bindFastTap(btnAdd, () => { hideLauncher(); showPage("inserisci"); });
   }
   const btnInsights = $("#btnSpeseInsights");
   if (btnInsights){
-    bindFastTap(btnInsights, async () => {
-      // toggle vista
-      const next = (state.speseView === "insights") ? "list" : "insights";
-      if (next === "insights"){
-        try{
-          await ensureStatsAllData({ showLoader:true });
-          setSpeseView("insights", { render:true });
-        }catch(e){ toast(e.message); }
-      } else {
-        setSpeseView("list");
-      }
-    });
+    btnInsights.hidden = true;
   }
-
 
   // HOME: tasto Spese apre direttamente la pagina "spese" (senza launcher)
   const openBtn = $("#openLauncher");
@@ -3319,10 +9750,6 @@ if (btnNewGuestOspiti){
 const btnNewGuestTop = $("#btnNewGuestTop");
 if (btnNewGuestTop){
   btnNewGuestTop.addEventListener("click", () => { enterGuestCreateMode(); showPage("ospite"); });
-}
-const goCalendarioTopOspiti = $("#goCalendarioTopOspiti");
-if (goCalendarioTopOspiti){
-  bindFastTap(goCalendarioTopOspiti, () => showPage("calendario"));
 }
 
 
@@ -3383,7 +9810,20 @@ if (goCalendarioTopOspiti){
   // HOME: Impostazioni (top)
   const hsTop = document.getElementById("homeSettingsTop");
   if (hsTop){
-    bindFastTap(hsTop, () => { hideLauncher(); showPage("impostazioni"); });
+    const goHomeSettings = (ev) => {
+      try{ if (ev){ ev.preventDefault(); ev.stopPropagation(); } }catch(_){ }
+      try{ hsTop.disabled = false; }catch(_){ }
+      try{ hsTop.style.pointerEvents = "auto"; }catch(_){ }
+      hideLauncher();
+      showPage((state.session && isOperatoreSession(state.session)) ? "opsettings" : "impostazioni");
+    };
+    bindFastTap(hsTop, goHomeSettings);
+    if (!hsTop.__settingsStrongBound){
+      hsTop.__settingsStrongBound = true;
+      ["click","touchend","pointerup"].forEach((evtName) => {
+        try{ hsTop.addEventListener(evtName, goHomeSettings, { passive:false, capture:true }); }catch(_){ try{ hsTop.addEventListener(evtName, goHomeSettings, true); }catch(__){} }
+      });
+    }
   }
 
   // HOME: icona Calendario (tap-safe su iOS PWA)
@@ -3405,6 +9845,27 @@ if (goCalendarioTopOspiti){
   if (goLav){
     bindFastTap(goLav, () => { hideLauncher(); showPage("lavanderia"); });
   }
+  const goOrePulHome = $("#goOrePuliziaHome");
+  if (goOrePulHome){
+    bindFastTap(goOrePulHome, () => { hideLauncher(); showPage("orepulizia"); });
+  }
+  try{ __applyHomeIconGradients__(); }catch(_){ }
+  try{
+    const laundryDetailClose = document.getElementById('laundryDetailClose');
+    const laundryDetailModal = document.getElementById('laundryDetailModal');
+    if (laundryDetailClose && !laundryDetailClose.__boundLaundryDetail){
+      laundryDetailClose.__boundLaundryDetail = true;
+      bindFastTap(laundryDetailClose, () => { __closeLaundryDetailModal__(); });
+    }
+    if (laundryDetailModal && !laundryDetailModal.__boundLaundryBackdrop){
+      laundryDetailModal.__boundLaundryBackdrop = true;
+      laundryDetailModal.addEventListener('click', (ev) => { if (ev.target === laundryDetailModal) __closeLaundryDetailModal__(); });
+    }
+    if (!document.body.__boundLaundryDetailEsc){
+      document.body.__boundLaundryDetailEsc = true;
+      document.addEventListener('keydown', (ev) => { if (ev.key === 'Escape') { __closeLaundryDetailModal__(); __closeLaundryPricesModal__(); } });
+    }
+  }catch(_){ }
   const goLavTop = $("#goLavanderiaTop");
   if (goLavTop){
     bindFastTap(goLavTop, () => { hideLauncher(); showPage("lavanderia"); });
@@ -3502,6 +9963,14 @@ if (goCalendarioTopOspiti){
   const btnBackStatsPiscina = $("#btnBackStatistichePiscina");
   if (btnBackStatsPiscina){ bindFastTap(btnBackStatsPiscina, () => { showPage("statistiche"); }); }
   const btnPiscinaBackfillTop = $("#btnPiscinaBackfillTop");
+  const btnPiscinaSimToday = $("#piscinaSimTodayBtn");
+  if (btnPiscinaSimToday){
+    bindFastTap(btnPiscinaSimToday, () => {
+      try{ piscinaOpenEditTodayModal(); }catch(e){ toast(e?.message || "Errore"); }
+    });
+  }
+
+
   if (btnPiscinaBackfillTop){ bindFastTap(btnPiscinaBackfillTop, () => { try{ piscinaBackfillCurrentMonth(); }catch(e){ toast(e.message||"Errore"); } }); }
 
 const btnPieSpese = $("#btnStatSpesePie");
@@ -3528,6 +9997,7 @@ function setupGuestListControls(){
   const sortSel = $("#guestSortBy");
   const dirBtn = $("#guestSortDir");
   const todayBtn = $("#guestToday");
+  const sortButtons = Array.from(document.querySelectorAll(".gf-sort-btn[data-sort-by]"));
   if (!sortSel) return;
 
   const savedBy = localStorage.getItem("dDAE_guestSortBy");
@@ -3535,7 +10005,22 @@ function setupGuestListControls(){
   state.guestSortBy = savedBy || state.guestSortBy || "arrivo";
   state.guestSortDir = savedDir || state.guestSortDir || "asc";
 
-  try { sortSel.value = state.guestSortBy; } catch(_) {}
+  const syncSortSelect = () => {
+    try { sortSel.value = state.guestSortBy; } catch(_) {}
+  };
+
+  let lastSortTapBy = "";
+  let lastSortTapTs = 0;
+  const SORT_DOUBLE_TAP_MS = 360;
+
+  const paintSortButtons = () => {
+    sortButtons.forEach((btn) => {
+      const active = String(btn.dataset.sortBy || "") === String(state.guestSortBy || "");
+      btn.classList.toggle("is-active", active);
+      btn.setAttribute("aria-pressed", active ? "true" : "false");
+      try { __translateTree__(btn); } catch(_) {}
+    });
+  };
 
   const paintDir = () => {
     if (!dirBtn) return;
@@ -3544,7 +10029,7 @@ function setupGuestListControls(){
     dirBtn.setAttribute("aria-pressed", asc ? "false" : "true");
   };
   paintDir();
-  // Filtro rapido: Oggi (arrivo = oggi)
+
   const savedToday = localStorage.getItem("dDAE_guestTodayOnly");
   state.guestTodayOnly = (savedToday === "1") ? true : (savedToday === "0") ? false : (state.guestTodayOnly || false);
 
@@ -3552,7 +10037,11 @@ function setupGuestListControls(){
     if (!todayBtn) return;
     todayBtn.classList.toggle("is-active", !!state.guestTodayOnly);
     todayBtn.setAttribute("aria-pressed", state.guestTodayOnly ? "true" : "false");
+    try { __translateTree__(todayBtn); } catch(_) {}
   };
+
+  syncSortSelect();
+  paintSortButtons();
   paintToday();
 
   if (todayBtn){
@@ -3564,19 +10053,54 @@ function setupGuestListControls(){
     });
   }
 
+  sortButtons.forEach((btn) => {
+    btn.addEventListener("click", () => {
+      const nextBy = String(btn.dataset.sortBy || "").trim();
+      if (!nextBy) return;
+
+      const sameButton = String(state.guestSortBy || "") === nextBy;
+      const now = Date.now();
+      const repeatedTap = sameButton || (lastSortTapBy === nextBy && ((now - lastSortTapTs) <= SORT_DOUBLE_TAP_MS));
+      lastSortTapBy = nextBy;
+      lastSortTapTs = now;
+
+      if (sameButton && repeatedTap) {
+        toggleGuestSortDir();
+        return;
+      }
+
+      state.guestSortBy = nextBy;
+      state.guestSortDir = "asc";
+      try { localStorage.setItem("dDAE_guestSortBy", state.guestSortBy); } catch(_){}
+      try { localStorage.setItem("dDAE_guestSortDir", state.guestSortDir); } catch(_){}
+      syncSortSelect();
+      paintSortButtons();
+      paintDir();
+      renderGuestCards();
+    });
+  });
 
   sortSel.addEventListener("change", () => {
     state.guestSortBy = sortSel.value;
+    state.guestSortDir = "asc";
     try { localStorage.setItem("dDAE_guestSortBy", state.guestSortBy); } catch(_){}
+    try { localStorage.setItem("dDAE_guestSortDir", state.guestSortDir); } catch(_){}
+    syncSortSelect();
+    paintSortButtons();
+    paintDir();
     renderGuestCards();
   });
 
+  const toggleGuestSortDir = () => {
+    state.guestSortDir = (state.guestSortDir === "desc") ? "asc" : "desc";
+    try { localStorage.setItem("dDAE_guestSortDir", state.guestSortDir); } catch(_){}
+    paintDir();
+    renderGuestCards();
+  };
+
   if (dirBtn){
     dirBtn.addEventListener("click", () => {
-      state.guestSortDir = (state.guestSortDir === "desc") ? "asc" : "desc";
-      try { localStorage.setItem("dDAE_guestSortDir", state.guestSortDir); } catch(_){}
-      paintDir();
-      renderGuestCards();
+      toggleGuestSortDir();
     });
   }
 
@@ -3601,6 +10125,28 @@ function guestIdOf(g){
   return String(g?.id ?? g?.ID ?? g?.ospite_id ?? g?.ospiteId ?? g?.guest_id ?? g?.guestId ?? "").trim();
 }
 
+function findCalendarGuestById(id){
+  try{
+    const needle = String(id ?? '').trim();
+    if (!needle) return null;
+
+    const sources = [
+      state?.calendar?.guests,
+      state?.guestRows,
+      state?.guests,
+      state?.ospitiRows,
+      state?.ospiti
+    ];
+
+    for (const src of sources){
+      if (!Array.isArray(src) || !src.length) continue;
+      const hit = src.find((g) => guestIdOf(g) === needle);
+      if (hit) return hit;
+    }
+  }catch(_){ }
+  return null;
+}
+
 function parseDateTs(v){
   const s = String(v ?? "").trim();
   if (!s) return null;
@@ -3609,25 +10155,54 @@ function parseDateTs(v){
 }
 
 function computeInsertionMap(guests){
+  const pickSeq = (g) => {
+    const v = Number(g?.seq);
+    return Number.isFinite(v) && v > 0 ? v : null;
+  };
+  const pickIns = (g) => {
+    const vals = [g?.insertion_no, g?.insertionNo, g?.ordineInserimento, g?.ins_no];
+    for (const raw of vals){
+      const v = Number(raw);
+      if (Number.isFinite(v) && v > 0) return v;
+    }
+    return null;
+  };
+
   const arr = (guests || []).map((g, idx) => {
     const id = guestIdOf(g);
+    const seq = pickSeq(g);
+    const ins = pickIns(g);
     const c = g?.created_at ?? g?.createdAt ?? "";
     const t = parseDateTs(c);
-    return { id, idx, t };
-  });
+    const bucket = (seq != null) ? 0 : (ins != null ? 1 : 2);
+    return { id, idx, seq, ins, t, bucket };
+  }).filter(x => !!x.id);
 
+  // Ordine misto stabile:
+  // 1) seq quando presente
+  // 2) insertion_no / ordineInserimento / ins_no come fallback
+  // 3) createdAt solo come ulteriore fallback
+  // updatedAt non influenza mai l'ordine di inserimento.
   arr.sort((a,b) => {
-    const at = a.t, bt = b.t;
-    if (at != null && bt != null) return at - bt;
-    if (at != null) return -1;
-    if (bt != null) return 1;
+    if (a.bucket !== b.bucket) return a.bucket - b.bucket;
+
+    if (a.bucket === 0){
+      if (a.seq !== b.seq) return a.seq - b.seq;
+    }else if (a.bucket === 1){
+      if (a.ins !== b.ins) return a.ins - b.ins;
+    }
+
+    const at = a.t;
+    const bt = b.t;
+    if (at != null && bt != null && at !== bt) return at - bt;
+    if (at == null && bt != null) return 1;
+    if (at != null && bt == null) return -1;
     return a.idx - b.idx;
   });
 
   const map = {};
   let n = 1;
   for (const x of arr){
-    if (!x.id) continue;
     map[x.id] = n++;
   }
   return map;
@@ -3816,8 +10391,16 @@ async function loadOspiti({ from="", to="", force=false } = {}){
       .then(([ , data ]) => {
         // aggiorna solo se l'utente è ancora nella lista ospiti
         if (state.page !== "ospiti") return;
-        state.guests = Array.isArray(data) ? data : [];
-        __lsSet(lsKey, state.guests);
+        const nextRaw = Array.isArray(data) ? data : [];
+        const next = __filterByExerciseYear__(nextRaw, state.exerciseYear || loadExerciseYear(), [
+          "check_in","checkIn","arrivo","dataArrivo","check_out","checkOut","partenza","dataPartenza",
+          "createdAt","created_at","updatedAt","updated_at"
+        ]);
+        // Evita di sovrascrivere con vuoto se ho già dati (flash → scomparsa)
+        if (next.length || !(Array.isArray(state.guests) && state.guests.length)) {
+          state.guests = next;
+          __lsSet(lsKey, state.guests);
+        }
         try{ requestAnimationFrame(renderGuestCards); }catch(_){ renderGuestCards(); }
       })
       .catch((err) => {
@@ -3832,8 +10415,16 @@ async function loadOspiti({ from="", to="", force=false } = {}){
   }
 
   const [ , data ] = await Promise.all([p, refresh()]);
-  state.guests = Array.isArray(data) ? data : [];
-  __lsSet(lsKey, state.guests);
+  const nextRaw = Array.isArray(data) ? data : [];
+        const next = __filterByExerciseYear__(nextRaw, state.exerciseYear || loadExerciseYear(), [
+          "check_in","checkIn","arrivo","dataArrivo","check_out","checkOut","partenza","dataPartenza",
+          "createdAt","created_at","updatedAt","updated_at"
+        ]);
+  // Evita di sovrascrivere con vuoto se ho già dati (flash → scomparsa)
+  if (next.length || !(Array.isArray(state.guests) && state.guests.length)) {
+    state.guests = next;
+    __lsSet(lsKey, state.guests);
+  }
   renderGuestCards();
 }
 
@@ -3851,13 +10442,15 @@ async function ensurePeriodData({ showLoader=true, force=false } = {}){
   // Prefill immediato da cache locale (perceived speed) — poi refresh SWR
   const lsSpeseKey = `spese|${uid}|${anno}|${from}|${to}`;
   const lsReportKey = `report|${uid}|${anno}|${from}|${to}`;
+  const lsGuestsKey = `ospiti|${uid}|${anno}|${from}|${to}`;
   const hitS = !force ? __lsGet(lsSpeseKey) : null;
   const hitR = !force ? __lsGet(lsReportKey) : null;
-  const hasLocal = !!((hitS && hitS.data) || (hitR && hitR.data));
+  const hitG = !force ? __lsGet(lsGuestsKey) : null;
+  const hasLocal = !!((hitS && hitS.data) || (hitR && hitR.data) || (hitG && hitG.data));
 
   if (!force) {
     if (hitS && Array.isArray(hitS.data)) {
-      state.spese = hitS.data;
+      state.spese = __filterByExerciseYear__(__filterSpeseByCardDateRange__(hitS.data, from, to), state.exerciseYear || loadExerciseYear(), ["dataSpesa","data","data_spesa"]);
       state.report = buildReportFromSpese(state.spese);
     } else if (hitR && hitR.data) {
       state.report = hitR.data;
@@ -3867,6 +10460,7 @@ async function ensurePeriodData({ showLoader=true, force=false } = {}){
 
   const fetchAll = () => Promise.all([
     cachedGet("spese", { from, to }, { showLoader: showLoader && !hasLocal, ttlMs: 2*60*1000, swrMs: 10*60*1000, force }),
+    cachedGet("ospiti", { from, to }, { showLoader:false, ttlMs: 2*60*1000, swrMs: 10*60*1000, force }),
   ]);
 
   // Se ho cache locale e non forzo, non bloccare la navigazione: aggiorna in background
@@ -3877,7 +10471,7 @@ async function ensurePeriodData({ showLoader=true, force=false } = {}){
         const annoNow = (state && state.exerciseYear) ? String(state.exerciseYear) : "";
         const kNow = `${uidNow}|${annoNow}|${state.period.from}|${state.period.to}`;
         if (kNow !== key) return;
-        state.spese = Array.isArray(spese) ? spese : [];
+        state.spese = __filterByExerciseYear__(__filterSpeseByCardDateRange__(Array.isArray(spese) ? spese : [], state.period.from, state.period.to), state.exerciseYear || loadExerciseYear(), ["dataSpesa","data","data_spesa"]);
         state.report = buildReportFromSpese(state.spese);
         state._dataKey = key;
         __lsSet(lsReportKey, state.report);
@@ -3898,8 +10492,8 @@ async function ensurePeriodData({ showLoader=true, force=false } = {}){
     return;
   }
 
-  const [spese] = await fetchAll();
-  state.spese = Array.isArray(spese) ? spese : [];
+  const [spese, ospiti] = await fetchAll();
+  state.spese = __filterByExerciseYear__(__filterSpeseByCardDateRange__(Array.isArray(spese) ? spese : [], state.period.from, state.period.to), state.exerciseYear || loadExerciseYear(), ["dataSpesa","data","data_spesa"]);
   state.report = buildReportFromSpese(state.spese);
   state._dataKey = key;
   __lsSet(lsReportKey, state.report);
@@ -3929,36 +10523,50 @@ async function ensureStatsAllData({ showLoader=true, force=false } = {}){
 
   const lsSpeseKey = `speseALL|${uid}|${anno}|${from}|${to}`;
   const lsReportKey = `reportALL|${uid}|${anno}|${from}|${to}`;
+  const lsGuestsKey = `ospitiALL|${uid}|${anno}|${from}|${to}`;
   const hitS = !force ? __lsGet(lsSpeseKey) : null;
   const hitR = !force ? __lsGet(lsReportKey) : null;
-  const hasLocal = !!((hitS && hitS.data) || (hitR && hitR.data));
+  const hitG = !force ? __lsGet(lsGuestsKey) : null;
+  const hasLocal = !!((hitS && hitS.data) || (hitR && hitR.data) || (hitG && hitG.data));
 
   if (!force) {
     if (hitS && Array.isArray(hitS.data)) {
-      state.speseAll = hitS.data;
+      state.speseAll = __filterByExerciseYear__(__filterSpeseByCardDateRange__(hitS.data, from, to), state.exerciseYear || loadExerciseYear(), ["dataSpesa","data","data_spesa"]);
       state.reportAll = buildReportFromSpese(state.speseAll);
     } else if (hitR && hitR.data) {
       state.reportAll = hitR.data;
+    }
+    if (hitG && Array.isArray(hitG.data)) {
+      state.statsGuests = __filterByExerciseYear__(hitG.data, state.exerciseYear || loadExerciseYear(), [
+        "check_in","checkIn","arrivo","dataArrivo","check_out","checkOut","partenza","dataPartenza",
+        "createdAt","created_at","updatedAt","updated_at"
+      ]);
     }
     if (hasLocal) state._statsDataKey = key;
   }
 
   const fetchAll = () => Promise.all([
     cachedGet("spese", { from, to }, { showLoader: showLoader && !hasLocal, ttlMs: 2*60*1000, swrMs: 10*60*1000, force }),
+    cachedGet("ospiti", { from, to }, { showLoader: false, ttlMs: 2*60*1000, swrMs: 10*60*1000, force }),
   ]);
 
   if (hasLocal && !force) {
     fetchAll()
-      .then(([spese]) => {
+      .then(([spese, ospiti]) => {
         const uidNow = (state && state.session && state.session.user_id) ? String(state.session.user_id) : "";
         const annoNow = (state && state.exerciseYear) ? String(state.exerciseYear) : "";
         const kNow = `${uidNow}|${annoNow}|ALL|${from}|${to}`;
         if (kNow !== key) return;
-        state.speseAll = Array.isArray(spese) ? spese : [];
+        state.speseAll = __filterByExerciseYear__(__filterSpeseByCardDateRange__(Array.isArray(spese) ? spese : [], from, to), state.exerciseYear || loadExerciseYear(), ["dataSpesa","data","data_spesa"]);
         state.reportAll = buildReportFromSpese(state.speseAll);
         state._statsDataKey = key;
         __lsSet(lsReportKey, state.reportAll);
         __lsSet(lsSpeseKey, state.speseAll);
+        state.statsGuests = __filterByExerciseYear__(Array.isArray(ospiti) ? ospiti : [], state.exerciseYear || loadExerciseYear(), [
+          "check_in","checkIn","arrivo","dataArrivo","check_out","checkOut","partenza","dataPartenza",
+          "createdAt","created_at","updatedAt","updated_at"
+        ]);
+        __lsSet(lsGuestsKey, state.statsGuests);
 
         try{
           if (state.page === "statgen") renderStatGen();
@@ -3973,12 +10581,17 @@ async function ensureStatsAllData({ showLoader=true, force=false } = {}){
     return;
   }
 
-  const [spese] = await fetchAll();
-  state.speseAll = Array.isArray(spese) ? spese : [];
+  const [spese, ospiti] = await fetchAll();
+  state.speseAll = __filterByExerciseYear__(__filterSpeseByCardDateRange__(Array.isArray(spese) ? spese : [], from, to), state.exerciseYear || loadExerciseYear(), ["dataSpesa","data","data_spesa"]);
   state.reportAll = buildReportFromSpese(state.speseAll);
   state._statsDataKey = key;
   __lsSet(lsReportKey, state.reportAll);
   __lsSet(lsSpeseKey, state.speseAll);
+  state.statsGuests = __filterByExerciseYear__(Array.isArray(ospiti) ? ospiti : [], state.exerciseYear || loadExerciseYear(), [
+    "check_in","checkIn","arrivo","dataArrivo","check_out","checkOut","partenza","dataPartenza",
+    "createdAt","created_at","updatedAt","updated_at"
+  ]);
+  __lsSet(lsGuestsKey, state.statsGuests);
 }
 
 
@@ -4173,7 +10786,13 @@ function renderSpese(){
 
     const btn = el.querySelector("[data-del]");
     if (btn){
-      btn.addEventListener("click", async () => {
+      // iOS/Safari: tap affidabile anche su PWA (Operatore)
+      bindFastTap(btn, async (ev) => {
+        try{
+          ev && ev.preventDefault && ev.preventDefault();
+          ev && ev.stopPropagation && ev.stopPropagation();
+          ev && ev.stopImmediatePropagation && ev.stopImmediatePropagation();
+        }catch(_){}
         if (!confirm("Eliminare definitivamente questa spesa?")) return;
         await api("spese", { method:"DELETE", params:{ id: s.id } });
         toast("Spesa eliminata");
@@ -4266,8 +10885,11 @@ function drawPie(canvasId, slices, opts){
   opts = opts || {};
   const centerTitle = (opts.centerTitle != null ? String(opts.centerTitle) : "Totale");
   const centerFormatter = (typeof opts.centerFormatter === "function") ? opts.centerFormatter : euro;
+  const showCenter = (opts.showCenter !== false);
 
-  const cssSize = Math.min(320, Math.floor(window.innerWidth * 0.78));
+  const parentW = (canvas.parentElement && canvas.parentElement.clientWidth) ? canvas.parentElement.clientWidth : 0;
+  const baseW = parentW || Math.floor(window.innerWidth * 0.78);
+  const cssSize = Math.min((opts.maxSize || 320), Math.max((opts.minSize || 120), Math.floor((opts.size || baseW) - 8)));
   const dpr = window.devicePixelRatio || 1;
   canvas.style.width = cssSize + "px";
   canvas.style.height = cssSize + "px";
@@ -4330,14 +10952,15 @@ function drawPie(canvasId, slices, opts){
   ctx.lineWidth = 1;
   ctx.stroke();
 
-  // center label
-  ctx.fillStyle = "rgba(15,23,42,0.75)";
-  ctx.font = "900 12px system-ui";
-  ctx.textAlign = "center";
-  ctx.fillText(centerTitle, cx, cy-4);
-  ctx.fillStyle = "rgba(15,23,42,0.92)";
-  ctx.font = "950 14px system-ui";
-  ctx.fillText(centerFormatter(total), cx, cy+14);
+  if (showCenter){
+    ctx.fillStyle = "rgba(15,23,42,0.75)";
+    ctx.font = "900 12px system-ui";
+    ctx.textAlign = "center";
+    ctx.fillText(centerTitle, cx, cy-4);
+    ctx.fillStyle = "rgba(15,23,42,0.92)";
+    ctx.font = "950 14px system-ui";
+    ctx.fillText(centerFormatter(total), cx, cy+14);
+  }
 }
 
 
@@ -4345,7 +10968,9 @@ function drawMonthlyPctBars(canvasId, pctValues, colors, opts){
   const canvas = document.getElementById(canvasId);
   if (!canvas) return;
   opts = opts || {};
-  const cssW = Math.min(340, Math.floor(window.innerWidth * 0.86));
+  const parentW = (canvas.parentElement && canvas.parentElement.clientWidth) ? canvas.parentElement.clientWidth : 0;
+  const baseW = parentW || Math.floor(window.innerWidth * 0.86);
+  const cssW = Math.min(340, Math.max(140, Math.floor(baseW - 4)));
   const cssH = 180;
   const dpr = window.devicePixelRatio || 1;
 
@@ -4422,6 +11047,239 @@ function roundRect(ctx, x, y, w, h, r){
 }
 
 
+function __renderLegendRows__(containerId, slices, valueFormatter){
+  const leg = document.getElementById(containerId);
+  if (!leg) return;
+  const fmt = (typeof valueFormatter === "function") ? valueFormatter : ((v)=>String(v));
+  const total = (Array.isArray(slices) ? slices : []).reduce((a,x)=>a+Math.max(0, Number((x && x.value) || 0)), 0);
+  leg.innerHTML = "";
+  (Array.isArray(slices) ? slices : []).forEach((sl)=>{
+    const v = Math.max(0, Number((sl && sl.value) || 0));
+    const pct = total > 0 ? (v / total * 100) : 0;
+    const row = document.createElement("div");
+    row.className = "legrow";
+    row.innerHTML = `
+      <div class="legleft">
+        <div class="dot" style="background:${sl.color}"></div>
+        <div class="legname">${escapeHtml(sl.label)}</div>
+      </div>
+      <div class="legright">${pct.toFixed(1)}% · ${fmt(v)}</div>
+    `;
+    leg.appendChild(row);
+  });
+}
+
+function __getStatGraphCard__(canvasId){
+  const canvas = document.getElementById(canvasId);
+  return canvas && canvas.closest ? canvas.closest(".stats-graph-card") : null;
+}
+
+function __bindStatGraphPopup__(canvasId, payload){
+  const card = __getStatGraphCard__(canvasId);
+  const canvas = document.getElementById(canvasId);
+  const target = card || canvas;
+  if (!target || !payload) return;
+  try{
+    target.classList.add("is-tappable");
+    target.setAttribute("role", "button");
+    target.setAttribute("tabindex", "0");
+    target.setAttribute("aria-label", payload.title || "Grafico");
+  }catch(_){ }
+  const open = ()=>{ try{ __openStatGraphPopup__(payload); }catch(_){ } };
+  target.onclick = open;
+  target.onkeydown = (e)=>{
+    const k = e && (e.key || e.code);
+    if (k === "Enter" || k === " " || k === "Spacebar"){
+      try{ e.preventDefault(); }catch(_){ }
+      open();
+    }
+  };
+}
+
+function __openStatGraphPopup__(payload){
+  const modal = document.getElementById("statGraphModal");
+  if (!modal || !payload) return;
+  const titleEl = document.getElementById("statGraphModalTitle");
+  const detailEl = document.getElementById("statGraphModalDetail");
+  const legendEl = document.getElementById("statGraphModalLegend");
+  if (titleEl) titleEl.textContent = String(payload.title || "Grafico");
+  if (detailEl) detailEl.textContent = String(payload.detail || "");
+  __renderLegendRows__("statGraphModalLegend", Array.isArray(payload.slices) ? payload.slices : [], payload.valueFormatter);
+  drawPie("statGraphModalCanvas", Array.isArray(payload.slices) ? payload.slices : [], {
+    centerTitle: payload.centerTitle != null ? payload.centerTitle : "Totale",
+    centerFormatter: (typeof payload.centerFormatter === "function") ? payload.centerFormatter : euro,
+    showCenter: true,
+    maxSize: 340,
+    minSize: 180
+  });
+  modal.hidden = false;
+  try{ modal.setAttribute("aria-hidden", "false"); }catch(_){ }
+}
+
+function __closeStatGraphPopup__(){
+  const modal = document.getElementById("statGraphModal");
+  if (!modal) return;
+  modal.hidden = true;
+  try{ modal.setAttribute("aria-hidden", "true"); }catch(_){ }
+}
+
+function __ensureStatGraphPopupBound__(){
+  const modal = document.getElementById("statGraphModal");
+  const closeBtn = document.getElementById("statGraphModalClose");
+  if (!modal || modal.__bound) return;
+  modal.__bound = true;
+  if (closeBtn) closeBtn.addEventListener("click", __closeStatGraphPopup__);
+  modal.addEventListener("click", (e)=>{ if (e.target === modal) __closeStatGraphPopup__(); });
+}
+
+function __occupazioneMensileSlices__(mensili){
+  const vals = Array.isArray(mensili && mensili.occPctByMonth) ? mensili.occPctByMonth : [];
+  const colors = __mensiliPalette12();
+  return new Array(12).fill(0).map((_,i)=>({
+    label: String(__MONTHS_IT[i] || `Mese ${i+1}`),
+    value: Math.max(0, Math.min(100, Number(vals[i] || 0) || 0)),
+    color: colors[i % colors.length] || "#2b7cb4"
+  })).filter(x=>x.value > 0);
+}
+
+function __operatorGraphColors__(){
+  try{
+    const catalog = getOperatoriCatalogFromSettings ? (getOperatoriCatalogFromSettings() || []) : [];
+    const palette = catalog.map(item => getOperatoreColorHexByName(item?.nome || '', item?.colore || 'blue')).filter(Boolean);
+    if (palette.length) return palette;
+  }catch(_){ }
+  return ['#6fb7d6', '#f29c50', '#4caf7d', '#e25d4b', '#8f78d4', '#d6b276'];
+}
+function __operatorGraphColors(){
+  return __operatorGraphColors__();
+}
+// Compatibilità difensiva: alcune build/client possono richiamare un alias errato
+// e bloccare il rendering dei grafici operatori con "... is not defined".
+function operatorgraphicColor(){
+  return __operatorGraphColors__();
+}
+function operatorGraphicColor(){
+  return __operatorGraphColors__();
+}
+
+function computeStatOrePuliziaGrafico(rows){
+  const listRaw = Array.isArray(rows) ? rows : [];
+  const list = __filterByExerciseYear__(listRaw, state.exerciseYear || loadExerciseYear(), ["data","date","Data","createdAt","created_at","updatedAt","updated_at"]);
+  const totals = new Map();
+  for (const r of list){
+    const name = getCanonicalActiveOperatorName(r?.operatore || r?.nome || '');
+    if (!name) continue;
+    const ore = Number(String(r?.ore ?? r?.Ore ?? 0).replace(",", "."));
+    if (!isFinite(ore) || ore <= 0) continue;
+    totals.set(name, (totals.get(name) || 0) + ore);
+  }
+  let fromSet = [];
+  try{ fromSet = getActiveOperatorNames ? (getActiveOperatorNames() || []) : []; }catch(_){ fromSet = []; }
+  const ordered = [];
+  const pushUnique = (v)=>{ const s = String(v||"").trim(); if (s && !ordered.includes(s)) ordered.push(s); };
+  fromSet.forEach(pushUnique);
+  const palette = __operatorGraphColors();
+  const slices = ordered.map((name, i)=>({
+    label: name,
+    value: Number(totals.get(name) || 0),
+    color: getOperatoreColorHexByName(name, palette[i % palette.length] || 'blue')
+  })).filter(x=>x.value > 0);
+  return slices;
+}
+
+function renderStatGrafici(operatoriRows){
+  __ensureStatGraphPopupBound__();
+  const year = String(state.exerciseYear || loadExerciseYear() || new Date().getFullYear());
+  const mensili = computeStatMensili();
+  state.statMensili = mensili;
+  const statGen = computeStatGen();
+  state.statGen = statGen;
+  const pren = computeStatPrenotazioni();
+  const cancRows = Array.isArray(state.deletedGuests) ? state.deletedGuests.filter(r => String(r.delete_reason || "").toLowerCase() === "cancellazione" || String(r.delete_reason || "").trim() === "") : [];
+  const activeRows = Array.isArray(state.statsGuests) ? state.statsGuests : (Array.isArray(state.guests) ? state.guests : []);
+  const cancSlices = [
+    { label: "Attive", value: activeRows.length, color: "#2b7cb4" },
+    { label: "Cancellate", value: cancRows.length, color: "#ff3b30" }
+  ];
+  const statSpese = computeStatSpese();
+  state.statSpese = statSpese;
+  const speseSlices = [
+    { label: categoriaLabel("CONTANTI"), value: statSpese.contanti, color: (COLORS.CONTANTI || "#2b7cb4") },
+    { label: categoriaLabel("TASSA_SOGGIORNO"), value: statSpese.tassaSoggiorno, color: (COLORS.TASSA_SOGGIORNO || "#d8bd97") },
+    { label: categoriaLabel("IVA_22"), value: statSpese.iva22, color: (COLORS.IVA_22 || "#c9772b") },
+    { label: categoriaLabel("IVA_10"), value: statSpese.iva10, color: (COLORS.IVA_10 || "#7ac0db") },
+    { label: categoriaLabel("IVA_4"), value: statSpese.iva4, color: (COLORS.IVA_4 || "#1f2937") }
+  ].filter(x=>Number(x.value || 0) > 0);
+  const pulizieSlices = computeStatOrePuliziaGrafico(operatoriRows);
+  const ricevuteSlices = [
+    { label: "Senza ricevuta", value: statGen.senzaRicevuta, color: "#bfbea9" },
+    { label: "Con ricevuta", value: statGen.conRicevuta, color: "#6fb7d6" }
+  ];
+  const bookingSlices = [
+    { label: "Con Booking", value: pren.withBooking, color: "#2b7cb4" },
+    { label: "Senza Booking", value: pren.withoutBooking, color: "#c9772b" }
+  ];
+  const occSlices = __occupazioneMensileSlices__(mensili);
+
+  drawPie("statGrafOccCanvas", occSlices.length ? occSlices : [{ label: "Nessun dato", value: 0, color: "#2b7cb4" }], { centerTitle: "Occup.", centerFormatter: (n)=>`${Number(n || 0).toFixed(1)}%`, showCenter: false, maxSize: 170, minSize: 120 });
+  drawPie("statGrafRicevuteCanvas", ricevuteSlices, { centerTitle: "Totale", centerFormatter: euro, showCenter: false, maxSize: 170, minSize: 120 });
+  drawPie("statGrafBookingCanvas", bookingSlices, { centerTitle: "Prenot.", centerFormatter: (n)=>String(Math.round(Number(n || 0))), showCenter: false, maxSize: 170, minSize: 120 });
+  drawPie("statGrafCancCanvas", cancSlices, { centerTitle: "Totale", centerFormatter: (n)=>String(Math.round(Number(n || 0))), showCenter: false, maxSize: 170, minSize: 120 });
+  drawPie("statGrafSpeseCanvas", speseSlices.length ? speseSlices : [{ label: "Nessuna spesa", value: 0, color: "#2b7cb4" }], { centerTitle: "Spese", centerFormatter: euro, showCenter: false, maxSize: 170, minSize: 120 });
+  drawPie("statGrafPulizieCanvas", pulizieSlices.length ? pulizieSlices : [{ label: "Nessun dato", value: 0, color: "#2b7cb4" }], { centerTitle: "Ore", centerFormatter: (n)=>__fmtHours_(n) || "0", showCenter: false, maxSize: 170, minSize: 120 });
+
+  __bindStatGraphPopup__("statGrafOccCanvas", {
+    title: "Occupazione mensile",
+    detail: `Anno solare ${year} · percentuale media mensile di occupazione`,
+    slices: occSlices,
+    valueFormatter: (v)=>`${Number(v || 0).toFixed(1)}%`,
+    centerTitle: "Media",
+    centerFormatter: (n)=>`${Number(n || 0).toFixed(1)}%`
+  });
+  __bindStatGraphPopup__("statGrafRicevuteCanvas", {
+    title: "Con ricevuta / Senza ricevuta",
+    detail: `Anno solare ${year} · distribuzione degli incassi`,
+    slices: ricevuteSlices,
+    valueFormatter: euro,
+    centerTitle: "Totale",
+    centerFormatter: euro
+  });
+  __bindStatGraphPopup__("statGrafBookingCanvas", {
+    title: "Prenotazioni con / senza Booking",
+    detail: `Anno solare ${year} · numero prenotazioni`,
+    slices: bookingSlices,
+    valueFormatter: (v)=>String(Math.round(Number(v || 0))),
+    centerTitle: "Prenot.",
+    centerFormatter: (n)=>String(Math.round(Number(n || 0)))
+  });
+  __bindStatGraphPopup__("statGrafCancCanvas", {
+    title: "Cancellazioni",
+    detail: `Anno solare ${year} · attive vs cancellate`,
+    slices: cancSlices,
+    valueFormatter: (v)=>String(Math.round(Number(v || 0))),
+    centerTitle: "Totale",
+    centerFormatter: (n)=>String(Math.round(Number(n || 0)))
+  });
+  __bindStatGraphPopup__("statGrafSpeseCanvas", {
+    title: "Spese",
+    detail: `Anno solare ${year} · distribuzione per categoria`,
+    slices: speseSlices,
+    valueFormatter: euro,
+    centerTitle: "Spese",
+    centerFormatter: euro
+  });
+  __bindStatGraphPopup__("statGrafPulizieCanvas", {
+    title: "Ore pulizia operatori",
+    detail: `Anno solare ${year} · ripartizione percentuale ore operatori`,
+    slices: pulizieSlices,
+    valueFormatter: (v)=>`${__fmtHours_(v) || "0"}h`,
+    centerTitle: "Ore",
+    centerFormatter: (n)=>`${__fmtHours_(n) || "0"}h`
+  });
+}
+
+
+
 /* Helpers */
 function hexToRgba(hex, a){
   const h = (hex || "").replace("#","");
@@ -4440,11 +11298,11 @@ function escapeHtml(s){
 }
 
 // =========================
-// STATISTICHE (dDAE_2.212)
+// STATISTICHE (dDAE_1.020)
 // =========================
 
 function computeStatGen(){
-  const guests = Array.isArray(state.guests) ? state.guests : [];
+  const guests = Array.isArray(state.statsGuests) ? state.statsGuests : (Array.isArray(state.guests) ? state.guests : []);
   const report = __getStatsReport() || null;
 
   const money = (v) => {
@@ -4538,7 +11396,7 @@ function computeStatGen(){
   }
 
 
-  // dDAE_2.212+ — Giacenza in cassa = (con ricevuta + senza ricevuta) - spese totali
+  // dDAE_1.020+ — Giacenza in cassa = (con ricevuta + senza ricevuta) - spese totali
   try{
     giacenza = (money(conRicevuta) + money(senzaRicevuta)) - money(speseTot);
   }catch(_){ }
@@ -4680,13 +11538,11 @@ function __mensiliPalette12(){
   return out;
 }
 
-const __MONTHS_IT = [
-  "Gennaio","Febbraio","Marzo","Aprile","Maggio","Giugno",
-  "Luglio","Agosto","Settembre","Ottobre","Novembre","Dicembre"
-];
+// month labels are refreshed by i18n
+__refreshMonthNamesCache__();
 
 function computeStatMensili(){
-  const guests = Array.isArray(state.guests) ? state.guests : [];
+  const guests = Array.isArray(state.statsGuests) ? state.statsGuests : (Array.isArray(state.guests) ? state.guests : []);
   const servizi = Array.isArray(state.servizi) ? state.servizi : [];
   const byMonth = new Array(12).fill(0);
 
@@ -4782,7 +11638,7 @@ function computeStatMensili(){
       }
       if (set.size > 0) return set.size;
     }catch(_){}
-    return 6;
+    return getConfiguredRoomsCount(6);
   };
 
   const totalRooms = __getTotalRooms();
@@ -4846,9 +11702,8 @@ function computeStatMensili(){
     if (ciISO && coISO) __nightsByMonthFromStay(ciISO, coISO, roomsCount);
   }
 
-  // Capacità per mese (usa anno corrente per i giorni del mese)
-  const now = new Date();
-  const y = now.getFullYear();
+  // Capacita per mese: usa sempre l'anno di esercizio selezionato
+  const y = Number(state.exerciseYear || loadExerciseYear() || new Date().getFullYear());
   const capacityRoomNights = new Array(12).fill(0).map((_,i)=>{
     const days = new Date(Date.UTC(y, i+1, 0)).getUTCDate(); // giorni nel mese
     return days * totalRooms;
@@ -4922,7 +11777,7 @@ function renderStatMensili(){
 
 // ===== Statistiche: Prenotazioni (booking compilato vs non compilato) =====
 function computeStatPrenotazioni(){
-  const guests = Array.isArray(state.guests) ? state.guests : [];
+  const guests = Array.isArray(state.statsGuests) ? state.statsGuests : (Array.isArray(state.guests) ? state.guests : []);
 
   const money = (v) => {
     if (v === null || v === undefined) return 0;
@@ -4996,8 +11851,8 @@ function openStatPieModal(){
 
   const s = state.statGen || computeStatGen();
   const slices = [
-    { label: "Importo senza ricevuta", value: s.senzaRicevuta, color: "#bfbea9" },
-    { label: "Importo con ricevuta", value: s.conRicevuta, color: "#6fb7d6" },
+    { label: "Senza ricevuta", value: s.senzaRicevuta, color: "#bfbea9" },
+    { label: "Con ricevuta", value: s.conRicevuta, color: "#6fb7d6" },
   ];
 
   drawPie("statPieCanvas", slices);
@@ -5287,7 +12142,7 @@ async function checkReceiptsOnStartup(){
 }
 
 function computeAziendaBilancio(){
-  const guests = Array.isArray(state.guests) ? state.guests : [];
+  const guests = Array.isArray(state.statsGuests) ? state.statsGuests : (Array.isArray(state.guests) ? state.guests : []);
   const spese = Array.isArray(state.spese) ? state.spese : [];
 
   // Incassi con/senza ricevuta: acconto + saldo
@@ -5383,7 +12238,7 @@ function renderStatCancellazioni(){
   const cancRows = delRows.filter(r => String(r.delete_reason || "").toLowerCase() === "cancellazione" || String(r.delete_reason || "").trim() === "");
   const cancN = cancRows.length;
 
-  const activeRows = Array.isArray(state.guests) ? state.guests : [];
+  const activeRows = Array.isArray(state.statsGuests) ? state.statsGuests : (Array.isArray(state.guests) ? state.guests : []);
   const activeN = activeRows.length;
 
   const total = activeN + cancN;
@@ -5657,6 +12512,7 @@ function computeStatSpese(){
   }
 
   return {
+    totale: (acc.CONTANTI + acc.TASSA_SOGGIORNO + acc.IVA_22 + acc.IVA_10 + acc.IVA_4),
     contanti: acc.CONTANTI,
     tassaSoggiorno: acc.TASSA_SOGGIORNO,
     iva22: acc.IVA_22,
@@ -5756,11 +12612,70 @@ function renderStatSpese(){
     if (el) el.textContent = euro(Number(v || 0));
   };
 
+  set("ssTotaleSpese", s.totale);
+
   set("ssContanti", s.contanti);
   set("ssTassa", s.tassaSoggiorno);
   set("ssIva22", s.iva22);
   set("ssIva10", s.iva10);
   set("ssIva4", s.iva4);
+
+  // Dettaglio elenco spese (visibile in Statistiche → Spese)
+  const list = document.getElementById("statSpeseList");
+  if (list){
+    list.innerHTML = "";
+    let items = Array.isArray(state.speseAll) ? [...state.speseAll] : [];
+
+    const toTime = (v) => {
+      if (!v) return null;
+      const s = String(v);
+      const iso = s.slice(0, 10);
+      if (/^\d{4}-\d{2}-\d{2}$/.test(iso)){
+        const t = Date.parse(iso + "T00:00:00Z");
+        return isNaN(t) ? null : t;
+      }
+      const t = Date.parse(s);
+      return isNaN(t) ? null : t;
+    };
+
+    items.sort((a,b) => {
+      const da = toTime(a.dataSpesa || a.data || a.data_spesa);
+      const db = toTime(b.dataSpesa || b.data || b.data_spesa);
+      if (da == null && db == null) return 0;
+      if (da == null) return 1;
+      if (db == null) return -1;
+      return db - da;
+    });
+
+    if (!items.length){
+      list.innerHTML = '<div style="font-size:13px; opacity:.75; padding:8px 2px;">Nessuna spesa nel periodo.</div>';
+    } else {
+      items.forEach((sp) => {
+        const el = document.createElement("div");
+        el.className = "item spesa-bg";
+        const cls = spesaCategoryClass(sp);
+        if (cls) el.classList.add(cls);
+
+        const importo = Number(sp.importoLordo || 0);
+        const data = formatShortDateIT(sp.dataSpesa || sp.data || sp.data_spesa || "");
+        const motivoTxt = (sp.motivazione || sp.motivo || "").toString();
+        const motivo = escapeHtml(motivoTxt);
+
+        el.innerHTML = `
+          <div class="item-top" style="align-items:center;">
+            <div class="spesa-line" title="${motivo}">
+              <span class="spesa-imp">${euro(importo)}</span>
+              <span class="spesa-sep">·</span>
+              <span class="spesa-date">${data}</span>
+              <span class="spesa-sep">·</span>
+              <span class="spesa-motivo">${motivo}</span>
+            </div>
+          </div>
+        `;
+        list.appendChild(el);
+      });
+    }
+  }
 }
 
 function openStatSpesePieModal(){
@@ -5916,6 +12831,25 @@ function updateGuestRemaining(){
   try { refreshFloatingLabels(); } catch (_) {}
 }
 
+function recalcGuestCommission(){
+  const totalEl = document.getElementById("guestTotal");
+  const pctEl = document.getElementById("guestChannelCommission");
+  const outEl = document.getElementById("guestBooking");
+  if (!outEl) return;
+  const totalRaw = String(totalEl?.value ?? "").trim();
+  const pctRaw = String(pctEl?.value ?? "").trim();
+  if (!totalRaw && !pctRaw){
+    outEl.value = "";
+    try { refreshFloatingLabels(); } catch (_) {}
+    return;
+  }
+  const total = parseFloat(totalRaw || "0") || 0;
+  const pct = parseFloat(pctRaw || "0") || 0;
+  const commission = Math.round((total * pct) * 100) / 10000;
+  outEl.value = (isFinite(commission) ? commission.toFixed(2) : "");
+  try { refreshFloatingLabels(); } catch (_) {}
+}
+
 function updateGuestPriceVisibility(){
   try{
     const hide = (String(state.guestMode || '').toLowerCase() === 'create' && !!state.guestCreateFromGroup);
@@ -5970,6 +12904,7 @@ function enterGuestCreateMode(){
   state.guestEditId = null;
   state.guestEditCreatedAt = null;
 
+  try{ ensureRoomsPickerButtons(); }catch(_){ }
   const title = document.getElementById("ospiteFormTitle");
   if (title) title.textContent = "Nuovo ospite";
   const btn = document.getElementById("createGuestCard");
@@ -5984,7 +12919,7 @@ function enterGuestCreateMode(){
 
 
   // reset fields
-  const fields = ["guestName","guestPhone","guestEmail","guestAdults","guestKidsU10","guestCheckOut","guestTotal","guestBooking","guestServices","guestDeposit","guestSaldo","guestRemaining"];
+  const fields = ["guestName","guestPhone","guestEmail","guestAdults","guestKidsU10","guestCheckOut","guestTotal","guestChannel","guestChannelCommission","guestBooking","guestServices","guestDeposit","guestSaldo","guestRemaining","guestNotes"];
   fields.forEach(id => { const el = document.getElementById(id); if (el) el.value = ""; });
   // reset servizi state
   try{ state.guestServicesItems = []; state.guestServicesComputedTotal = 0; state.guestServicesManualOverride = false; state.guestServicesLoadedFor = null; }catch(_){ }
@@ -5992,6 +12927,8 @@ function enterGuestCreateMode(){
 
   const ci = document.getElementById("guestCheckIn");
   if (ci) ci.value = todayISO();
+  try{ populateGuestChannelOptions(); }catch(_){ }
+  try{ applySelectedChannelToGuestForm(""); }catch(_){ }
 
   setMarriage(false);
   setGroup(false);
@@ -6029,11 +12966,13 @@ function enterGuestCreateMode(){
 
 
   try { updateGuestPriceVisibility(); } catch (_) {}
+  try{ syncGuestNotesUI(null, { open:false }); }catch(_){}
 
   // (Create mode) nulla da fare sulle stanze: la disponibilita' si aggiorna quando l'utente inserisce le date.
 }
 
 function enterGuestEditMode(ospite){
+  try{ ensureRoomsPickerButtons(); }catch(_){ }
   setGuestFormViewOnly(false);
 
   state.guestCreateFromGroup = false;
@@ -6105,10 +13044,16 @@ state.guestEditCreatedAt = (ospite?.created_at ?? ospite?.createdAt ?? null);
   document.getElementById("guestCheckIn").value = formatISODateLocal(ospite.check_in || ospite.checkIn || "") || "";
   document.getElementById("guestCheckOut").value = formatISODateLocal(ospite.check_out || ospite.checkOut || "") || "";
   document.getElementById("guestTotal").value = ospite.importo_prenotazione ?? ospite.total ?? 0;
+  try{ populateGuestChannelOptions(ospite.channel_id ?? ospite.channelId ?? ""); }catch(_){ }
+  const __guestChannelCommission = (ospite.channel_commissione ?? ospite.channelCommissione ?? ospite.channel_commission_pct ?? ospite.channelCommissionPct ?? 0);
+  document.getElementById("guestChannelCommission").value = (__guestChannelCommission === null || __guestChannelCommission === undefined || __guestChannelCommission === "") ? "" : __guestChannelCommission;
+  try{ document.getElementById("guestChannel").value = String(ospite.channel_id ?? ospite.channelId ?? ""); }catch(_){ }
+  try{ applySelectedChannelToGuestForm(ospite.channel_id ?? ospite.channelId ?? "", { preserveManual:true }); }catch(_){ }
   document.getElementById("guestBooking").value = ospite.importo_booking ?? ospite.booking ?? 0;
   document.getElementById("guestServices").value = ospite.servizi_totale ?? ospite.serviziTotal ?? ospite.importo_servizi ?? 0;
   document.getElementById("guestDeposit").value = ospite.acconto_importo ?? ospite.deposit ?? 0;
   document.getElementById("guestSaldo").value = ospite.saldo_pagato ?? ospite.saldoPagato ?? ospite.saldo ?? 0;
+  try{ syncGuestNotesUI(ospite, { open:false }); }catch(_){}
 
   // matrimonio / G
   state.guestMarriage = !!(ospite.matrimonio);
@@ -6234,12 +13179,80 @@ function _guestIdOf(item){
   return String(item?.id || item?.ID || item?.ospite_id || item?.ospiteId || item?.guest_id || item?.guestId || "").trim();
 }
 
-function _parseRoomsArr(stanzeField){
-  // Restituisce sempre un array unico/sortato di stanze [1..6]
-  const norm = (arr) => Array.from(new Set((arr || [])
+function getConfiguredRoomsCount(fallback = 6){
+  try{
+    const n = parseInt(String(state?.settings?.byKey?.numero_stanze?.value ?? state?.settings?.byKey?.numero_stanze?.Value ?? state?.settings?.byKey?.numero_stanze?.val ?? fallback), 10);
+    if (Number.isFinite(n) && n >= 0) return n;
+  }catch(_){ }
+  return Math.max(0, parseInt(fallback, 10) || 6);
+}
+
+function updateSettingsRoomsButtonLabel(){
+  try{
+    const el = document.getElementById("settingsRoomsBtn");
+    if (!el) return;
+    const label = el.querySelector('.settings-btn-label');
+    const n = getConfiguredRoomsCount(6);
+    if (label) label.textContent = `Stanze ${n}`;
+    el.setAttribute('aria-label', `Numero stanze: ${n}. Tap per avanzare, pressione lunga per azzerare`);
+    el.title = `Numero stanze: ${n}. Tap per avanzare, pressione lunga per azzerare`;
+  }catch(_){ }
+}
+
+function ensureRoomsPickerButtons(){
+  try{
+    const picker = document.getElementById('roomsPicker');
+    if (!picker) return;
+    const count = getConfiguredRoomsCount(6);
+    const selected = (state && state.guestRooms instanceof Set) ? new Set(Array.from(state.guestRooms)) : new Set();
+    const parts = [];
+    for (let i = 1; i <= count; i++) {
+      const on = selected.has(i);
+      parts.push(`<button aria-pressed="${on ? "true" : "false"}" class="room-dot${on ? " selected" : ""}" data-room="${i}" type="button">${i}</button>`);
+    }
+    picker.innerHTML = parts.join('');
+  }catch(_){ }
+}
+
+async function saveRoomsCountSetting(nextCount){
+  const n = Math.max(0, Math.min(12, parseInt(nextCount, 10) || 0));
+  if (!Number.isFinite(n) || n < 0) throw new Error('Numero stanze non valido');
+  await api('impostazioni', { method: 'POST', body: { numero_stanze: n }, showLoader: true });
+  try{
+    state.settings = state.settings || {};
+    state.settings.byKey = state.settings.byKey || {};
+    state.settings.byKey.numero_stanze = { key:'numero_stanze', value:n, val:n, Value:n };
+  }catch(_){ }
+  await ensureSettingsLoaded({ force:true, showLoader:false });
+  try{
+    if (state && state.guestRooms instanceof Set){
+      state.guestRooms = new Set(Array.from(state.guestRooms).filter(v => Number(v) >= 1 && Number(v) <= n).sort((a,b)=>a-b));
+    }
+  }catch(_){ }
+  try{ ensureRoomsPickerButtons(); }catch(_){ }
+  try{ updateSettingsRoomsButtonLabel(); }catch(_){ }
+  try{ window.__ddae_renderRooms?.(); }catch(_){ }
+  try{ window.__ddae_refreshRoomsAvailability?.(); }catch(_){ }
+  try{ window.__ddae_refreshPulizieGrid?.({ forceReload:true }); }catch(_){ }
+  try{ if (state && state.page === 'calendario') renderCalendario?.(); }catch(_){ }
+  try{ if (state && state.page === 'ospite'){
+    const current = state.guestMode === 'view' ? state.guestViewItem : state.guestEditSourceItem;
+    if (current) renderRoomsReadOnly?.(current);
+  } }catch(_){ }
+  toast('Numero stanze aggiornato');
+}
+
+function normalizeRoomsList(arr, fallback = 6){
+  const maxRooms = getConfiguredRoomsCount(fallback);
+  return Array.from(new Set((Array.isArray(arr) ? arr : [])
     .map(n => parseInt(n, 10))
-    .filter(n => isFinite(n) && n >= 1 && n <= 6)))
+    .filter(n => Number.isFinite(n) && n >= 1 && n <= maxRooms)))
     .sort((a,b) => a - b);
+}
+
+function _parseRoomsArr(stanzeField){
+  // Restituisce sempre un array unico/sortato di stanze [1..N configurato]
+  const norm = (arr) => normalizeRoomsList(arr, 6);
 
   const fromDateParts = (d, m, y) => {
     const dd = parseInt(d, 10);
@@ -6303,9 +13316,9 @@ function _parseRoomsArr(stanzeField){
       if (parts) return norm(parts);
     }
 
-    // Lista stanze: supporta "2,3,4" e "2|3|4" (senza pescare cifre da numeri lunghi)
+    // Lista stanze: supporta "2,3,4", "2|3|4", "10 11" e JSON/stringhe simili
     const tokens = s.split(/[|,;\s]+/).map(t => t.trim()).filter(Boolean);
-    const nums = tokens.map(t => parseInt(t, 10)).filter(n => isFinite(n) && n >= 1 && n <= 6);
+    const nums = tokens.map(t => parseInt(t, 10)).filter(n => Number.isFinite(n));
     return norm(nums);
   } catch (_) {
     return [];
@@ -6315,7 +13328,7 @@ function _parseRoomsArr(stanzeField){
 
 function buildRoomsStackHTML(guestId, roomsArr){
   if (!roomsArr || !roomsArr.length) return `<span class="room-dot-badge is-empty" aria-label="Nessuna stanza">—</span>`;
-  return `<div class="rooms-stack" aria-label=" e letti">` + roomsArr.map((n) => {
+  return `<div class="rooms-stack" aria-label=" e letti">` + normalizeRoomsList(roomsArr, 6).map((n) => {
     const key = `${guestId}:${n}`;
     const info = (state.stanzeByKey && state.stanzeByKey[key]) ? state.stanzeByKey[key] : { letto_m: 0, letto_s: 0, culla: 0 };
     const lettoM = Number(info.letto_m || 0) || 0;
@@ -6345,7 +13358,7 @@ function renderRoomsReadOnly(ospite){
   if (!roomsArr.length && state.guestRooms && state.guestRooms.size){
     roomsArr = Array.from(state.guestRooms)
       .map(n => parseInt(n,10))
-      .filter(n => isFinite(n) && n>=1 && n<=6)
+      .filter(n => Number.isFinite(n) && n>=1 && n<=getConfiguredRoomsCount(6))
       .sort((a,b)=>a-b);
   }
 
@@ -6394,7 +13407,7 @@ function renderRoomsReadOnly(ospite){
 }
 
 
-// ===== dDAE_2.212 — Multi prenotazioni per stesso nome =====
+// ===== dDAE_1.020 — Multi prenotazioni per stesso nome =====
 function normalizeGuestNameKey(name){
   try{ return collapseSpaces(String(name || "").trim()).toLowerCase(); }catch(_){ return String(name||"").trim().toLowerCase(); }
 }
@@ -6601,7 +13614,7 @@ function setGuestFormViewOnly(isView, ospite){
   if (btn) btn.hidden = !!isView;
 
   const picker = document.getElementById("roomsPicker");
-  if (picker) picker.hidden = !!isView;
+  if (picker) { try{ ensureRoomsPickerButtons(); }catch(_){ } picker.hidden = !!isView; }
 
   const ro = document.getElementById("roomsReadOnly");
   if (ro) {
@@ -6623,10 +13636,15 @@ function setGuestFormViewOnly(isView, ospite){
     hideRowByInputId("guestAdults", !!isView);
     // Date check-in / check-out
     hideRowByInputId("guestCheckIn", !!isView);
-    // Importo booking: non deve comparire in sola lettura
+    // In sola lettura mantieni visibile solo la card channel; percentuale e importo commissione nascosti
     hideRowByInputId("guestBooking", !!isView);
+    try{
+      const commWrap = document.getElementById("guestChannelCommissionWrap");
+      if (commWrap) commWrap.hidden = !!isView;
+    }catch(_){ }
   }catch(_){ }
 
+  try{ const notesEl = document.getElementById("guestNotes"); if (notesEl) notesEl.readOnly = !!isView; }catch(_){}
   // Servizi: in sola lettura mostra il tasto accanto a "Importo servizi" (layout modifica invariato)
   try{ __placeServicesPillForView(!!isView); }catch(_){ }
 
@@ -6718,6 +13736,49 @@ function serviziPreviewText(items){
     return !(String(del) === "1" || del === true);
   }).length;
   return n > 0 ? (n + " servizi") : "";
+}
+
+
+function guestNotesValue(item){
+  return String(item?.note ?? item?.notes ?? item?.nota ?? "").trim();
+}
+
+function guestHasNotes(item){
+  return guestNotesValue(item).length > 0;
+}
+
+function setGuestNotesExpanded(expanded){
+  try{
+    const wrap = document.getElementById("guestNotesWrap");
+    const btn = document.getElementById("guestNotesToggle");
+    if (wrap) wrap.hidden = !expanded;
+    if (btn){
+      btn.setAttribute("aria-expanded", expanded ? "true" : "false");
+      btn.classList.toggle("is-open", !!expanded);
+    }
+  }catch(_){ }
+  try{ state.guestNotesExpanded = !!expanded; }catch(_){ }
+}
+
+function updateGuestNotesIndicator(){
+  try{
+    const dot = document.getElementById("guestNotesToggleDot");
+    if (!dot) return;
+    const notesVal = String(document.getElementById("guestNotes")?.value || "").trim();
+    dot.hidden = !(notesVal.length > 0);
+  }catch(_){ }
+}
+
+function syncGuestNotesUI(item, opts = {}){
+  const notesEl = document.getElementById("guestNotes");
+  if (!notesEl) return;
+  const notes = (item === null || item === undefined) ? "" : guestNotesValue(item);
+  notesEl.value = notes;
+  const placeholder = (String(state.guestMode || "") === "view") ? "Nessuna nota" : "Inserisci eventuali note";
+  notesEl.placeholder = placeholder;
+  updateGuestNotesIndicator();
+  const wantsOpen = Object.prototype.hasOwnProperty.call(opts, "open") ? !!opts.open : (!!notes && !!state.guestNotesExpanded);
+  setGuestNotesExpanded(wantsOpen);
 }
 
 function renderServiziList(){
@@ -7191,19 +14252,24 @@ async function saveGuest(opts = {}){
   const checkIn = document.getElementById("guestCheckIn")?.value || "";
   const checkOut = document.getElementById("guestCheckOut")?.value || "";
   const total = parseFloat(document.getElementById("guestTotal")?.value || "0") || 0;
+  const channelId = String(document.getElementById("guestChannel")?.value || "").trim();
+  const channelItem = getChannelCatalogItemById(channelId);
+  const channelCommissionPct = parseFloat(document.getElementById("guestChannelCommission")?.value || "0") || 0;
   const booking = parseFloat(document.getElementById("guestBooking")?.value || "0") || 0;
   const serviziTotale = parseFloat(document.getElementById("guestServices")?.value || "0") || 0;
   const deposit = parseFloat(document.getElementById("guestDeposit")?.value || "0") || 0;
   const saldoPagato = parseFloat(document.getElementById("guestSaldo")?.value || "0") || 0;
+  const notes = String(document.getElementById("guestNotes")?.value || "").trim();
   const saldoTipo = state.guestSaldoType || "contante";
   const rooms = Array.from(state.guestRooms || [])
     .map(n => parseInt(n,10))
-    .filter(n => isFinite(n) && n>=1 && n<=6)
+    .filter(n => Number.isFinite(n) && n>=1 && n<=getConfiguredRoomsCount(6))
     .sort((a,b)=>a-b);
   const depositType = state.guestDepositType || "contante";
   const matrimonio = !!(state.guestMarriage);
   const g = !!(state.guestGroup);
 if (!name) return toast("Inserisci il nome");
+  if (!channelItem) return toast("Seleziona il channel");
   const payload = {
     nome: name,
     telefono: telefono,
@@ -7213,6 +14279,12 @@ if (!name) return toast("Inserisci il nome");
     check_in: checkIn,
     check_out: checkOut,
     importo_prenotazione: total,
+    channel_id: channelItem ? String(channelItem.id) : "",
+    channel_nome: channelItem ? String(channelItem.nome) : "",
+    channel_colore: channelItem ? String(channelItem.colore) : "",
+    channel_iniziale: channelItem ? String(channelItem.iniziale || __channelInitialFromName__(channelItem.nome)) : "",
+    channel_commissione: Math.round(channelCommissionPct * 100) / 100,
+    channel_commission_pct: Math.round(channelCommissionPct * 100) / 100,
     importo_booking: booking,
     servizi_totale: serviziTotale,
     servizi_preview: serviziPreviewText(state.guestServicesItems || []),
@@ -7223,6 +14295,9 @@ if (!name) return toast("Inserisci il nome");
     acconto_ricevuta: !!state.guestDepositReceipt,
     saldo_ricevuta: !!state.guestSaldoReceipt,
     saldo_ricevutain: !!state.guestSaldoReceipt,
+    note: notes,
+    notes: notes,
+    nota: notes,
     matrimonio,
     g: g ? "1" : "",
     col_c: (state.guestColC ? "1" : ""),
@@ -7296,16 +14371,20 @@ if (!name) return toast("Inserisci il nome");
   try{ if (state.calendar){ state.calendar.ready = false; state.calendar.rangeKey = ""; } }catch(_){ }
 
   if (instantGoList){
-    // Sei già in lista: aggiorna appena possibile senza bloccare la UI
+    // Sei già in lista: aggiorna subito lista e LED top bar senza bloccare la UI.
     try{
-      loadOspiti({ ...(state.period || {}), force:true }).catch(e => toast(e.message));
+      loadOspiti({ ...(state.period || {}), force:true })
+        .then(()=>{ try{ refreshTopGuestAlerts({ force:true, keepModal:true }); }catch(_){ } })
+        .catch(e => toast(e.message));
     }catch(_){ }
+    try{ setTimeout(()=>{ try{ refreshTopGuestAlerts({ force:true, keepModal:true }); }catch(_){ } }, 120); }catch(_){ }
     try{ __sfxSave(); }catch(_){ }
   toast(isEdit ? "Modifiche salvate" : "Ospite creato");
     return;
   }
 
   await loadOspiti({ ...(state.period || {}), force:true });
+  try{ refreshTopGuestAlerts({ force:true, keepModal:true }); }catch(_){ }
   try{ __sfxSave(); }catch(_){ }
   toast(isEdit ? "Modifiche salvate" : "Ospite creato");
 
@@ -7329,6 +14408,15 @@ function setupOspite(){
   if (recClose) bindFastTap(recClose, () => closeReceiptDueModal());
   const recModal = document.getElementById("receiptDueModal");
   if (recModal) recModal.addEventListener("click", (e)=>{ if (e.target === recModal) closeReceiptDueModal(); });
+
+  const guestLedLeft = document.getElementById("dbLedRead");
+  if (guestLedLeft) bindFastTap(guestLedLeft, () => openGuestAlertModal('left'));
+  const guestLedRight = document.getElementById("dbLedWrite");
+  if (guestLedRight) bindFastTap(guestLedRight, () => openGuestAlertModal('right'));
+  const guestAlertClose = document.getElementById("guestAlertClose");
+  if (guestAlertClose) bindFastTap(guestAlertClose, () => closeGuestAlertModal());
+  const guestAlertModal = document.getElementById("guestAlertModal");
+  if (guestAlertModal) guestAlertModal.addEventListener("click", (e)=>{ if (e.target === guestAlertModal) closeGuestAlertModal(); });
 
   // AMMINISTRATORE: popup dati + grafico
   const btnAdminInputsTop = document.getElementById("btnAdminInputsTop");
@@ -7433,7 +14521,7 @@ function setupOspite(){
           : "Eliminare definitivamente questo ospite?";
         if (!confirm(msg)) return;
 
-        // ✅ dDAE_2.212: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
+        // ✅ dDAE_1.020: dopo cancellazione, vai SUBITO alla guest list (UX immediata su iOS)
         // 1) Navigazione istantanea + rimozione ottimistica dalla lista
         try{
           const idsSet = new Set((idsToDelete || []).map(x => String(x)));
@@ -7468,6 +14556,7 @@ function setupOspite(){
             }
             toast("Ospite eliminato");
             invalidateApiCache("ospiti|");
+    try{ refreshTopGuestAlerts({ force:true }); }catch(_){ }
             invalidateApiCache("stanze|");
             try{ if (state.calendar){ state.calendar.ready = false; state.calendar.rangeKey = ""; } }catch(_){ }
 
@@ -7502,6 +14591,7 @@ function setupOspite(){
           await api("ospiti", { method:"DELETE", params:{ id: delId }});
           toast("Prenotazione eliminata");
           invalidateApiCache("ospiti|");
+    try{ refreshTopGuestAlerts({ force:true }); }catch(_){ }
           invalidateApiCache("stanze|");
           try{ if (state.calendar){ state.calendar.ready = false; state.calendar.rangeKey = ""; } }catch(_){ }
 
@@ -7608,6 +14698,22 @@ function setupOspite(){
     });
   }
 
+  const notesToggle = document.getElementById("guestNotesToggle");
+  if (notesToggle && !notesToggle.__bound){
+    notesToggle.__bound = true;
+    notesToggle.addEventListener("click", (e) => {
+      try{ e.preventDefault(); }catch(_){ }
+      const next = !document.getElementById("guestNotesWrap")?.hidden;
+      setGuestNotesExpanded(!next);
+    });
+  }
+  const notesField = document.getElementById("guestNotes");
+  if (notesField && !notesField.__bound){
+    notesField.__bound = true;
+    notesField.addEventListener("input", () => { updateGuestNotesIndicator(); });
+  }
+
+  try{ ensureRoomsPickerButtons(); }catch(_){ }
   const roomsWrap = document.getElementById("roomsPicker");
 
   // Toggle M/G (ora accanto a Importo prenotazione)
@@ -7979,13 +15085,27 @@ function setupOspite(){
 
   bindRegPill("regTags");
 
+  const guestChannelSel = document.getElementById("guestChannel");
+  if (guestChannelSel && !guestChannelSel.__boundChannel){
+    guestChannelSel.__boundChannel = true;
+    guestChannelSel.addEventListener("change", () => { try{ applySelectedChannelToGuestForm(guestChannelSel.value); }catch(_){ } });
+  }
+  try{ populateGuestChannelOptions(); }catch(_){ }
+
   // Rimanenza da pagare (Importo prenotazione - Acconto - Saldo)
   ["guestTotal","guestServices","guestDeposit","guestSaldo"].forEach((id) => {
     const el = document.getElementById(id);
     if (!el) return;
-    el.addEventListener("input", () => { try { updateGuestRemaining(); } catch (_) {} });
-    el.addEventListener("change", () => { try { updateGuestRemaining(); } catch (_) {} });
+    el.addEventListener("input", () => {
+      try { if (id === "guestTotal") recalcGuestCommission(); } catch (_) {}
+      try { updateGuestRemaining(); } catch (_) {}
+    });
+    el.addEventListener("change", () => {
+      try { if (id === "guestTotal") recalcGuestCommission(); } catch (_) {}
+      try { updateGuestRemaining(); } catch (_) {}
+    });
   });
+  try { recalcGuestCommission(); } catch (_) {}
   try { updateGuestRemaining(); } catch (_) {}
 
 
@@ -8022,7 +15142,7 @@ function setupOspite(){
 }
 
 function euro(n){
-  try { return (Number(n)||0).toLocaleString("it-IT", { style:"currency", currency:"EUR" }); }
+  try { return (Number(n)||0).toLocaleString(__getCurrentLocale__(), { style:"currency", currency:"EUR" }); }
   catch { return (Number(n)||0).toFixed(2) + " €"; }
 }
 
@@ -8104,6 +15224,15 @@ function renderGuestCards(){
     ? state.ospiti
     : (Array.isArray(state.guests) ? state.guests : []);
 
+  // Filtro per anno di esercizio (obbligatorio, anche per la guest list)
+  try{
+    const y = state.exerciseYear || loadExerciseYear();
+    items = __filterByExerciseYear__(items, y, [
+      "check_in","checkIn","arrivo","dataArrivo","check_out","checkOut","partenza","dataPartenza",
+      "createdAt","created_at","updatedAt","updated_at"
+    ]);
+  }catch(_){ }
+
   // Filtro rapido "Oggi": mostra solo ospiti con arrivo (check_in) = oggi
   if (state.guestTodayOnly){
     const today = todayISO();
@@ -8135,43 +15264,80 @@ function renderGuestCards(){
     it._insNo = id ? insMap[id] : null;
   });
 
-  // Raggruppa per nome (multi prenotazioni sullo stesso cliente)
-  let groups = groupGuestsByName(items);
-  groups = sortGuestGroups(groups);
+  // Guest list: una card unica per ospite/nome, anche se esistono più prenotazioni
+  // o più gruppi di stanze. I dettagli della scheda mostrano poi i blocchi separati.
+  let cards = groupGuestsByName(items || []).map((group) => {
+    const bookings = Array.isArray(group?.bookings) ? group.bookings.slice() : [];
+    const first = bookings[0] || null;
+    if (!first) return null;
+    const sourceInsNo = bookings
+      .map(x => Number(x?._insNo) || null)
+      .filter(x => x != null && x > 0)
+      .sort((a,b)=>a-b)[0] || null;
+    const arrTs = bookings
+      .map(x => parseDateTs(x?.check_in ?? x?.checkIn))
+      .filter(t => t != null)
+      .sort((a,b)=>a-b)[0] ?? null;
+    const hasNotes = bookings.some(x => guestHasNotes(x));
+    return {
+      ...first,
+      nome: group?.nome || (String(first?.nome ?? first?.name ?? first?.guest ?? "").trim() || "Ospite"),
+      _arrivoTs: arrTs,
+      _insNo: sourceInsNo,
+      _sourceInsNo: sourceInsNo,
+      _groupBookings: bookings,
+      _hasNotesAny: hasNotes
+    };
+  }).filter(Boolean);
 
-  groups.forEach(group => {
-    const first = (group.bookings && group.bookings.length) ? group.bookings[0] : null;
+  const cardsByInsertion = cards.slice().sort((a,b) => {
+    const aa = Number(a?._sourceInsNo) || 1e18;
+    const bb = Number(b?._sourceInsNo) || 1e18;
+    if (aa !== bb) return aa - bb;
+    const ta = (a?._arrivoTs == null) ? 1e18 : Number(a._arrivoTs);
+    const tb = (b?._arrivoTs == null) ? 1e18 : Number(b._arrivoTs);
+    if (ta !== tb) return ta - tb;
+    return normalizeGuestNameKey(a?.nome).localeCompare(normalizeGuestNameKey(b?.nome), "it");
+  });
+  cardsByInsertion.forEach((card, idx) => {
+    card._groupInsNo = idx + 1;
+    card._insNo = idx + 1;
+    card._displayInsNo = idx + 1;
+  });
+
+  cards = sortGuestGroups(cards);
+
+  cards.forEach(first => {
     if (!first) return;
 
     // Evidenzia checkout oggi con pagamento in sospeso (rimanenza > 0)
     const __today = todayISO();
-    const __hasCheckoutPending = (group.bookings || []).some(b => {
-      const outISO = __parseDateFlexibleToISO(b?.check_out || b?.checkOut);
-      if (!outISO || outISO !== __today) return false;
-      const total = money(b?.importo_prenotazione ?? b?.importo_prenota ?? b?.total ?? 0);
-      const services = money(b?.servizi_totale ?? b?.serviziTotal ?? b?.importo_servizi ?? 0);
-      const dep = money(b?.acconto_importo ?? b?.accontoImporto ?? b?.deposit ?? 0);
-      const saldo = money(b?.saldo_pagato ?? b?.saldoPagato ?? b?.saldo ?? 0);
-      const remaining = (total + services) - dep - saldo;
-      return isFinite(remaining) && remaining > 0.0001;
-    });
+    const outISO = __parseDateFlexibleToISO(first?.check_out || first?.checkOut);
+    const total = money(first?.importo_prenotazione ?? first?.importo_prenota ?? first?.total ?? 0);
+    const services = money(first?.servizi_totale ?? first?.serviziTotal ?? first?.importo_servizi ?? 0);
+    const dep = money(first?.acconto_importo ?? first?.accontoImporto ?? first?.deposit ?? 0);
+    const saldo = money(first?.saldo_pagato ?? first?.saldoPagato ?? first?.saldo ?? 0);
+    const remaining = (total + services) - dep - saldo;
+    const __hasCheckoutPending = !!(outISO && outISO === __today && isFinite(remaining) && remaining > 0.0001);
 
     const card = document.createElement("div");
     card.className = "guest-card";
     if (__hasCheckoutPending) card.classList.add("checkout-pending");
 
-    const nome = escapeHtml(group.nome || "Ospite");
+    const nome = escapeHtml(first.nome || String(first?.name ?? first?.guest ?? "").trim() || "Ospite");
 
-    const insNo = (Number(group._insNo) && Number(group._insNo) > 0 && Number(group._insNo) < 1e18) ? Number(group._insNo) : null;
+    const insNo = (Number(first._displayInsNo) && Number(first._displayInsNo) > 0 && Number(first._displayInsNo) < 1e18) ? Number(first._displayInsNo) : null;
 
     const led = guestLedStatus(first);
 
     const marriageOn = !!(first?.matrimonio);
+    const hasNotes = !!(first?._hasNotesAny) || guestHasNotes(first);
 
     const arrivoText = formatLongDateIT(first.check_in || first.checkIn || "") || "—";
 
     const tel = escapeHtml(String(first?.telefono ?? first?.tel ?? first?.phone ?? "").trim());
     const em = escapeHtml(String(first?.email ?? first?.mail ?? "").trim());
+    const channelBadge = getGuestChannelBadgeData(first);
 
     card.tabIndex = 0;
     card.setAttribute("role", "button");
@@ -8180,7 +15346,7 @@ function renderGuestCards(){
     card.innerHTML = `
       <div class="guest-row guest-row-compact">
         <div class="guest-main">
-          ${insNo ? `<span class="guest-insno">${insNo}</span>` : ``}
+          ${insNo ? `<span class="guest-insno${hasNotes ? ` has-notes` : ``}"${hasNotes ? ` aria-label="Note presenti" title="Note presenti"` : ``}>${insNo}</span>` : ``}
           <div class="guest-nameblock">
             <span class="guest-name-text">${nome}</span>
             <span class="guest-arrivo guest-arrivo-under" aria-label="Arrivo">${arrivoText}</span>
@@ -8188,6 +15354,7 @@ function renderGuestCards(){
           </div>
         </div>
         <div class="guest-meta-right" aria-label="Stato">
+          ${(channelBadge && channelBadge.name) ? `<span class="guest-channel-inline"><span class="guest-channel-dot color-${channelBadge.color}" aria-label="${escapeHtml(channelBadge.name)}" title="${escapeHtml(channelBadge.name)}"><span>${escapeHtml(channelBadge.initial)}</span></span></span>` : ``}
           ${marriageOn ? `<span class="marriage-dot" aria-label="Matrimonio">M</span>` : ``}
           ${(truthy(first?.g ?? first?.flag_g ?? first?.gruppo_g ?? first?.group ?? first?.g_flag) ? `<span class="g-dot" aria-label="G">G</span>` : ``)}
           ${(truthy(first?.col_c ?? first?.colC ?? first?.c ?? first?.C ?? first?.flag_c ?? first?.flagC ?? first?.colc ?? first?.c_flag) ? `<span class="c-dot" aria-label="C">C</span>` : ``)}
@@ -8197,10 +15364,15 @@ function renderGuestCards(){
     `;
 
     const open = () => {
-      // In caso di multi prenotazioni: mantiene contesto e mostra elenco nella scheda
-      if (group.bookings && group.bookings.length > 1){
-        state.guestGroupBookings = group.bookings;
-        state.guestGroupKey = group.key;
+      const sameNameItems = Array.isArray(first?._groupBookings) && first._groupBookings.length
+        ? {
+            key: normalizeGuestNameKey(first?.nome || String(first?.name ?? first?.guest ?? "").trim() || ""),
+            bookings: first._groupBookings
+          }
+        : groupGuestsByName(items || []).find(g => normalizeGuestNameKey(g?.nome) === normalizeGuestNameKey(first?.nome || String(first?.name ?? first?.guest ?? "").trim() || ""));
+      if (sameNameItems && sameNameItems.bookings && sameNameItems.bookings.length > 1){
+        state.guestGroupBookings = sameNameItems.bookings;
+        state.guestGroupKey = sameNameItems.key;
         state.guestGroupActiveId = guestIdOf(first);
       } else {
         state.guestGroupBookings = null;
@@ -8499,6 +15671,29 @@ async function loadProdottiList_(action, bucket, { force=false, showLoader=true 
   const items = (rows || []).filter(r => !__normBool01(r.isDeleted));
   items.forEach(__spesaNormalizeItem_);
 
+  // Deduplica per nome prodotto (evita card duplicate) + cleanup backend (best-effort)
+  try{
+    const map = new Map();
+    const dupIds = [];
+    (items || []).forEach((it)=>{
+      const k = __prodNameKey_(it);
+      if (!k) return;
+      if (!map.has(k)) { map.set(k, it); return; }
+      // duplicato: tieni il primo, marca gli altri come deleted
+      try{ if (it && it.id != null) dupIds.push(String(it.id)); }catch(_){}
+    });
+    const uniq = Array.from(map.values());
+    // sostituisci in-place
+    items.length = 0;
+    uniq.forEach(x=>items.push(x));
+    if (dupIds.length){
+      // pulizia backend in background, senza bloccare UI
+      Promise.all(dupIds.map((id)=>api(action, { method:"PUT", body:{ id:String(id), isDeleted:1, qty:0, saved:0, checked:0 }, showLoader:false })))
+        .then(()=>{})
+        .catch(()=>{});
+    }
+  }catch(_){}
+
   s.items = items;
   s.loaded = true;
   s.loadedAt = now;
@@ -8598,7 +15793,6 @@ function renderProdotti(){
 function setupProdotti(){
   const btnAdd = document.getElementById("prodAddBtn");
   const btnReset = document.getElementById("prodResetBtn");
-  const btnSave = document.getElementById("prodSaveBtn");
   const list = document.getElementById("prodottiList");
 
   const tabC = document.getElementById("prodTabColazione");
@@ -8622,6 +15816,8 @@ function setupProdotti(){
     try{ modal.setAttribute("aria-hidden", "true"); }catch(_){}
   };
 
+  try{ __prodDraftClear_(); }catch(_){ }
+
   if (btnAdd) bindFastTap(btnAdd, openModal);
   if (close) bindFastTap(close, closeModal);
   if (modal) modal.addEventListener("click", (e)=>{ if (e.target === modal) closeModal(); });
@@ -8631,6 +15827,24 @@ function setupProdotti(){
     const v = raw.trim();
     if (!v) return;
     const prodotto = v.toUpperCase();
+    // Non permettere duplicati (un record unico: update/delete su id)
+    try{
+      const targetKey = (action === "prodotti_pulizia") ? "pulizia" : "colazione";
+      const bucket = __spesaBucketByKey_(targetKey);
+      if (!bucket.loaded) { try{ await loadProdottiList_(action, bucket, { force:false, showLoader:false }); }catch(_){ } }
+      const key = String(prodotto).trim().toLowerCase();
+      const exists = (bucket.items || []).some((it)=>{
+        if (__normBool01(it?.isDeleted)) return false;
+        return __prodNameKey_(it) === key;
+      });
+      if (exists){
+        try{ toast("Prodotto già presente"); }catch(_){}
+        if (input) input.value = "";
+        closeModal();
+        return;
+      }
+    }catch(_){}
+
     if (input) input.value = "";
     closeModal();
     try{
@@ -8684,53 +15898,7 @@ function setupProdotti(){
     }catch(e){ toast(e.message); }
   });
 
-  if (btnSave) bindFastTap(btnSave, async () => {
-    const action = __prodAction_();
-    try{
-      const draft = __prodDraftBucket_();
-      const dirty = __prodDraftDirtyBucket_();
-      const ids = Object.keys(dirty || {});
-      if (!ids.length){
-        // comunque forza normalizzazione LED
-        updateProdottiHomeBlink();
-        return;
-      }
-
-      const bucket = __prodStateBucket_();
-      const items = bucket.items || [];
-
-      const qtyById = {};
-      for (const id of ids){
-        const qn = parseInt(String(draft[id] ?? 0), 10);
-        const qty = isNaN(qn) ? 0 : Math.max(0, qn);
-        qtyById[id] = qty;
-
-        const it = items.find(x => String(x.id||"") === String(id));
-        if (it){
-          it.qty = qty;
-          __spesaNormalizeItem_(it);
-          it.updatedAt = new Date().toISOString();
-        }
-      }
-
-      // UI immediata
-      __prodDraftClear_();
-      renderProdotti();
-      updateProdottiHomeBlink();
-
-      // Sync backend in background + reload forzato (stato consistente multi-dispositivo)
-      const sync = async () => {
-        await Promise.all(ids.map((id) => (
-          api(action, { method:"PUT", body:{ id:String(id), qty: qtyById[id], saved: 0 }, showLoader:false })
-        )));
-        await api(action, { method:"POST", body:{ op:"save" }, showLoader:false });
-        // aggiorna entrambe le liste (LED Home su altri device)
-        await loadSpesaAll({ force:true, showLoader:false });
-      };
-
-      sync().catch((e)=>{ try{ toast(e.message || "Errore"); }catch(_){ } });
-    }catch(e){ toast(e.message); }
-  });
+  
 
   if (!list) return;
 
@@ -8739,28 +15907,109 @@ function setupProdotti(){
     return (__prodStateBucket_().items || []).find(x => String(x.id||"") === sid);
   };
 
-  const persistPatch = async (id, patch, {showLoader=false} = {}) => {
-    const action = __prodAction_();
+  // Auto-save (0.5s) — nessun salvataggio manuale
+  const __prodAuto__ = { timer:null, pending:{} };
+
+  const __prodApplyLocal__ = (id, patch) => {
     const it = findItem(id);
-    if (it) Object.assign(it, patch, { updatedAt: new Date().toISOString() });
-    renderProdotti();
-    updateProdottiHomeBlink();
+    if (!it) return null;
     try{
-      await api(action, { method:"PUT", body: Object.assign({ id: String(id) }, patch), showLoader });
-      // ricarica in background per coerenza
-      loadProdotti({ force:true, showLoader:false }).then(()=>{ renderProdotti(); updateProdottiHomeBlink(); }).catch(()=>{});
+      Object.assign(it, patch || {});
+      __spesaNormalizeItem_(it);
+      it.updatedAt = new Date().toISOString();
+    }catch(_){}
+    return it;
+  };
+
+  const __prodAutoCommit__ = async () => {
+    try{
+      if (__prodAuto__.timer){ clearTimeout(__prodAuto__.timer); __prodAuto__.timer = null; }
+      const entries = Object.entries(__prodAuto__.pending || {});
+      if (!entries.length) return;
+      __prodAuto__.pending = {};
+
+      const byAction = {};
+      entries.forEach(([id, obj]) => {
+        const act = String(obj?.action || __prodAction_() || "");
+        if (!act) return;
+        byAction[act] = byAction[act] || [];
+        byAction[act].push({ id, patch: (obj && obj.patch) ? obj.patch : {} });
+      });
+
+      await Promise.all(
+        Object.keys(byAction).flatMap((act) => (
+          byAction[act].map(({id, patch}) => (
+            api(act, { method:"PUT", body: Object.assign({ id:String(id) }, patch || {}), showLoader:false })
+          ))
+        ))
+      );
+
+      // refresh (LED + coerenza multi-dispositivo)
+      try{ await loadSpesaAll({ force:true, showLoader:false }); }catch(_){}
+
+      renderProdotti();
+      updateProdottiHomeBlink();
     }catch(e){
-      toast(e.message);
+      try{ toast(e.message || "Errore"); }catch(_){}
+    }
+  };
+
+  const __prodAutoSchedule__ = (id, patch, { immediate=false } = {}) => {
+    const sid = String(id || "");
+    if (!sid) return;
+    const action = __prodAction_();
+    __prodAuto__.pending[sid] = __prodAuto__.pending[sid] || { action, patch:{} };
+    __prodAuto__.pending[sid].action = action;
+    __prodAuto__.pending[sid].patch = Object.assign(__prodAuto__.pending[sid].patch || {}, patch || {});
+
+    if (__prodAuto__.timer){ clearTimeout(__prodAuto__.timer); __prodAuto__.timer = null; }
+    if (immediate){
+      __prodAutoCommit__();
+    }else{
+      __prodAuto__.timer = setTimeout(__prodAutoCommit__, 500);
     }
   };
 
   // Event delegation: qty / check
 
-  // Qty dot: tap cycle (draft), long-press (0.5s) reset to empty + "carta stropicciata"
+  // Qty dot: tap cycle, long-press (0.5s) azzera quantità
   let prodQtyTimer = null;
   let prodQtyTargetId = null;
   let prodQtyLongFired = false;
   let prodLastQtyTouch = 0;
+  // Card: double-tap = elimina, long-press (0.5s) = azzera quantità
+  let prodCardTimer = null;
+  let prodCardTargetId = null;
+  let prodCardLongFired = false;
+  let prodCardLongFiredAt = 0;
+  let prodCardLastTapAt = 0;
+  let prodCardLastTapId = "";
+
+  const clearProdCardPress = () => {
+    if (prodCardTimer){ clearTimeout(prodCardTimer); prodCardTimer = null; }
+    prodCardTargetId = null;
+    prodCardLongFired = false;
+  };
+
+  const startProdCardPress = (id) => {
+    clearProdCardPress();
+    prodCardTargetId = id;
+    prodCardTimer = setTimeout(() => {
+      prodCardLongFired = true;
+      prodCardLongFiredAt = Date.now();
+      // Long press (0.5s) sulla card: svuota quantità (pallino)
+      const base = getProdBaseQty(id);
+      if (base > 0){
+        __prodApplyLocal__(id, { qty: 0, saved: 0 });
+        renderProdotti();
+        updateProdottiHomeBlink();
+        // il gesto dura già 0,5s → salva subito
+        __prodAutoSchedule__(id, { qty: 0, saved: 0 }, { immediate:true });
+      }
+    }, 500);
+  };
+
+
 
   const clearProdQtyPress = () => {
     if (prodQtyTimer){ clearTimeout(prodQtyTimer); prodQtyTimer = null; }
@@ -8770,20 +16019,20 @@ function setupProdotti(){
 
   const getProdBaseQty = (id) => {
     const it = findItem(id);
-    const draftQty = __prodDraftGetQty_(id);
-    if (draftQty !== null) {
-      const n = parseInt(String(draftQty ?? 0), 10);
-      return isNaN(n) ? 0 : Math.max(0, n);
-    }
     const n = parseInt(String(it?.qty ?? 0), 10);
     return isNaN(n) ? 0 : Math.max(0, n);
   };
 
   const cycleProdQty = (id) => {
+    const it = findItem(id);
+    if (!it) return;
     const base = getProdBaseQty(id);
     const next = (base >= 9) ? 0 : (base + 1);
-    __prodDraftSetQty_(id, next);
+    __prodApplyLocal__(id, { qty: next, saved: (next > 0 ? 1 : 0) });
     renderProdotti();
+    updateProdottiHomeBlink();
+    // memorizza automaticamente dopo 0,5s
+    __prodAutoSchedule__(id, { qty: next, saved: (next > 0 ? 1 : 0) }, { immediate:false });
   };
 
   const startProdQtyPress = (id) => {
@@ -8791,13 +16040,15 @@ function setupProdotti(){
     prodQtyTargetId = id;
     prodQtyTimer = setTimeout(() => {
       prodQtyLongFired = true;
-      // Long press: gesto distinto (non deve attivare anche il tap)
-      // Se il pallino è pieno: svuota e suona "carta stropicciata"
+      // Long press (0.5s): svuota quantità (pallino)
       const base = getProdBaseQty(id);
       if (base > 0){
         try{ __sfxGlass(); }catch(_){ }
-        __prodDraftSetQty_(id, 0);
+        __prodApplyLocal__(id, { qty: 0, saved: 0 });
         renderProdotti();
+        updateProdottiHomeBlink();
+        // il gesto dura già 0,5s → salva subito
+        __prodAutoSchedule__(id, { qty: 0, saved: 0 }, { immediate:true });
       }
     }, 500);
   };
@@ -8816,13 +16067,20 @@ function setupProdotti(){
       e.stopPropagation();
       return;
     }
+
+    // Long-press sulla card (0,5s) → azzera quantità
+    if (e.target.closest && (e.target.closest(".colazione-checkdot") || e.target.closest(".colazione-qtydot"))) return;
+    startProdCardPress(id);
   }, { passive:false, capture:true });
 
   list.addEventListener("touchend", (e) => {
     const row = e.target.closest && e.target.closest(".colazione-item");
-    if (!row) return;
-    const id = String(row.dataset.id || "");
-    if (!id) return;
+    const id = row ? String(row.dataset.id || "") : "";
+    if (!id){
+      clearProdQtyPress();
+      clearProdCardPress();
+      return;
+    }
 
     if (e.target.closest && e.target.closest(".colazione-qtydot")) {
       if (prodQtyTimer){ clearTimeout(prodQtyTimer); prodQtyTimer = null; }
@@ -8832,10 +16090,19 @@ function setupProdotti(){
       e.stopPropagation();
       return;
     }
+
+    const wasLong = !!prodCardLongFired;
+    clearProdCardPress();
+    if (wasLong){
+      e.preventDefault();
+      e.stopPropagation();
+      return;
+    }
   }, { passive:false, capture:true });
 
   list.addEventListener("touchcancel", (e) => {
     clearProdQtyPress();
+    clearProdCardPress();
     try{ e.preventDefault(); e.stopPropagation(); }catch(_){ }
   }, { passive:false, capture:true });
 
@@ -8848,32 +16115,49 @@ function setupProdotti(){
     const id = row ? String(row.dataset.id || "") : "";
     if (!id) return;
 
-    // qty: ciclo 0->1->2..->9->0 (draft)
-    if (qtyBtn){
-      if (Date.now() - prodLastQtyTouch < 450) { e.preventDefault(); e.stopPropagation(); return; }
+    // ignore click subito dopo long-press
+    if (Date.now() - prodCardLongFiredAt < 700){
       e.preventDefault();
-      const it = findItem(id);
-      const base = (()=>{
-        const draftQty = __prodDraftGetQty_(id);
-        if (draftQty !== null) return draftQty;
-        const n = parseInt(String(it?.qty ?? 0), 10);
-        return isNaN(n) ? 0 : Math.max(0, n);
-      })();
-      const next = (base >= 9) ? 0 : (base + 1);
-      __prodDraftSetQty_(id, next);
-      renderProdotti();
+      e.stopPropagation();
       return;
     }
 
-    // check: persist immediato
+    // qty: ciclo 0->1->2..->9->0 (auto-save 0,5s)
+    if (qtyBtn){
+      if (Date.now() - prodLastQtyTouch < 450) { e.preventDefault(); e.stopPropagation(); return; }
+      e.preventDefault();
+      cycleProdQty(id);
+      return;
+    }
+
+    // check: toggle (auto-save 0,5s)
     if (chkBtn){
       e.preventDefault();
       const it = findItem(id);
       const cur = __normBool01(it?.checked) ? 1 : 0;
       const next = cur ? 0 : 1;
-      persistPatch(id, { checked: next }, { showLoader:false });
+      __prodApplyLocal__(id, { checked: next });
+      renderProdotti();
+      updateProdottiHomeBlink();
+      __prodAutoSchedule__(id, { checked: next }, { immediate:false });
       return;
     }
+
+    // double click/tap sulla card: elimina la card
+    const now = Date.now();
+    if (prodCardLastTapId === id && (now - prodCardLastTapAt) < 350){
+      e.preventDefault();
+      prodCardLastTapId = "";
+      prodCardLastTapAt = 0;
+
+      __prodApplyLocal__(id, { isDeleted: 1, qty: 0, saved: 0, checked: 0 });
+      renderProdotti();
+      updateProdottiHomeBlink();
+      __prodAutoSchedule__(id, { isDeleted: 1, qty: 0, saved: 0, checked: 0 }, { immediate:true });
+      return;
+    }
+    prodCardLastTapId = id;
+    prodCardLastTapAt = now;
   });
 
   // Prima render (se già caricato)
@@ -9128,7 +16412,7 @@ function refreshFloatingLabels(){
 
 
 /* =========================
-   Piscina (dDAE_2.212)
+   Piscina (dDAE_1.020)
 ========================= */
 const PISCINA_ACTION = "piscina";
 
@@ -9309,7 +16593,7 @@ function renderPiscinaCalendar(){
   label.textContent = __fmtMonthYear(viewMonth);
 
   const now = new Date();
-  todayLbl.textContent = __fmtItDateLong(now);
+  todayLbl.textContent = "";
 
   const y = viewMonth.getFullYear();
   const m = viewMonth.getMonth();
@@ -9377,12 +16661,82 @@ function piscinaOpenModal(dayKey){
   set("pmCloroComb", (r.cloro_attivo_combinato ?? "—") + " ppm");
   set("pmPh", (r.ph ?? "—"));
   set("pmTemp", (r.temp_acqua ?? "—") + " °C");
-  const meta = [];
-  if (r.timestamp_report) meta.push(String(r.timestamp_report));
-  if (r.origine) meta.push(String(r.origine));
-  set("pmMeta", meta.length ? meta.join(" · ") : "—");
-
   try{ modal.hidden = false; }catch(_){ modal.style.display = "block"; }
+}
+
+function piscinaTodayDayKey(){
+  const d = new Date();
+  return isoDate(new Date(d.getFullYear(), d.getMonth(), d.getDate()));
+}
+
+function piscinaOpenEditTodayModal(){
+  const modal = document.getElementById("piscinaEditModal");
+  if (!modal) return;
+  const title = document.getElementById("piscinaEditTitle");
+  const dayKey = piscinaTodayDayKey();
+  const row = piscinaGetRowByDayKey(dayKey);
+  const base = row || piscinaSimulateForDay(new Date(dayKey + "T00:00:00"));
+  try{ if (title) title.textContent = `Report piscina — ${__fmtItDateLong(new Date(dayKey+"T00:00:00"))}`; }catch(_){ }
+  const setVal = (id, v)=>{ const el = document.getElementById(id); if (el) el.value = (v ?? '') === '' ? '' : String(v); };
+  setVal("peCloroLibero", base?.cloro_attivo_libero ?? '');
+  setVal("peCloroComb", base?.cloro_attivo_combinato ?? '');
+  setVal("pePh", base?.ph ?? '');
+  setVal("peTemp", base?.temp_acqua ?? '');
+  try{ modal.hidden = false; }catch(_){ modal.style.display = "block"; }
+}
+
+function piscinaCloseEditModal(){
+  const modal = document.getElementById("piscinaEditModal");
+  if (!modal) return;
+  try{ modal.hidden = true; }catch(_){ modal.style.display = "none"; }
+}
+
+async function piscinaSaveTodayManual(){
+  const dayKey = piscinaTodayDayKey();
+  const d = new Date(dayKey + "T00:00:00");
+  if (isNaN(d)) throw new Error("Data non valida");
+  const parseField = (id, label)=>{
+    const el = document.getElementById(id);
+    const raw = String(el?.value ?? '').trim().replace(',', '.');
+    const val = Number(raw);
+    if (!raw || !isFinite(val)) throw new Error(`${label} non valido`);
+    return val;
+  };
+  const cloroLibero = parseField("peCloroLibero", "Cloro attivo libero");
+  const cloroComb = parseField("peCloroComb", "Cloro attivo combinato");
+  const ph = parseField("pePh", "pH");
+  const temp = parseField("peTemp", "Temperatura acqua");
+  const ts = new Date(d.getFullYear(), d.getMonth(), d.getDate(), 19, 0, 0, 0).toISOString();
+  const nowIso = new Date().toISOString();
+  const existing = piscinaGetRowByDayKey(dayKey);
+  const payload = {
+    timestamp_report: ts,
+    origine: "manual",
+    cloro_attivo_libero: cloroLibero,
+    cloro_attivo_combinato: cloroComb,
+    ph,
+    temp_acqua: temp,
+    updatedAt: nowIso,
+  };
+  const s = piscinaEnsureState();
+  if (existing && existing.id) {
+    await api(PISCINA_ACTION, { method:"PUT", body: Object.assign({ id:String(existing.id) }, payload), showLoader:false });
+    Object.assign(existing, payload);
+  } else {
+    const created = Object.assign({
+      id: genId("piscina"),
+      createdAt: nowIso,
+    }, payload);
+    await api(PISCINA_ACTION, { method:"POST", body: created, showLoader:false });
+    s.rows = Array.isArray(s.rows) ? s.rows : [];
+    s.rows.push(Object.assign({}, created));
+  }
+  s.fetchedAt = Date.now();
+  piscinaIndexRows();
+  renderPiscinaCalendar();
+  piscinaCloseEditModal();
+  toast("Report piscina salvato", "blue");
+  return true;
 }
 
 function piscinaCloseModal(){
@@ -9405,170 +16759,419 @@ function __piscinaValuesForMonth(viewMonth){
   return out;
 }
 
-function piscinaPrintCurrentMonth(){
-  const viewMonth = piscinaGetViewMonth();
+function __piscinaMonthStats__(monthItems){
+  const nums = (field) => monthItems.map(x => x.row ? Number(x.row[field]) : null).filter(v => v !== null && !isNaN(v));
+  const avg = (arr) => arr.length ? (arr.reduce((a,b)=>a+b,0) / arr.length) : null;
+  return {
+    totalDays: monthItems.length,
+    filledDays: monthItems.filter(x => !!x.row).length,
+    cloroLiberoAvg: avg(nums("cloro_attivo_libero")),
+    cloroCombAvg: avg(nums("cloro_attivo_combinato")),
+    phAvg: avg(nums("ph")),
+    tempAvg: avg(nums("temp_acqua")),
+  };
+}
+
+function __piscinaFmtVal__(x, digits=2, unit=""){
+  if (x === null || x === undefined || Number.isNaN(Number(x))) return "—";
+  return `${Number(x).toFixed(digits)}${unit}`;
+}
+
+function __piscinaPdfFileName__(viewMonth){
+  const y = viewMonth.getFullYear();
+  const m = String(viewMonth.getMonth() + 1).padStart(2, "0");
+  return `report-piscina-${y}-${m}.pdf`;
+}
+
+function __piscinaLoadImage__(src){
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => resolve(img);
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+
+function __piscinaBase64ToBytes__(base64){
+  const bin = atob(base64);
+  const bytes = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i += 1) bytes[i] = bin.charCodeAt(i);
+  return bytes;
+}
+
+function __piscinaPdfFromJpegDataUrl__(jpegDataUrl, imgWidth, imgHeight){
+  const base64 = String(jpegDataUrl || '').split(',')[1] || '';
+  const imgBytes = __piscinaBase64ToBytes__(base64);
+  const pageW = 595.28;
+  const pageH = 841.89;
+  const enc = new TextEncoder();
+  const chunks = [];
+  let offset = 0;
+  const offsets = [0];
+
+  const pushText = (txt) => {
+    const bytes = enc.encode(txt);
+    chunks.push(bytes);
+    offset += bytes.length;
+  };
+  const pushBytes = (bytes) => {
+    chunks.push(bytes);
+    offset += bytes.length;
+  };
+
+  pushText(`%PDF-1.4
+%ÿÿÿÿ
+`);
+
+  const addObj = (id, bodyParts) => {
+    offsets[id] = offset;
+    pushText(`${id} 0 obj
+`);
+    bodyParts.forEach((part) => {
+      if (typeof part === 'string') pushText(part);
+      else pushBytes(part);
+    });
+    pushText(`
+endobj
+`);
+  };
+
+  addObj(1, [`<< /Type /Catalog /Pages 2 0 R >>
+`]);
+  addObj(2, [`<< /Type /Pages /Count 1 /Kids [3 0 R] >>
+`]);
+  addObj(3, [`<< /Type /Page /Parent 2 0 R /MediaBox [0 0 ${pageW.toFixed(2)} ${pageH.toFixed(2)}] /Resources << /XObject << /Im0 4 0 R >> /ProcSet [/PDF /ImageC] >> /Contents 5 0 R >>
+`]);
+  addObj(4, [
+    `<< /Type /XObject /Subtype /Image /Width ${imgWidth} /Height ${imgHeight} /ColorSpace /DeviceRGB /BitsPerComponent 8 /Filter /DCTDecode /Length ${imgBytes.length} >>
+stream
+`,
+    imgBytes,
+    `
+endstream
+`
+  ]);
+  const content = `q
+${pageW.toFixed(2)} 0 0 ${pageH.toFixed(2)} 0 0 cm
+/Im0 Do
+Q
+`;
+  addObj(5, [`<< /Length ${content.length} >>
+stream
+${content}endstream
+`]);
+
+  const xrefOffset = offset;
+  pushText(`xref
+0 6
+0000000000 65535 f 
+`);
+  for (let i = 1; i <= 5; i += 1) pushText(`${String(offsets[i]).padStart(10, '0')} 00000 n 
+`);
+  pushText(`trailer
+<< /Size 6 /Root 1 0 R >>
+startxref
+${xrefOffset}
+%%EOF`);
+
+  return new Blob(chunks, { type: 'application/pdf' });
+}
+
+async function __piscinaReportCanvas__(viewMonth){
   const monthItems = __piscinaValuesForMonth(viewMonth);
+  const rows = monthItems.filter(x => !!x.row);
+  if (!rows.length) throw new Error('Nessun report nel mese selezionato');
 
-  const rows = monthItems.filter(x=>!!x.row).map(x=>x.row);
-  if (!rows.length){ toast("Nessun report nel mese selezionato"); return; }
+  const stats = __piscinaMonthStats__(monthItems);
+  const canvas = document.createElement('canvas');
+  canvas.width = 1240;
+  canvas.height = 1754;
+  const ctx = canvas.getContext('2d', { alpha:false });
+  if (!ctx) throw new Error('Canvas non disponibile');
 
-  // Costruisci serie per grafici
-  const series = {
-    cloroL: monthItems.map(x=>x.row ? Number(x.row.cloro_attivo_libero) : null),
-    cloroC: monthItems.map(x=>x.row ? Number(x.row.cloro_attivo_combinato) : null),
-    ph: monthItems.map(x=>x.row ? Number(x.row.ph) : null),
-    temp: monthItems.map(x=>x.row ? Number(x.row.temp_acqua) : null),
-  };
-
-  const minmax = (arr)=>{
-    const v = arr.filter(x=>x!==null && !isNaN(x));
-    if (!v.length) return {min:0,max:1};
-    return { min: Math.min(...v), max: Math.max(...v) };
-  };
-
-  const spark = (arr, colorVar="--p1")=>{
-    const w=228, h=18, pad=2;
-    const mm=minmax(arr);
-    const span = (mm.max-mm.min) || 1;
-    let pts=[];
-    const n=arr.length;
-    for (let i=0;i<n;i++){
-      const v=arr[i];
-      if (v===null || isNaN(v)){ continue; }
-      const x = pad + (i/(n-1))*(w-2*pad);
-      const y = pad + (1-((v-mm.min)/span))*(h-2*pad);
-      pts.push(`${x.toFixed(1)},${y.toFixed(1)}`);
-    }
-    return `<svg width="${w}" height="${h}" viewBox="0 0 ${w} ${h}" xmlns="http://www.w3.org/2000/svg">
-      <rect x="0" y="0" width="${w}" height="${h}" rx="8" ry="8" style="fill: var(--card); stroke: var(--border);"/>
-      <polyline points="${pts.join(" ")}" fill="none" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" style="stroke: var(${colorVar});"/>
-    </svg>`;
-  };
-
-  const fmt = (x, unit="")=>{
-    if (x===null || x===undefined || isNaN(Number(x))) return "—";
-    return `${x}${unit}`;
-  };
-
+  const W = canvas.width;
+  const H = canvas.height;
+  const pad = 44;
+  const contentW = W - pad * 2;
+  const rowCount = monthItems.length;
+  const footerY = H - 28;
+  const tableBottomMax = H - 92;
+  const tableTop = 688;
+  const headerH = 32;
+  const rowH = Math.max(22, Math.min(30, Math.floor((tableBottomMax - (tableTop + headerH)) / Math.max(1, rowCount))));
+  const tableH = headerH + (rowH * rowCount);
+  const chartAreaY = 330;
+  const chartAreaH = 288;
   const monthTitle = __fmtMonthYear(viewMonth);
-  const __base = (()=>{
-    try{
-      const u = String(location && location.href || "").split("#")[0].split("?")[0];
-      const i = u.lastIndexOf("/");
-      return (i>=0) ? u.slice(0, i+1) : "./";
-    }catch(_){ return "./"; }
-  })();
-  const html = `<!doctype html>
-  <html lang="it"><head><meta charset="utf-8"/><meta name="viewport" content="width=device-width,initial-scale=1"/><base href="${__base}"/>
-  <title>Report Piscina - ${monthTitle}</title>
-  <style>
-    :root{
-      --p1:#2B7CB4;
-      --p2:#4D9CC5;
-      --p3:#6FB7D6;
-      --p4:#96BFC7;
-      --p5:#BFBEA9;
-      --p6:#D6B286;
-      --p7:#CF9458;
-      --p8:#C9772B;
-      --text:#0f172a;
-      --border: rgba(15,23,42,0.12);
-      --muted: rgba(15,23,42,0.72);
-      --card: rgba(255,255,255,0.94);
-      --headbg: rgba(77,156,197,0.18);
-      --bg:#ffffff;
+  const logoSrc = `./assets/logo.jpg?v=${(window.APP_VERSION || '2.261')}`;
+  const tableFont = rowH <= 23 ? 12 : rowH <= 25 ? 13 : 14;
+  const tableHeaderFont = rowH <= 23 ? 13 : 14;
+  const colDay = 76;
+  const remainingW = contentW - colDay;
+  const colRatios = [1.15, 1.15, 0.75, 0.95];
+  const ratioSum = colRatios.reduce((a, b) => a + b, 0);
+  const colWidths = colRatios.map(v => remainingW * (v / ratioSum));
+  const headerXs = [pad, pad + colDay];
+  for (let i = 1; i < colWidths.length; i += 1) headerXs.push(headerXs[1] + colWidths.slice(0, i).reduce((a, b) => a + b, 0));
+
+  const drawTextFit = (text, x, y, maxWidth, opts={}) => {
+    const { font='600 16px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif', color='#0f172a', align='left' } = opts;
+    ctx.save();
+    ctx.font = font;
+    ctx.fillStyle = color;
+    ctx.textAlign = align;
+    let out = String(text == null ? '' : text);
+    while (out.length > 1 && ctx.measureText(out).width > maxWidth) out = out.slice(0, -1);
+    if (out !== text && out.length > 1) out = out.slice(0, -1) + '…';
+    ctx.fillText(out, x, y, maxWidth);
+    ctx.restore();
+  };
+
+  const drawSeriesCard = (x, y, w, h, title, values, opts={}) => {
+    const color = opts.color || '#2B7CB4';
+    const digits = opts.digits ?? 2;
+    const unit = opts.unit || '';
+    const nums = values.map(v => Number(v)).filter(v => Number.isFinite(v));
+    ctx.fillStyle = '#ffffff';
+    ctx.strokeStyle = 'rgba(15,23,42,0.10)';
+    ctx.lineWidth = 2;
+    roundRect(ctx, x, y, w, h, 20);
+    ctx.fill();
+    ctx.stroke();
+
+    ctx.fillStyle = color;
+    ctx.font = '800 18px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+    ctx.fillText(title, x + 16, y + 26);
+
+    const info = nums.length
+      ? `${Math.min(...nums).toFixed(digits)} / ${Math.max(...nums).toFixed(digits)}${unit}`
+      : 'n.d.';
+    ctx.fillStyle = 'rgba(15,23,42,0.64)';
+    ctx.font = '600 12px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+    drawTextFit(info, x + w - 16, y + 26, 120, { font:'600 12px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif', color:'rgba(15,23,42,0.64)', align:'right' });
+
+    const chartX = x + 14;
+    const chartY = y + 42;
+    const chartW = w - 28;
+    const chartH = h - 64;
+
+    ctx.strokeStyle = 'rgba(15,23,42,0.08)';
+    ctx.lineWidth = 1;
+    for (let i = 0; i <= 2; i += 1) {
+      const gy = chartY + (chartH * i / 2);
+      ctx.beginPath();
+      ctx.moveTo(chartX, gy);
+      ctx.lineTo(chartX + chartW, gy);
+      ctx.stroke();
     }
-    *{ box-sizing:border-box; }
-    body{ font-family: -apple-system,BlinkMacSystemFont,system-ui,Segoe UI,Roboto,Helvetica,Arial; margin: 0; color: var(--text); background:var(--bg); }
-    .page{ padding: 14px; }
-    .hdr{ display:flex; align-items:center; gap:12px; margin:0 0 10px 0; }
-    .logo{ width:56px; height:auto; border-radius:8px; flex:0 0 auto; }
-    .htxt{ flex:1; min-width:0; }
-    h1{ font-size: 18px; margin:0 0 6px 0; color: var(--p1); }
-    .sub{ font-size: 11px; color: var(--muted); margin-bottom: 10px; }
 
-    .brandbar{ display:flex; width:100%; height:8px; border-radius: 999px; overflow:hidden; margin: 0 0 10px 0; border: 1px solid var(--border); }
-    .brandbar span{ flex:1; }
-    .brandbar .c1{ background: var(--p1); }
-    .brandbar .c2{ background: var(--p2); }
-    .brandbar .c3{ background: var(--p3); }
-    .brandbar .c4{ background: var(--p4); }
-    .brandbar .c5{ background: var(--p5); }
-    .brandbar .c6{ background: var(--p6); }
-    .brandbar .c7{ background: var(--p7); }
-    .brandbar .c8{ background: var(--p8); }
-    .grid{ display:flex; flex-direction:column; gap: 8px; }
-    .card{ border: 1px solid var(--border); border-radius: 14px; padding: 10px; background: var(--card); }
-    .row{ display:flex; justify-content:space-between; align-items:center; gap: 10px; margin: 5px 0; font-size: 11px; }
-    .k{ font-weight: 800; }
-    .v{ font-weight: 900; }
-    table{ width:100%; border-collapse: collapse; font-size: 9px; }
-    th,td{ border-bottom: 1px solid var(--border); padding: 3px 4px; text-align:left; vertical-align:top; }
-    thead th{ background: var(--headbg); }
-    th{ font-weight: 900; }
-    .mono{ font-family: ui-monospace, SFMono-Regular, Menlo, Monaco, Consolas, "Liberation Mono", "Courier New", monospace; }
-    @page{ size: A4; margin: 10mm; }
-    @media print{
-      html, body{
-        margin: 0;
-        background:#fff;
-        -webkit-print-color-adjust: exact;
-        print-color-adjust: exact;
-      }
-      .page{ padding: 0; }
-      svg{ max-width: 100%; height: auto; }
-      .card{ break-inside: avoid; page-break-inside: avoid; }
-      table, thead, tbody, tr, td, th{ break-inside: avoid; page-break-inside: avoid; }
+    if (!nums.length) {
+      ctx.fillStyle = 'rgba(15,23,42,0.42)';
+      ctx.font = '600 13px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+      ctx.fillText('Nessun dato', x + 16, y + h - 16);
+      return;
     }
-</style></head><body><div class="page">
-    <div class="hdr">
-      <img class="logo" src="./assets/logo.jpg" alt="Daedalium"/>
-      <div class="htxt">
-        <h1>Report Piscina — ${monthTitle}</h1>
-        <div class="sub">Daedalium PMS</div>
-      </div>
-    </div>
-    <div class="brandbar" aria-hidden="true"><span class="c1"></span><span class="c2"></span><span class="c3"></span><span class="c4"></span><span class="c5"></span><span class="c6"></span><span class="c7"></span><span class="c8"></span></div>
 
-    <div class="grid">
-      <div class="card">
-        <div class="row"><span class="k">Cloro attivo libero</span><span class="v">${spark(series.cloroL,"--p1")}</span></div>
-        <div class="row"><span class="k">Cloro attivo combinato</span><span class="v">${spark(series.cloroC,"--p8")}</span></div>
-        <div class="row"><span class="k">pH</span><span class="v">${spark(series.ph,"--p4")}</span></div>
-        <div class="row"><span class="k">Temperatura acqua</span><span class="v">${spark(series.temp,"--p6")}</span></div>
-      </div>
+    let min = Math.min(...nums);
+    let max = Math.max(...nums);
+    if (min === max) { min -= 1; max += 1; }
+    const points = [];
+    monthItems.forEach((item, idx) => {
+      const raw = item.row ? Number(item.row[opts.key]) : NaN;
+      if (!Number.isFinite(raw)) return;
+      const px = chartX + (idx / Math.max(1, rowCount - 1)) * chartW;
+      const py = chartY + chartH - ((raw - min) / (max - min)) * chartH;
+      points.push([px, py, raw]);
+    });
 
-      <div class="card">
-        <table>
-          <thead><tr><th>Giorno</th><th>Cloro libero</th><th>Cloro comb.</th><th>pH</th><th>Temp</th></tr></thead>
-          <tbody>
-          ${monthItems.map(x=>{
-            if (!x.row) return `<tr><td>${x.day}</td><td colspan="4" style="color:rgba(15,23,42,0.45)">—</td></tr>`;
-            const r=x.row;
-            return `<tr>
-              <td class="mono">${x.day}</td>
-              <td>${fmt(r.cloro_attivo_libero," ppm")}</td>
-              <td>${fmt(r.cloro_attivo_combinato," ppm")}</td>
-              <td>${fmt(r.ph,"")}</td>
-              <td>${fmt(r.temp_acqua," °C")}</td>
-</tr>`;
-          }).join("")}
-          </tbody>
-        </table>
-      </div>
-    </div>
-  </div>
-    <script>setTimeout(()=>{ try{ window.focus(); }catch(e){} }, 100);</script>
-  </body></html>`;
+    if (points.length === 1) {
+      ctx.fillStyle = color;
+      ctx.beginPath();
+      ctx.arc(points[0][0], points[0][1], 4, 0, Math.PI * 2);
+      ctx.fill();
+    } else if (points.length > 1) {
+      ctx.strokeStyle = color;
+      ctx.lineWidth = 2.5;
+      ctx.beginPath();
+      points.forEach((p, i) => {
+        if (!i) ctx.moveTo(p[0], p[1]);
+        else ctx.lineTo(p[0], p[1]);
+      });
+      ctx.stroke();
+      ctx.fillStyle = color;
+      points.forEach((p) => {
+        ctx.beginPath();
+        ctx.arc(p[0], p[1], 2.7, 0, Math.PI * 2);
+        ctx.fill();
+      });
+    }
 
-  const w = window.open("", "_blank");
-  if (!w){ toast("Popup bloccato: abilita finestre per stampare"); return; }
+    const lastVal = nums[nums.length - 1];
+    ctx.fillStyle = '#0f172a';
+    ctx.font = '800 15px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+    drawTextFit(`Ultimo: ${lastVal.toFixed(digits)}${unit}`, x + 16, y + h - 14, w - 32, { font:'800 15px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif', color:'#0f172a' });
+  };
+
+  ctx.fillStyle = '#ffffff';
+  ctx.fillRect(0, 0, W, H);
+
   try{
-    w.document.open();
-    w.document.write(html);
-    w.document.close();
-    setTimeout(()=>{ try{ w.focus(); w.print(); }catch(e){} }, 450);
-  }catch(_){ try{ w.close(); }catch(__){} }
+    const logo = await __piscinaLoadImage__(logoSrc);
+    ctx.save();
+    ctx.beginPath();
+    const ls = 76;
+    const lx = pad;
+    const ly = pad;
+    ctx.moveTo(lx + 18, ly);
+    ctx.arcTo(lx + ls, ly, lx + ls, ly + ls, 18);
+    ctx.arcTo(lx + ls, ly + ls, lx, ly + ls, 18);
+    ctx.arcTo(lx, ly + ls, lx, ly, 18);
+    ctx.arcTo(lx, ly, lx + ls, ly, 18);
+    ctx.closePath();
+    ctx.clip();
+    ctx.drawImage(logo, lx, ly, ls, ls);
+    ctx.restore();
+  }catch(_){ }
+
+  const colors = ['#2B7CB4','#4D9CC5','#6FB7D6','#96BFC7','#BFBEA9','#D6B286','#CF9458','#C9772B'];
+  const barX = pad + 96;
+  const barY = pad + 18;
+  const barW = contentW - 96;
+  const segW = barW / colors.length;
+  colors.forEach((c, i) => {
+    ctx.fillStyle = c;
+    ctx.fillRect(barX + segW * i, barY, segW + 1, 10);
+  });
+
+  ctx.fillStyle = '#2B7CB4';
+  ctx.font = '900 36px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+  ctx.fillText('Report Piscina', pad + 96, pad + 64);
+  ctx.fillStyle = '#0f172a';
+  ctx.font = '700 22px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+  ctx.fillText(monthTitle, pad + 96, pad + 95);
+  ctx.fillStyle = 'rgba(15,23,42,0.62)';
+  ctx.font = '500 17px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+
+  const cardsY = 180;
+  const cardGap = 16;
+  const cardW = (contentW - cardGap * 3) / 4;
+  const cardH = 108;
+  const summaryCards = [
+    { title:'Mese', value:`${stats.filledDays}/${stats.totalDays}`, sub:'report presenti', fill:'#f7fbfe' },
+    { title:'Cloro libero', value:__piscinaFmtVal__(stats.cloroLiberoAvg, 2), sub:'media ppm', fill:'#f2f8fc' },
+    { title:'Cloro comb.', value:__piscinaFmtVal__(stats.cloroCombAvg, 2), sub:'media ppm', fill:'#fefaf5' },
+    { title:'pH · Temp', value:`${__piscinaFmtVal__(stats.phAvg, 2)} · ${__piscinaFmtVal__(stats.tempAvg, 1)}`, sub:'media mese', fill:'#f8f7fd' }
+  ];
+  summaryCards.forEach((card, idx) => {
+    const x = pad + idx * (cardW + cardGap);
+    ctx.fillStyle = card.fill;
+    ctx.strokeStyle = 'rgba(15,23,42,0.09)';
+    ctx.lineWidth = 2;
+    roundRect(ctx, x, cardsY, cardW, cardH, 20);
+    ctx.fill();
+    ctx.stroke();
+    ctx.fillStyle = '#2B7CB4';
+    ctx.font = '800 18px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+    drawTextFit(card.title, x + 16, cardsY + 26, cardW - 32, { font:'800 18px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif', color:'#2B7CB4' });
+    ctx.fillStyle = '#0f172a';
+    ctx.font = '900 26px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+    drawTextFit(card.value, x + 16, cardsY + 60, cardW - 32, { font:'900 26px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif', color:'#0f172a' });
+    ctx.fillStyle = 'rgba(15,23,42,0.62)';
+    ctx.font = '700 14px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+    drawTextFit(card.sub, x + 16, cardsY + 84, cardW - 32, { font:'700 14px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif', color:'rgba(15,23,42,0.62)' });
+  });
+
+  ctx.fillStyle = '#2B7CB4';
+  ctx.font = '900 22px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+  ctx.fillText('Andamento compatto', pad, chartAreaY - 12);
+
+  const chartGap = 16;
+  const chartW = (contentW - chartGap) / 2;
+  const chartH = 132;
+  drawSeriesCard(pad, chartAreaY, chartW, chartH, 'Cloro libero', rows.map(x => x.row?.cloro_attivo_libero), { color:'#2B7CB4', digits:2, unit:' ppm', key:'cloro_attivo_libero' });
+  drawSeriesCard(pad + chartW + chartGap, chartAreaY, chartW, chartH, 'Cloro combinato', rows.map(x => x.row?.cloro_attivo_combinato), { color:'#C9772B', digits:2, unit:' ppm', key:'cloro_attivo_combinato' });
+  drawSeriesCard(pad, chartAreaY + chartH + chartGap, chartW, chartH, 'pH', rows.map(x => x.row?.ph), { color:'#6B5CE7', digits:2, unit:'', key:'ph' });
+  drawSeriesCard(pad + chartW + chartGap, chartAreaY + chartH + chartGap, chartW, chartH, 'Temperatura', rows.map(x => x.row?.temp_acqua), { color:'#17A673', digits:1, unit:' °C', key:'temp_acqua' });
+
+  ctx.fillStyle = '#2B7CB4';
+  ctx.font = '900 22px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+  ctx.fillText('Dettaglio giornaliero', pad, tableTop - 14);
+
+  ctx.fillStyle = 'rgba(77,156,197,0.18)';
+  roundRect(ctx, pad, tableTop, contentW, headerH, 14);
+  ctx.fill();
+
+  const headers = ['G', 'Cloro lib.', 'Cloro comb.', 'pH', 'Temp'];
+  const colBoxes = [colDay, ...colWidths];
+  headers.forEach((h, idx) => {
+    const x = headerXs[idx] + 10;
+    const maxWidth = colBoxes[idx] - 20;
+    drawTextFit(h, x, tableTop + 21, maxWidth, { font:`800 ${tableHeaderFont}px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif`, color:'#0f172a' });
+  });
+
+  monthItems.forEach((item, idx) => {
+    const y = tableTop + headerH + (idx * rowH);
+    ctx.fillStyle = idx % 2 === 0 ? '#ffffff' : 'rgba(77,156,197,0.05)';
+    ctx.fillRect(pad, y, contentW, rowH);
+    ctx.strokeStyle = 'rgba(15,23,42,0.06)';
+    ctx.lineWidth = 1;
+    ctx.beginPath();
+    ctx.moveTo(pad, y + rowH);
+    ctx.lineTo(pad + contentW, y + rowH);
+    ctx.stroke();
+
+    const row = item.row || {};
+    const vals = [
+      String(item.day).padStart(2, '0'),
+      item.row ? __piscinaFmtVal__(row.cloro_attivo_libero, 2, '') : '—',
+      item.row ? __piscinaFmtVal__(row.cloro_attivo_combinato, 2, '') : '—',
+      item.row ? __piscinaFmtVal__(row.ph, 2, '') : '—',
+      item.row ? __piscinaFmtVal__(row.temp_acqua, 1, '°') : '—',
+    ];
+    vals.forEach((v, i) => {
+      const x = headerXs[i] + 10;
+      const maxWidth = colBoxes[i] - 20;
+      drawTextFit(v, x, y + Math.max(15, rowH - 7), maxWidth, { font:`700 ${tableFont}px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif`, color:'#0f172a' });
+    });
+  });
+
+  ctx.fillStyle = 'rgba(15,23,42,0.55)';
+  ctx.font = '500 15px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+  const generated = `Generato il ${new Date().toLocaleString('it-IT')}`;
+  const note = rows.length === rowCount ? '· tutti i giorni valorizzati' : `· giorni senza dato: ${rowCount - rows.length}`;
+  drawTextFit(`${generated} ${note}`, pad, footerY, contentW, { font:'500 15px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif', color:'rgba(15,23,42,0.55)' });
+  return canvas;
+}
+async function piscinaShareCurrentMonthPdf(){
+  const viewMonth = piscinaGetViewMonth();
+  const filename = __piscinaPdfFileName__(viewMonth);
+  const canvas = await __piscinaReportCanvas__(viewMonth);
+  const jpegDataUrl = canvas.toDataURL('image/jpeg', 0.92);
+  const pdfBlob = __piscinaPdfFromJpegDataUrl__(jpegDataUrl, canvas.width, canvas.height);
+  const file = new File([pdfBlob], filename, { type: 'application/pdf' });
+
+  try{
+    if (navigator.canShare && navigator.canShare({ files:[file] })) {
+      await navigator.share({ title: `Report piscina ${__fmtMonthYear(viewMonth)}`, files:[file] });
+      return true;
+    }
+  }catch(err){
+    if (err && err.name === 'AbortError') return false;
+  }
+
+  const url = URL.createObjectURL(pdfBlob);
+  try{
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    try{ a.click(); }catch(_){ }
+    try{ document.body.removeChild(a); }catch(_){ }
+    toast('PDF report pronto', 'blue');
+    return true;
+  } finally {
+    setTimeout(() => { try{ URL.revokeObjectURL(url); }catch(_){ } }, 2000);
+  }
 }
 
 async function piscinaCreateReportForDay(dayKey, { origine="auto19" } = {}){
@@ -9669,7 +17272,10 @@ function setupPiscina(){
   const grid = document.getElementById("piscinaGrid");
   const close = document.getElementById("piscinaModalClose");
   const modal = document.getElementById("piscinaModal");
-  const printBtn = document.getElementById("piscinaPrintBtn");
+  const shareBtn = document.getElementById("piscinaShareBtn");
+  const editModal = document.getElementById("piscinaEditModal");
+  const editCancelBtn = document.getElementById("piscinaEditCancel");
+  const editSaveBtn = document.getElementById("piscinaEditSave");
 
   if (prev) bindFastTap(prev, ()=>{ const vm = piscinaGetViewMonth(); piscinaSetViewMonth(new Date(vm.getFullYear(), vm.getMonth()-1, 1)); renderPiscinaCalendar(); });
   if (next) bindFastTap(next, ()=>{ const vm = piscinaGetViewMonth(); piscinaSetViewMonth(new Date(vm.getFullYear(), vm.getMonth()+1, 1)); renderPiscinaCalendar(); });
@@ -9688,7 +17294,12 @@ function setupPiscina(){
   if (modal){
     modal.addEventListener("click", (e)=>{ if (e.target === modal) piscinaCloseModal(); });
   }
-  if (printBtn) bindFastTap(printBtn, ()=>piscinaPrintCurrentMonth());
+  if (editModal){
+    editModal.addEventListener("click", (e)=>{ if (e.target === editModal) piscinaCloseEditModal(); });
+  }
+  if (shareBtn) bindFastTap(shareBtn, async ()=>{ try{ await piscinaShareCurrentMonthPdf(); }catch(e){ toast(e?.message || "Errore PDF"); } });
+  if (editCancelBtn) bindFastTap(editCancelBtn, ()=>piscinaCloseEditModal());
+  if (editSaveBtn) bindFastTap(editSaveBtn, async ()=>{ try{ await piscinaSaveTodayManual(); }catch(e){ toast(e?.message || "Errore salvataggio"); } });
 
   // scheduler robusto: quando l'app è aperta o torna attiva
   try{
@@ -9704,6 +17315,7 @@ function setupPiscina(){
 async function init(){
   // Perf mode: deve girare DOPO che body esiste e DOPO init delle costanti
   applyPerfMode();
+  try{ __applyDarkMode__(__isDarkModeEnabled__()); }catch(_){ }
   try{ setupAudioUI(); }catch(_){ }
   const __restore = __readRestoreState();
   // Session + anno
@@ -9718,10 +17330,15 @@ async function init(){
   setupHome();
   // Check ricevute mancanti (solo a riavvio)
   try{ setTimeout(()=>{ try{ checkReceiptsOnStartup(); }catch(_){ } }, 120); }catch(_){ }
+  try{ scheduleTopGuestAlertsRefresh(); }catch(_){ }
+  try{ setTimeout(()=>{ try{ refreshTopGuestAlerts({ force:true }); }catch(_){ } }, 180); }catch(_){ }
 
   try{ applyRoleMode(); }catch(_){ }
   setupCalendario();
   setupImpostazioni();
+  setupOperatoriPage();
+  setupChannelPage();
+  setupLaundryCatalogPage();
 setupPiscina();
 setupProdotti();
 // Avvio: prima cosa dopo il bootstrap UI (utente autenticato) è controllare entrambe le liste spesa
@@ -9744,8 +17361,16 @@ try{
   if (__restore && __restore.period && __restore.period.from && __restore.period.to) {
     setPeriod(__restore.period.from, __restore.period.to);
   } else {
-    const [from,to] = monthRangeISO(new Date());
-    setPeriod(from,to);
+    // LOCAL mode: default periodo = anno esercizio (evita liste vuote e totali a zero su iOS)
+    if (typeof __LOCAL_MODE__ !== "undefined" && __LOCAL_MODE__) {
+      const y = (state && state.exerciseYear) ? String(state.exerciseYear) : String(new Date().getFullYear());
+      const from = `${y}-01-01`;
+      const to   = `${y}-12-31`;
+      setPeriod(from,to);
+    } else {
+      const [from,to] = monthRangeISO(new Date());
+      setPeriod(from,to);
+    }
   }
 
   // Preset periodo (scroll iOS)
@@ -9803,16 +17428,12 @@ try{
     try { ensureSettingsLoaded({ force:false, showLoader:false }).catch(() => {}); } catch(_){ }
   }
 
-  // avvio: ripristina sezione se il SW ha forzato un reload su iOS
-  // Avvio: sempre HOME quando l'utente è autenticato (ignora l'ultima pagina visitata)
-  try{ sessionStorage.removeItem(__RESTORE_KEY); }catch(_){ }
-  try{
-    localStorage.removeItem(__RESTORE_KEY);
-    localStorage.removeItem(__LAST_PAGE_KEY);
-  }catch(_){ }
-  try{ __writeHashPage("home"); }catch(_){ }
-
-  const targetPage = (state.session && state.session.user_id) ? "home" : "auth";
+  // avvio: se c'è uno stato di restore (es. dopo sync/import o reload SW),
+  // riapri la pagina salvata; altrimenti mantieni HOME come default per login normale.
+  const restoredPage = (__restore && __sanitizePage(__restore.page)) ? __sanitizePage(__restore.page) : null;
+  const targetPage = (state.session && state.session.user_id)
+    ? (restoredPage || "home")
+    : "auth";
   showPage(targetPage);
   if (__restore) setTimeout(() => { try { __applyUiState(__restore); } catch(_) {} }, 0);
 
@@ -9832,6 +17453,115 @@ try{
   const cleanResetHours = document.getElementById("cleanResetHours");
   const cleanResetAll = document.getElementById("cleanResetAll");
 
+  const __CLEAN_COLS__ = () => getLaundryComponentCodes();
+
+  const doResetAllPulizie = async () => {
+    if (!ensureCanEditPulizieDay()) return;
+    const ok = await confirmYesNo("Resettare tutto?");
+    if (!ok) return;
+
+    try{
+      try{ __dirtyLaundryRooms = new Set(); __dirtyLaundryCells = new Set(); }catch(_){ }
+
+      const __allSlots = Array.from(document.querySelectorAll(".clean-grid .cell.slot"));
+      __allSlots.forEach(el => {
+        try{ el.classList.remove("is-saved"); }catch(_){ }
+        try{ writeCell(el, 0); }catch(_){ }
+        try{ __markLaundryDirty(el); }catch(_){ }
+      });
+
+      try{
+        (opEls||[]).forEach(r => {
+          try{ r.hours.classList.remove("is-saved"); }catch(_){ }
+          try{ writeHourDot(r.hours, 0); }catch(_){ }
+        });
+      }catch(_){ }
+
+      await saveLaundryNow();
+      await saveHoursNow();
+    }catch(err){
+      try{ toast(String(err && err.message || "Errore reset pulizie"), "orange"); }catch(_){ }
+    }
+  };
+
+  const __bindResetAllCorner = (el) => {
+    try{
+      if (!el || el.__boundResetAllCorner) return;
+      el.__boundResetAllCorner = true;
+      bindFastTap(el, doResetAllPulizie);
+      el.addEventListener("keydown", (e) => {
+        const k = (e && e.key) ? e.key : "";
+        if (k === "Enter" || k === " "){
+          try{ e.preventDefault(); e.stopPropagation(); }catch(_){ }
+          try{ doResetAllPulizie(); }catch(_){ }
+        }
+      }, true);
+    }catch(_){ }
+  };
+
+  const rebuildPulizieGrid = ({ preserveValues = true } = {}) => {
+    try{
+      if (!cleanGrid) return;
+      const cols = __CLEAN_COLS__();
+      const prev = new Map();
+      if (preserveValues){
+        try{
+          cleanGrid.querySelectorAll('.cell.slot').forEach((cell) => {
+            const room = String(cell?.dataset?.room || '').trim();
+            const col = String(cell?.dataset?.col || '').trim().toUpperCase();
+            if (!room || !col) return;
+            prev.set(`${room}|${col}`, {
+              value: readCell(cell),
+              saved: !!cell.classList.contains('is-saved')
+            });
+          });
+        }catch(_){ }
+      }
+      const count = Math.max(0, Math.min(12, getConfiguredRoomsCount(6)));
+      try{ cleanGrid.style.setProperty('--cg-cols', String(Math.max(1, cols.length))); }catch(_){ }
+      try{ cleanGrid.style.setProperty('--cg-rows', String(Math.max(1, count + 1))); }catch(_){ }
+      try{ cleanGrid.style.gridTemplateRows = `var(--cg-head-h, 50px) repeat(${Math.max(1, count + 1)}, var(--cg-row-h, 50px))`; }catch(_){ }
+      try{ cleanGrid.style.gridTemplateColumns = `var(--cg-corner, 40px) repeat(${Math.max(1, cols.length)}, minmax(0, 1fr))`; }catch(_){ }
+      const parts = [];
+      const laundryCatalogMap = __laundryCatalogMapByCode__(getLaundryCatalogFromSettings());
+      parts.push('<div aria-label="Reset pulizie" class="c cell head corner clean-reset-corner" id="cleanResetAll" role="button" tabindex="0"><svg aria-hidden="true" class="cr-icon" viewBox="0 0 24 24"><path d="M6 6l12 12"></path><path d="M18 6L6 18"></path></svg></div>');
+      cols.forEach((col) => {
+        const item = laundryCatalogMap.get(__normalizeLaundryCode__(col));
+        const color = __normalizeLaundryColor__(item?.colore || 'blue');
+        const title = String(item?.titolo || col).trim() || col;
+        parts.push(`<div class="c cell head laundry-head color-${color}" data-col="${col}" title="${__escapeHtmlBasic__(title)}">${col}</div>`);
+      });
+      for (let r = 1; r <= count; r++) {
+        parts.push(`<div class="c cell room r${r} room-${r}">${r}</div>`);
+        cols.forEach((col) => {
+          const item = laundryCatalogMap.get(__normalizeLaundryCode__(col));
+          const color = __normalizeLaundryColor__(item?.colore || 'blue');
+          parts.push(`<div class="c cell slot room-${r} color-${color}" data-col="${col}" data-room="${r}"></div>`);
+        });
+      }
+      parts.push('<div class="c cell room rres room-res">RES</div>');
+      cols.forEach((col) => {
+        const item = laundryCatalogMap.get(__normalizeLaundryCode__(col));
+        const color = __normalizeLaundryColor__(item?.colore || 'blue');
+        parts.push(`<div class="c cell slot room-res color-${color}" data-col="${col}" data-room="RES"></div>`);
+      });
+      cleanGrid.innerHTML = parts.join('');
+      try{ __bindResetAllCorner(document.getElementById("cleanResetAll")); }catch(_){ }
+      try{ if (typeof cleanGridHandlersBound !== 'undefined') cleanGridHandlersBound = false; }catch(_){ }
+      try{ __dirtyLaundryRooms = new Set(); __dirtyLaundryCells = new Set(); }catch(_){ }
+      try{
+        cleanGrid.querySelectorAll('.cell.slot').forEach((cell) => {
+          const room = String(cell?.dataset?.room || '').trim();
+          const col = String(cell?.dataset?.col || '').trim().toUpperCase();
+          const hit = prev.get(`${room}|${col}`);
+          if (!hit) return;
+          writeCell(cell, hit.value || 0);
+          cell.classList.toggle('is-saved', !!hit.saved && Number(hit.value || 0) > 0);
+        });
+      }catch(_){ }
+    }catch(_){ }
+  };
+
   // --- Autosave (debounce 1s): Pulizie (biancheria) + Ore operatori ---
   let __laundrySaveT = null;
   let __hoursSaveT = null;
@@ -9840,7 +17570,7 @@ try{
   let __laundryRefreshT = null;
   let __savingHours = false;
   let __pendingHours = false;
-  // dDAE_2.212: salvataggio PULIZIE per-stanza (evita generazione righe/report inutili)
+  // dDAE_1.020: salvataggio PULIZIE per-stanza (evita generazione righe/report inutili)
   // Mantiene UI fluida: nessun "blink" dei numeri durante autosave / refresh.
   let __dirtyLaundryRooms = new Set();   // stanze modificate (solo queste vengono salvate)
   let __dirtyLaundryCells = new Set();   // celle modificate (solo queste ricevono bordo rosso post-save)
@@ -9963,12 +17693,19 @@ try{
           existing = parseRows(res);
         }catch(_){ existing = []; }
 
-        const map = new Map();
+        const mapExact = new Map();
+        const mapKey = new Map();
         const _max = (a,b)=> (a>b?a:b);
+        const _n = (s)=>String(s||"").trim().toLowerCase();
+        const _k = (s)=>_n(s).replace(/[^a-z0-9]+/g,"");
         existing.forEach(r=>{
-          const op = String(r?.operatore || r?.nome || '').trim().toLowerCase();
+          const raw = (r?.operatore || r?.nome || '');
+          const op = _n(raw);
+          const key = _k(raw);
           const ore = parseInt(String(r?.ore ?? 0), 10);
-          if (op) map.set(op, (ore!=ore)?0: _max(0, ore));
+          const v = (ore!=ore)?0: _max(0, ore);
+          if (op) mapExact.set(op, v);
+          if (key) mapKey.set(key, v);
         });
 
         const idxActive = (names||[]).findIndex(n => String(n||'').trim().toLowerCase() === String(activeName||'').trim().toLowerCase());
@@ -9983,11 +17720,22 @@ try{
             const el = opEls[idxActive];
             hours = el ? readHourDot(el.hours) : 0;
           } else {
-            hours = map.get(name.toLowerCase()) || 0;
+            hours = (mapExact.get(_n(name)) ?? mapKey.get(_k(name)) ?? 0);
           }
 
-          if (hours > 0){
-            rows.push({ data: date, operatore: name, ore: hours, benzina_euro: OP_BENZINA_EUR });
+          const isActive = (idx === idxActive && idxActive >= 0);
+          if (hours > 0 || isActive){
+            const benzinaOperatore = getOperatoreBenzinaByName(name, 0);
+            const tariffaOperatore = getOperatoreTariffaByName(name, 0);
+            rows.push({
+              data: date,
+              operatore: name,
+              ore: hours,
+              benzina_euro: (hours > 0 ? benzinaOperatore : 0),
+              benzina_unit_euro: benzinaOperatore,
+              tariffa_euro: tariffaOperatore,
+              colore: (getOperatoreCatalogItemByName(name)?.colore || 'blue')
+            });
           }
         });
 
@@ -9999,6 +17747,18 @@ try{
       if (!touched) return;
 
       await api("operatori", { method:"POST", body: opPayload });
+      try{
+        // UI: evidenzia subito i pallini ore salvati (cerchio rosso)
+        opEls.forEach((r, idx) => {
+          try{
+            const rowEl = (r.hours && r.hours.closest) ? r.hours.closest('.clean-op-row') : null;
+            if (rowEl && rowEl.style && rowEl.style.display === 'none') return;
+            const v = readHourDot(r.hours);
+            r.hours.classList.toggle("is-saved", v > 0);
+          }catch(_){ }
+        });
+      }catch(_){ }
+
       try{ await loadOperatoriForDay({ clearFirst:false }); }catch(_){ }
     }catch(err){
       try{ toast(String(err && err.message || "Errore salvataggio ore lavoro")); }catch(_){}
@@ -10017,21 +17777,22 @@ try{
   const cleanHeaderText = document.getElementById("cleanHeaderText");
   const cleanHeaderClose = document.getElementById("cleanHeaderClose");
 
-  const CLEAN_HEADER_DESC = {
-    MAT: "Lenzuolo Matrimoniale",
-    SIN: "Lenzuolo Singolo",
-    FED: "Federe",
-    TDO: "Telo Doccia",
-    TFA: "Telo Faccia",
-    TBI: "Telo Bidet",
-    TAP: "Tappeto",
-    TPI: "Telo Piscina",
+  const getCleanHeaderDescMap = () => {
+    const map = {};
+    try{
+      getLaundryCatalogFromSettings().forEach((item) => {
+        const code = __normalizeLaundryCode__(item?.abbreviazione);
+        const title = __laundryDisplayTitle__(item, String(item?.titolo || '').trim());
+        if (code && title) map[code] = title;
+      });
+    }catch(_){ }
+    return map;
   };
 
   const openCleanHeaderModal = (code) => {
     if (!cleanHeaderModal || !cleanHeaderText) return;
     const c = String(code || "").trim().toUpperCase();
-    const text = CLEAN_HEADER_DESC[c] || "";
+    const text = getCleanHeaderDescMap()[c] || "";
     if (!text) return;
     cleanHeaderText.textContent = text;
     cleanHeaderModal.hidden = false;
@@ -10070,6 +17831,10 @@ try{
   };
 
   const getCleanDate = () => {
+    try{
+      const __isOp = !!(state && state.session && isOperatoreSession(state.session));
+      if (__isOp) return toISODateLocal(new Date());
+    }catch(_){ }
     const d = state.cleanDay ? new Date(state.cleanDay) : new Date();
     return toISODateLocal(d);
   };
@@ -10104,14 +17869,71 @@ try{
 
 
   // --- Ore operatori (foglio "operatori") ---
-  const OP_BENZINA_EUR = (state.settings && state.settings.loaded) ? getSettingNumber("costo_benzina", 2.00) : 2.00;   // € per presenza
-  const OP_RATE_EUR_H = (state.settings && state.settings.loaded) ? getSettingNumber("tariffa_oraria", 8.00) : 8.00;    // € per ora
 
-    const opEls = [
-    { name: document.getElementById("op1Name"), hours: document.getElementById("op1Hours") },
-    { name: document.getElementById("op2Name"), hours: document.getElementById("op2Hours") },
-    { name: document.getElementById("op3Name"), hours: document.getElementById("op3Hours") },
-  ].filter(x => x.name && x.hours);
+  // dDAE_1.025 — Operatore: in Pulizie il nome è lo username loggato (non dipende da Impostazioni)
+  const __getLoggedOperatorName = () => {
+    try{
+      if (!(state && state.session)) return "";
+      if (!isOperatoreSession(state.session)) return "";
+      return String(
+        state.session._op_local ||
+        state.session.username ||
+        state.session.user ||
+        state.session.nome ||
+        state.session.name ||
+        state.session.email ||
+        ""
+      ).trim();
+    }catch(_){ return ""; }
+  };
+
+  const __getPulizieOperatorNames = () => {
+    const ops = (getActiveOperatorNames ? getActiveOperatorNames() : []).map(x=>String(x||"").trim()).filter(Boolean);
+    return Array.from(new Set(ops.filter(Boolean)));
+  };
+
+  const __escapeHtmlBasic__ = (value) => String(value || '').replace(/[&<>"]/g, s => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;'}[s]));
+  let opEls = [];
+
+  const __ensurePulizieOperatorRows__ = (names = []) => {
+    const host = document.getElementById('cleanOps');
+    if (!host) return [];
+    const safeNames = Array.from(new Set((Array.isArray(names) ? names : []).map(n => String(n || '').trim()).filter(Boolean)));
+    host.innerHTML = safeNames.map((name, idx) => `
+<div class="clean-op-row" data-op="${idx+1}" data-name="${__escapeHtmlBasic__(name)}">
+<div aria-label="${__escapeHtmlBasic__(name)}" class="clean-op-name"></div>
+<button aria-label="Ore ${__escapeHtmlBasic__(name)}" class="clean-hour-dot is-zero" data-value="0" type="button"></button>
+</div>`).join('');
+    opEls = Array.from(host.querySelectorAll('.clean-op-row')).map((row) => ({
+      row,
+      name: row.querySelector('.clean-op-name'),
+      hours: row.querySelector('.clean-hour-dot')
+    })).filter(x => x.row && x.name && x.hours);
+    opEls.forEach(r => {
+      if (r.hours && !r.hours.dataset.boundHourDot){
+        r.hours.dataset.boundHourDot = '1';
+        try{ bindHourDot(r.hours); }catch(_){ }
+      }
+    });
+    return opEls;
+  };
+
+
+  const __applyOperatorePulizieVisuals__ = (rowEl, nameEl, hourEl, operatorName, fallbackColor = 'blue') => {
+    const hex = getOperatoreColorHexByName(operatorName, fallbackColor || 'blue');
+    const soft = (typeof hexToRgba === 'function') ? hexToRgba(hex, 0.22) : 'rgba(111,183,214,0.22)';
+    const softStrong = (typeof hexToRgba === 'function') ? hexToRgba(hex, 0.72) : 'rgba(111,183,214,0.72)';
+    try{ if (rowEl) rowEl.dataset.color = __normalizeOperatoreColor__(getOperatoreCatalogItemByName(operatorName)?.colore || fallbackColor || 'blue'); }catch(_){ }
+    try{ if (nameEl) nameEl.style.color = hex; }catch(_){ }
+    try{
+      if (hourEl){
+        hourEl.style.borderColor = softStrong;
+        hourEl.style.color = hex;
+        hourEl.style.background = 'rgba(255,255,255,0.80)';
+        hourEl.style.boxShadow = `0 10px 22px rgba(15,23,42,0.10), inset 0 0 0 1px rgba(255,255,255,0.35), 0 0 0 4px ${soft}`;
+      }
+    }catch(_){ }
+  };
 
   const readHourDot = (el) => {
     const n = parseInt(String(el.dataset.value || "0"), 10);
@@ -10172,85 +17994,70 @@ try{
   };
 
   const syncCleanOperators = () => {
-  const names = getOperatorNamesFromSettings(); // [op1, op2, op3]
+    const names = __getPulizieOperatorNames();
+    __ensurePulizieOperatorRows__(names);
 
-  opEls.forEach((r, idx) => {
-    const n = String(names[idx] || "").trim();
-    const rowEl = (r.hours && r.hours.closest) ? r.hours.closest(".clean-op-row") : null;
+    const loggedName = (() => { try{ return __getLoggedOperatorName(); }catch(_){ return ''; } })();
+    const loggedNorm = String(loggedName || '').trim().toLowerCase();
+    const isOpSession = !!(state && state.session && isOperatoreSession(state.session));
 
-    // Se non è impostato: NON mostrare né scritta né pallino
-    if (!n) {
-      if (rowEl) rowEl.style.display = "none";
-      if (String(r.name.tagName || "").toUpperCase() === "INPUT") {
-        r.name.value = "";
-      } else {
-        r.name.textContent = "";
-        r.name.classList.remove("is-placeholder");
-      }
-      // sicurezza: azzera il dot
-      writeHourDot(r.hours, 0);
-      return;
-    }
+    opEls.forEach((r, idx) => {
+      const rowEl = r.row || (r.hours && r.hours.closest ? r.hours.closest('.clean-op-row') : null);
+      const n = String(names[idx] || rowEl?.dataset?.name || '').trim();
+      if (!n || !rowEl) return;
 
-    // Se impostato: mostra riga e applica nome
-    if (rowEl) rowEl.style.display = "";
-
-    // Nome: solo lettura
-    if (String(r.name.tagName || "").toUpperCase() === "INPUT") {
-      r.name.readOnly = true;
-      r.name.setAttribute("readonly", "");
-      r.name.value = n;
-    } else {
+      rowEl.dataset.name = n;
+      rowEl.style.display = '';
       r.name.textContent = n;
-      r.name.classList.remove("is-placeholder");
-    }
+      r.name.classList.remove('is-placeholder');
+      try{ __applyOperatorePulizieVisuals__(rowEl, r.name, r.hours, n, __OPERATORI_COLOR_KEYS__[idx % __OPERATORI_COLOR_KEYS__.length] || 'blue'); }catch(_){ }
+      if (!r.hours.dataset.value) writeHourDot(r.hours, 0);
+      try {
+        r.name.setAttribute('aria-label', n);
+        r.hours.setAttribute('aria-label', 'Ore ' + n);
+      } catch (_) {}
 
-    // Dot: init a 0 (se mancante)
-    if (!r.hours.dataset.value) writeHourDot(r.hours, 0);
+      if (isOpSession){
+        const show = !!loggedNorm && (n.toLowerCase() === loggedNorm || n.toLowerCase().includes(loggedNorm) || loggedNorm.includes(n.toLowerCase()));
+        rowEl.style.display = show ? '' : 'none';
+        if (!show){
+          try{ writeHourDot(r.hours, 0); }catch(_){ }
+          try{ r.hours.classList.remove('is-saved'); }catch(_){ }
+        }
+      }
+    });
 
-    // Accessibilità: usa il nome reale
-    try {
-      r.name.setAttribute("aria-label", n);
-      r.hours.setAttribute("aria-label", "Ore " + n);
-    } catch (_) {}
-  });
-
-  // Sessione OPERATORE: mostra solo il proprio nome
-  try{
-    if (state && state.session && isOperatoreSession(state.session)){
-      const rawU = String(state.session._op_local || state.session.username || state.session.user || state.session.nome || state.session.name || state.session.email || "").trim();
-      const normU = rawU.toLowerCase();
-      if (normU){
-        const active = (names||[]).find(n => String(n||"").trim().toLowerCase() === normU) || rawU;
-        opEls.forEach((r, idx)=>{
-          const nm = String(names[idx] || "").trim();
-          if (!nm) return;
-          const rowEl = (r.hours && r.hours.closest) ? r.hours.closest('.clean-op-row') : null;
+    if (isOpSession && loggedName){
+      const visible = opEls.some(r => (r.row || (r.hours && r.hours.closest ? r.hours.closest('.clean-op-row') : null))?.style.display !== 'none');
+      if (!visible){
+        __ensurePulizieOperatorRows__([loggedName]);
+        opEls.forEach(r => {
+          const rowEl = r.row || (r.hours && r.hours.closest ? r.hours.closest('.clean-op-row') : null);
           if (!rowEl) return;
-          const show = nm.toLowerCase() === String(active||"").trim().toLowerCase();
-          rowEl.style.display = show ? '' : 'none';
-          if (!show){
-            try{ writeHourDot(r.hours, 0); }catch(_){ }
-            try{ r.hours.classList.remove('is-saved'); }catch(_){ }
-          }
+          rowEl.style.display = '';
+          rowEl.dataset.name = loggedName;
+          r.name.textContent = loggedName;
+          try{ __applyOperatorePulizieVisuals__(rowEl, r.name, r.hours, loggedName, 'blue'); }catch(_){ }
+          if (!r.hours.dataset.value) writeHourDot(r.hours, 0);
         });
       }
     }
-  }catch(_){}
+  };
 
-};
+
+  try{ window.__syncCleanOperators__ = syncCleanOperators; }catch(_){ }
 
   try{ syncCleanOperators(); }catch(_){}
-  opEls.forEach(r => { try{ bindHourDot(r.hours); }catch(_){ } });
+  try{ rebuildPulizieGrid({ preserveValues:false }); }catch(_){ }
 
   const buildOperatoriPayload = () => {
     const date = getCleanDate();
     const rows = [];
-    const names = getOperatorNamesFromSettings(); // [op1, op2, op3]
+    const names = __getPulizieOperatorNames(); // [op1, op2, op3] oppure [username,"",""]
 
     const hasAnyName = names.some(n => String(n || "").trim());
     if (!hasAnyName){
-      throw new Error("Imposta i nomi operatori in Impostazioni");
+      return { touched: false, payload: { data: date, operatori: [], replaceDay: true } };
     }
 
     // IMPORTANTE: inviamo ANCHE le ore a 0.
@@ -10261,11 +18068,16 @@ try{
       if (!name) return; // operatore non configurato
 
       const hours = readHourDot(r.hours); // può essere 0
+      const benzinaOperatore = getOperatoreBenzinaByName(name, 0);
+      const tariffaOperatore = getOperatoreTariffaByName(name, 0);
       rows.push({
         data: date,
         operatore: name,
         ore: hours,
-        benzina_euro: OP_BENZINA_EUR
+        benzina_euro: (hours > 0 ? benzinaOperatore : 0),
+        benzina_unit_euro: benzinaOperatore,
+        tariffa_euro: tariffaOperatore,
+        colore: (getOperatoreCatalogItemByName(name)?.colore || 'blue')
       });
     });
 
@@ -10287,7 +18099,7 @@ try{
       if (room) map.set(room, r);
     });
 
-    const cols = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
+    const cols = getLaundryComponentCodes();
 
     // Snapshot update: aggiorna tutte le celle in un colpo solo (niente clear→repaint→blink)
     document.querySelectorAll(".clean-grid .cell.slot").forEach(cell => {
@@ -10311,21 +18123,28 @@ try{
 
   // --- Ore operatori: carica dal DB per il giorno selezionato (così un nuovo salvataggio SOVRASCRIVE davvero) ---
   const _normOpName = (s) => String(s || "").trim().toLowerCase();
+  // chiave "robusta" per tollerare differenze di spazi/punteggiatura post-sync
+  const _normOpKey  = (s) => _normOpName(s).replace(/[^a-z0-9]+/g, "");
 
   const applyOperatoriRows = (rows) => {
     if (!Array.isArray(rows)) rows = [];
-    const map = new Map();
+    const mapExact = new Map();
+    const mapKey = new Map();
     rows.forEach(r => {
-      const op = _normOpName(r?.operatore || r?.nome || "");
+      const raw = (r?.operatore || r?.nome || "");
+      const op = _normOpName(raw);
+      const key = _normOpKey(raw);
       const ore = parseInt(String(r?.ore ?? 0), 10);
-      if (op) map.set(op, isNaN(ore) ? 0 : Math.max(0, ore));
+      const v = isNaN(ore) ? 0 : Math.max(0, ore);
+      if (op) mapExact.set(op, v);
+      if (key) mapKey.set(key, v);
     });
 
-    const names = getOperatorNamesFromSettings(); // [op1, op2, op3]
+    const names = __getPulizieOperatorNames(); // [op1, op2, op3] oppure [username,"",""]
     opEls.forEach((r, idx) => {
       const name = String(names[idx] || "").trim();
       if (!name) return; // non configurato (riga nascosta)
-      const v = map.get(_normOpName(name)) || 0;
+      const v = (mapExact.get(_normOpName(name)) ?? mapKey.get(_normOpKey(name)) ?? 0);
       writeHourDot(r.hours, v);
       r.hours.classList.toggle("is-saved", v > 0);
     });
@@ -10334,7 +18153,7 @@ try{
   const loadOperatoriForDay = async ({ clearFirst = true } = {}) => {
     if (clearFirst){
       // azzera dots visivamente (se poi arrivano dati li ripopola)
-      const names = getOperatorNamesFromSettings();
+      const names = __getPulizieOperatorNames();
       opEls.forEach((r, idx) => {
         const name = String(names[idx] || "").trim();
         if (!name) return;
@@ -10350,7 +18169,8 @@ try{
         : (res && Array.isArray(res.rows) ? res.rows
         : (res && Array.isArray(res.data) ? res.data
         : []));
-      applyOperatoriRows(rows);
+      const rowsY = __filterByExerciseYear__(rows, state.exerciseYear || loadExerciseYear(), ["data","date","createdAt","created_at","updatedAt","updated_at"]);
+      applyOperatoriRows(rowsY);
     }catch(_){
       // offline/errore: se clearFirst era true, restano a 0
     }
@@ -10361,7 +18181,7 @@ try{
     // Quando cambi giorno: griglia subito vuota, poi (se ci sono) applica dati salvati.
     if (clearFirst) clearAllSlots();
     try{
-      const day = state.cleanDay ? new Date(state.cleanDay) : new Date();
+      const day = (state && state.session && isOperatoreSession(state.session)) ? new Date() : (state.cleanDay ? new Date(state.cleanDay) : new Date());
       const data = toISODateLocal(day);
       const res = await api("pulizie", { method:"GET", params:{ data }, showLoader:false });
 
@@ -10373,7 +18193,8 @@ try{
         : [])));
 
       const preserveDirty = (!clearFirst) && (__savingLaundry || (__dirtyLaundryCells && __dirtyLaundryCells.size));
-      applyPulizieRows(rows, { preserveDirty });
+      const rowsY = __filterByExerciseYear__(rows, state.exerciseYear || loadExerciseYear(), ["data","date","createdAt","created_at","updatedAt","updated_at"]);
+      applyPulizieRows(rowsY, { preserveDirty });
 
     }catch(_){
       // offline/errore: se stiamo cambiando giorno, resta vuota; se è un refresh "soft", non tocchiamo
@@ -10383,7 +18204,7 @@ try{
 
 const buildPuliziePayload = (roomsList = null) => {
     const data = getCleanDate();
-    const cols = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
+    const cols = getLaundryComponentCodes();
 
     let rooms = null;
     if (Array.isArray(roomsList) && roomsList.length){
@@ -10451,7 +18272,7 @@ const buildPuliziePayload = (roomsList = null) => {
       const head = ev.target && ev.target.closest ? ev.target.closest(".cell.head") : null;
       if (!head || head.classList.contains("corner")) return null;
       const code = String(head.textContent || "").trim().toUpperCase();
-      return CLEAN_HEADER_DESC[code] ? code : null;
+      return getCleanHeaderDescMap()[code] ? code : null;
     };
 
     cleanGrid.addEventListener("touchend", (e) => {
@@ -10573,62 +18394,37 @@ if (cleanResetHours){
 
 // Reset TUTTO (Pulizie + Ore) dalla cella corner (con conferma Sì/No)
 if (cleanResetAll){
-  const doResetAllPulizie = async () => {
-    if (!ensureCanEditPulizieDay()) return;
-    const ok = await confirmYesNo("Resettare tutto?");
-    if (!ok) return;
-
-    try{
-      // azzera tutte le celle biancheria (griglia pulizie)
-      // IMPORTANTE: marca tutte le stanze/celle come "dirty" così il salvataggio parte davvero
-      // e lo script può cancellare i record quando tutto è a zero.
-      try{ __dirtyLaundryRooms = new Set(); __dirtyLaundryCells = new Set(); }catch(_){}
-
-      const __allSlots = Array.from(document.querySelectorAll(".clean-grid .cell.slot"));
-      __allSlots.forEach(el => {
-        try{ el.classList.remove("is-saved"); }catch(_){ }
-        try{ writeCell(el, 0); }catch(_){ }
-        try{ __markLaundryDirty(el); }catch(_){ }
-      });
-
-      // azzera tutti i pallini ore (solo operatori visibili)
-      try{
-        (opEls||[]).forEach(r => {
-          try{ r.hours.classList.remove("is-saved"); }catch(_){ }
-          try{ writeHourDot(r.hours, 0); }catch(_){ }
-        });
-      }catch(_){ }
-
-      // salva immediatamente (prima biancheria, poi ore)
-      await saveLaundryNow();
-      await saveHoursNow();
-    }catch(err){
-      try{ toast(String(err && err.message || "Errore reset pulizie"), "orange"); }catch(_){ }
-    }
-  };
-
-  bindFastTap(cleanResetAll, doResetAllPulizie);
-
-  // supporto tastiera (Enter/Space)
-  try{
-    cleanResetAll.addEventListener("keydown", (e) => {
-      const k = (e && e.key) ? e.key : "";
-      if (k === "Enter" || k === " "){
-        try{ e.preventDefault(); e.stopPropagation(); }catch(_){ }
-        try{ doResetAllPulizie(); }catch(_){ }
-      }
-    }, true);
-  }catch(_){ }
+  try{ __bindResetAllCorner(document.getElementById('cleanResetAll')); }catch(_){ }
 }
+
+  try{
+    window.__ddae_refreshPulizieGrid = async ({ forceReload = false } = {}) => {
+      try{ rebuildPulizieGrid({ preserveValues: !forceReload }); }catch(_){ }
+      try{
+        if (state && state.page === "pulizie") await loadPulizieForDay({ clearFirst: forceReload });
+      }catch(_){ }
+    };
+  }catch(_){ }
 
   const updateCleanLabel = () => {
     const lab = document.getElementById("cleanDateLabel");
-    if (!lab) return;
-    const base = state.cleanDay ? new Date(state.cleanDay) : new Date();
-    lab.textContent = formatFullDateIT(startOfLocalDay(base));
+    const base = (state && state.session && isOperatoreSession(state.session)) ? new Date() : (state.cleanDay ? new Date(state.cleanDay) : new Date());
+    const day = startOfLocalDay(base);
+    if (lab) lab.textContent = formatFullDateIT(day);
+    try{ if (state && state.page === "pulizie") __setTopbarCenterLabel__(); }catch(_){ }
   };
 
   const shiftClean = (deltaDays) => {
+    try{
+      const __isOp = !!(state && state.session && isOperatoreSession(state.session));
+      if (__isOp){
+        state.cleanDay = startOfLocalDay(new Date()).toISOString();
+        updateCleanLabel();
+        try{ loadPulizieForDay(); }catch(_){ }
+        try{ loadOperatoriForDay(); }catch(_){ }
+        return;
+      }
+    }catch(_){ }
     const base = state.cleanDay ? new Date(state.cleanDay) : new Date();
     const d = startOfLocalDay(base);
     d.setDate(d.getDate() + deltaDays);
@@ -10648,16 +18444,30 @@ if (cleanResetAll){
   });
 
   // inizializza label se apri direttamente la pagina
-  if (!state.cleanDay) state.cleanDay = startOfLocalDay(new Date()).toISOString();
+  try{
+    const __isOp = !!(state && state.session && isOperatoreSession(state.session));
+    const nav = document.querySelector("#page-pulizie .clean-nav");
+    if (nav) nav.style.display = __isOp ? "none" : "";
+    if (__isOp){
+      state.cleanDay = startOfLocalDay(new Date()).toISOString();
+    } else {
+      if (!state.cleanDay) state.cleanDay = startOfLocalDay(new Date()).toISOString();
+    }
+  }catch(_){ if (!state.cleanDay) state.cleanDay = startOfLocalDay(new Date()).toISOString(); }
   updateCleanLabel();
   try{ loadPulizieForDay(); }catch(_){ }
-    try{ loadOperatoriForDay(); }catch(_){ }
+  try{ loadOperatoriForDay(); }catch(_){ }
 
 
 
 // --- Lavanderia ---
   const btnLaundryGenerate = document.getElementById("btnLaundryGenerate");
   const btnLaundryGenerateTop = document.getElementById("btnLaundryGenerateTop");
+  const btnLaundryPricesTop = document.getElementById("btnLaundryPricesTop");
+  const laundryPricesModal = document.getElementById("laundryPricesModal");
+  const laundryPricesClose = document.getElementById("laundryPricesClose");
+  const laundryPricesCancel = document.getElementById("laundryPricesCancel");
+  const laundryPricesSave = document.getElementById("laundryPricesSave");
   try{
     const fromEl = document.getElementById("laundryFrom");
     const toEl   = document.getElementById("laundryTo");
@@ -10690,6 +18500,35 @@ if (btnLaundryGenerate){
       }
     });
   }
+  if (btnLaundryPricesTop){
+    bindFastTap(btnLaundryPricesTop, async () => {
+      try{
+        showPage("lavanderia");
+        await __openLaundryPricesModal__();
+      }catch(e){
+        console.error(e);
+        try{ toast(e.message || "Errore"); }catch(_){ }
+      }
+    });
+  }
+  if (laundryPricesClose && !laundryPricesClose.__boundLaundryPricesClose){
+    laundryPricesClose.__boundLaundryPricesClose = true;
+    bindFastTap(laundryPricesClose, () => { __closeLaundryPricesModal__(); });
+  }
+  if (laundryPricesCancel && !laundryPricesCancel.__boundLaundryPricesCancel){
+    laundryPricesCancel.__boundLaundryPricesCancel = true;
+    bindFastTap(laundryPricesCancel, () => { __closeLaundryPricesModal__(); });
+  }
+  if (laundryPricesSave && !laundryPricesSave.__boundLaundryPricesSave){
+    laundryPricesSave.__boundLaundryPricesSave = true;
+    bindFastTap(laundryPricesSave, async () => {
+      try{ await __saveLaundryPricesModal__(); }catch(e){ try{ toast(e?.message || "Errore"); }catch(_){ } }
+    });
+  }
+  if (laundryPricesModal && !laundryPricesModal.__boundLaundryPricesBackdrop){
+    laundryPricesModal.__boundLaundryPricesBackdrop = true;
+    laundryPricesModal.addEventListener('click', (ev) => { if (ev.target === laundryPricesModal) __closeLaundryPricesModal__(); });
+  }
 if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie){
     bindFastTap(btnOrePuliziaFromPulizie, () => {
       try{ showPage("orepulizia"); }catch(_){}
@@ -10710,7 +18549,7 @@ if (typeof btnOrePuliziaFromPulizie !== "undefined" && btnOrePuliziaFromPulizie)
 }
 
 
-// ===== CALENDARIO (dDAE_2.212) =====
+// ===== CALENDARIO (dDAE_1.020) =====
 function setupCalendario(){
   const pickBtn = document.getElementById("calPickBtn");
   const todayBtn = document.getElementById("calTodayBtn");
@@ -10726,7 +18565,7 @@ function setupCalendario(){
     state.calendar = { anchor: new Date(), ready: false, guests: [] };
   }
 // View mode: "week" (default) / "month"
-  if (!state.calendar.viewMode) state.calendar.viewMode = "month";
+  state.calendar.viewMode = "month";
 
   const applyCalendarViewUI = () => {
     const sec = document.getElementById("page-calendario");
@@ -10738,7 +18577,7 @@ function setupCalendario(){
 
     if (toggleMonthBtn){
       try{
-        toggleMonthBtn.setAttribute("aria-label", isMonth ? "Calendario settimanale" : "Calendario mensile");
+        toggleMonthBtn.setAttribute("aria-label", __translateText__(isMonth ? "Calendario settimanale" : "Calendario mensile"));
         toggleMonthBtn.classList.toggle("is-active", !!isMonth);
       }catch(_){}
     }
@@ -10772,7 +18611,7 @@ function setupCalendario(){
 
   // Sync: forza lettura database (tap-safe iOS PWA)
   if (syncBtn){
-    syncBtn.setAttribute("aria-label", "Forza lettura database");
+    syncBtn.setAttribute("aria-label", __translateText__("Forza lettura database"));
     bindFastTap(syncBtn, async () => {
       try{
         syncBtn.disabled = true;
@@ -10810,6 +18649,7 @@ function setupCalendario(){
     d.setHours(0,0,0,0);
     state.calendar.anchor = d;
     renderCalendario();
+    requestAnimationFrame(() => { try{ scrollCalendarMonthToDayLeft(d.getDate()); }catch(_){ } });
     __scheduleCalendarFetch({ force:false, showLoader:false });
   });
 
@@ -10837,44 +18677,34 @@ function setupCalendario(){
   if (prevMonthBtn) prevMonthBtn.addEventListener("click", () => {
     shiftAnchorAndRender(addMonthsClamped(state.calendar.anchor, -1));
   });
-  if (prevBtn) prevBtn.addEventListener("click", () => {
-    shiftAnchorAndRender(addDays(state.calendar.anchor, -7));
-  });
-  if (nextBtn) nextBtn.addEventListener("click", () => {
-    shiftAnchorAndRender(addDays(state.calendar.anchor, 7));
-  });
-
   if (nextMonthBtn) nextMonthBtn.addEventListener("click", () => {
     shiftAnchorAndRender(addMonthsClamped(state.calendar.anchor, 1));
   });
-  if (toggleMonthBtn) toggleMonthBtn.addEventListener("click", () => {
-    if (!state.calendar) state.calendar = { anchor: new Date(), ready: false, guests: [] };
-    state.calendar.viewMode = (state.calendar.viewMode === "month") ? "week" : "month";
-    applyCalendarViewUI();
-    renderCalendario();
-    __scheduleCalendarFetch({ force:false, showLoader:false });
-  });
-
   // Applica stato UI all'avvio
   applyCalendarViewUI();
 
-  // Landscape-fit: ridimensiona la griglia mensile per rientrare a schermo (solo in vista mese)
+  // Landscape-fit: ridimensiona subito anche su iOS al cambio orientamento / viewport
   try{
     if (!window.__ddaeCalMonthFitBound){
       window.__ddaeCalMonthFitBound = true;
-      let __t = null;
-      window.addEventListener("resize", () => {
-        try{
-          if (__t) clearTimeout(__t);
-          __t = setTimeout(() => {
-            try{
-              if (state && state.page === "calendario" && state.calendar && state.calendar.viewMode === "month"){
-                requestAnimationFrame(()=>{ try{ __fitCalendarioMonthLandscape(); }catch(_){ } });
-              }
-            }catch(_){ }
-          }, 120);
-        }catch(_){ }
-      }, { passive:true });
+      const __refreshCalendarLayout = () => {
+        try{ __scheduleCalendarioLayoutRefresh(); }catch(_){ }
+      };
+      window.addEventListener("resize", __refreshCalendarLayout, { passive:true });
+      window.addEventListener("orientationchange", __refreshCalendarLayout, { passive:true });
+      window.addEventListener("pageshow", __refreshCalendarLayout, { passive:true });
+      try{
+        if (window.visualViewport){
+          window.visualViewport.addEventListener("resize", __refreshCalendarLayout, { passive:true });
+        }
+      }catch(_){ }
+      try{
+        const mq = window.matchMedia ? window.matchMedia("(orientation: landscape)") : null;
+        if (mq){
+          if (typeof mq.addEventListener === 'function') mq.addEventListener('change', __refreshCalendarLayout);
+          else if (typeof mq.addListener === 'function') mq.addListener(__refreshCalendarLayout);
+        }
+      }catch(_){ }
     }
   }catch(_){ }
 }
@@ -10886,7 +18716,7 @@ async function ensureCalendarData({ force = false, showLoader = false } = {}) {
 
   const anchor = (state.calendar && state.calendar.anchor) ? state.calendar.anchor : new Date();
 
-  const mode = (state.calendar && state.calendar.viewMode) ? state.calendar.viewMode : "month";
+  const mode = "month";
   let winFrom, winTo, rangeKey;
 
   if (mode === "month"){
@@ -10924,7 +18754,9 @@ async function ensureCalendarData({ force = false, showLoader = false } = {}) {
 
 function renderCalendario(){
   if (!state.calendar) state.calendar = { anchor: new Date(), ready: false, guests: [] };
-  const mode = state.calendar.viewMode || "month";
+  const mode = "month";
+
+  try{ __setTopbarCenterLabel__(); }catch(_){}
 
   try{
     const sec = document.getElementById("page-calendario");
@@ -10940,71 +18772,75 @@ function renderCalendario(){
     if (gMonth && mode !== "month") gMonth.hidden = true;
   }catch(_){}
 
-  if (mode === "month") return renderCalendarioMonth();
-  return renderCalendarioWeek();
+  return renderCalendarioMonth();
 }
 
 
-/* dDAE_2.212 — Calendario: blocca SOLO la colonna numeri stanze durante lo scroll orizzontale (fix iOS) */
-function ensureCalRoomFreezeBound(){
-  const wrap = document.querySelector("#page-calendario .cal-grid-wrap");
-  if (!wrap) return;
+/* dDAE_2.290 — Calendario: focus giorno corrente corretto + colonna stanze contrasto */
+function ensureCalendarFixedRailStructure(){
+  const page = document.getElementById("page-calendario");
+  if (!page) return {};
+  const wrap = page.querySelector(".cal-grid-wrap");
+  if (!wrap) return {};
 
-  // Se già bindato, aggiorna subito
-  if (wrap.__roomFreezeUpdate){
-    try{ wrap.__roomFreezeUpdate(); }catch(_){}
-    return;
+  let rail = document.getElementById("calRoomRail");
+  if (!rail){
+    rail = document.createElement("div");
+    rail.id = "calRoomRail";
+    rail.className = "cal-room-rail";
   }
 
-  let raf = 0;
-  const update = ()=>{
-    raf = 0;
-    const x = (wrap && typeof wrap.scrollLeft === "number") ? wrap.scrollLeft : 0;
-    const rooms = wrap.querySelectorAll(".cal-pill.room");
-    rooms.forEach(el=>{
-      try{ el.style.transform = `translateX(${x}px)`; }catch(_){}
-    });
-  };
+  let daysWrap = document.getElementById("calDaysWrap");
+  if (!daysWrap){
+    daysWrap = document.createElement("div");
+    daysWrap.id = "calDaysWrap";
+    daysWrap.className = "cal-days-wrap";
+  }
 
-  const onScroll = ()=>{
-    if (raf) return;
-    raf = requestAnimationFrame(update);
-  };
+  const gridWeek = document.getElementById("calGrid");
+  const gridMonth = document.getElementById("calGridMonth");
 
-  wrap.__roomFreezeUpdate = update;
+  if (!wrap.contains(rail)) wrap.insertBefore(rail, wrap.firstChild || null);
+  if (!wrap.contains(daysWrap)) wrap.appendChild(daysWrap);
+  if (gridWeek && gridWeek.parentElement !== daysWrap) daysWrap.appendChild(gridWeek);
+  if (gridMonth && gridMonth.parentElement !== daysWrap) daysWrap.appendChild(gridMonth);
 
-  try{ wrap.addEventListener("scroll", onScroll, { passive: true }); }catch(_){ wrap.addEventListener("scroll", onScroll); }
-  try{ window.addEventListener("resize", onScroll, { passive: true }); }catch(_){ window.addEventListener("resize", onScroll); }
-  try{ window.addEventListener("orientationchange", onScroll, { passive: true }); }catch(_){ window.addEventListener("orientationchange", onScroll); }
+  try{ wrap.classList.add("has-fixed-room-rail"); }catch(_){ }
+  return { wrap, rail, daysWrap, gridWeek, gridMonth };
+}
 
-  // Prima applicazione
-  update();
+function renderCalendarRoomRail(roomsCount){
+  const parts = ensureCalendarFixedRailStructure();
+  const rail = parts.rail;
+  if (!rail) return;
+  rail.replaceChildren();
+
+  const corner = document.createElement("div");
+  corner.className = "cal-room-rail-head";
+  corner.innerHTML = `<div class="cal-corner-text">ST</div>`;
+  rail.appendChild(corner);
+
+  for (let r = 1; r <= roomsCount; r++){
+    const pill = document.createElement("div");
+    pill.className = `cal-room-rail-pill room-${r}`;
+    pill.setAttribute("aria-label", `Stanza ${r}`);
+    const rn = document.createElement("span");
+    rn.className = "cal-room-num";
+    rn.textContent = String(r);
+    pill.appendChild(rn);
+    rail.appendChild(pill);
+  }
 }
 
 function applyCalRoomFreeze(mode){
-  const wrap = document.querySelector("#page-calendario .cal-grid-wrap");
-  if (!wrap) return;
-
-  ensureCalRoomFreezeBound();
-
-  if (mode !== "month"){
-    // In settimana non deve restare alcun offset residuo
-    try{ wrap.scrollLeft = 0; }catch(_){}
-    try{
-      const rooms = wrap.querySelectorAll(".cal-pill.room");
-      rooms.forEach(el=>{
-        try{ el.style.transform = "translateX(0px)"; }catch(_){}
-      });
-    }catch(_){}
-    return;
-  }
-
-  // In mese: applica offset in base allo scroll attuale
-  try{ if (wrap.__roomFreezeUpdate) wrap.__roomFreezeUpdate(); }catch(_){}
+  const parts = ensureCalendarFixedRailStructure();
+  if (!parts.wrap) return;
+  try{ parts.wrap.dataset.calMode = String(mode || "week"); }catch(_){ }
 }
 
 function renderCalendarioWeek(){
-  const grid = document.getElementById("calGrid");
+  const parts = ensureCalendarFixedRailStructure();
+  const grid = parts.gridWeek || document.getElementById("calGrid");
   try{ if (grid) grid.classList.toggle("is-loading", !!(state.calendar && state.calendar.loading)); }catch(_){ }
   const title = document.getElementById("calWeekTitle");
   const input = document.getElementById("calDateInput");
@@ -11017,31 +18853,24 @@ function renderCalendarioWeek(){
   const start = startOfWeekMonday(anchor);
   const days = Array.from({ length: 7 }, (_, i) => addDays(start, i));
 
-  // Mantieni input data sincronizzato con l'anchor (utile quando navighi con le frecce)
   try{ if (input) input.value = formatISODateLocal(anchor) || todayISO(); }catch(_){ }
-
   if (title) {
-    const month = monthNameIT(anchor).toUpperCase();
-    title.textContent = month;
+    title.textContent = "";
+    title.hidden = true;
   }
-
   const occ = buildWeekOccupancy(start);
+  const roomsCount = getConfiguredRoomsCount(6);
+  renderCalendarRoomRail(roomsCount);
 
   grid.innerHTML = "";
 
-  // Angolo alto-sinistra: etichetta "ST" (sopra la colonna stanze, a sinistra dei giorni)
-  const corner = document.createElement("div");
-  corner.className = "cal-cell cal-head cal-corner";
-  corner.innerHTML = `<div class="cal-corner-text">ST</div>`;
-  frag.appendChild(corner);
-
-// Prima riga: giorni (colonne)
   for (let i = 0; i < 7; i++) {
     const d = days[i];
     const dayPill = document.createElement("div");
     dayPill.className = "cal-cell cal-head";
+    dayPill.dataset.dayIndex = String(i + 1);
+    if (getCalendarTodayColumnIndex(anchor) === (i + 1)) dayPill.classList.add('is-today-col');
 
-    // Abbreviazione (LUN, MAR...) sopra, numero giorno sotto
     const ab = document.createElement("div");
     ab.className = "cal-day-abbrev";
     ab.textContent = ((window.matchMedia && window.matchMedia("(orientation: landscape)").matches) ? weekdayShortIT(d).toUpperCase().slice(0,1) : weekdayShortIT(d).toUpperCase());
@@ -11052,22 +18881,10 @@ function renderCalendarioWeek(){
 
     dayPill.appendChild(ab);
     dayPill.appendChild(num);
-
     frag.appendChild(dayPill);
   }
 
-  // Righe: stanze (prima colonna) + celle per ogni giorno
-  for (let r = 1; r <= 6; r++) {
-    const pill = document.createElement("div");
-    pill.className = `cal-pill room room-${r}`;
-
-    const rn = document.createElement("span");
-    rn.className = "cal-room-num";
-    rn.textContent = String(r);
-    pill.appendChild(rn);
-
-    frag.appendChild(pill);
-
+  for (let r = 1; r <= roomsCount; r++) {
     for (let i = 0; i < 7; i++) {
       const d = days[i];
       const dIso = isoDate(d);
@@ -11080,22 +18897,18 @@ function renderCalendarioWeek(){
       cell.dataset.room = String(r);
       const info = occ.get(`${dIso}:${r}`);
       if (!info) {
-        // Casella vuota: nessuna azione (evita anche handler globali tipo [data-room])
         cell.addEventListener("click", (ev)=>{
           try { ev.preventDefault(); } catch (_) {}
           try { ev.stopPropagation(); } catch (_) {}
-
-          // Feedback minimo: solo bordo nero spesso (nessuna azione / nessuna apertura schede)
           try{
             const prev = grid.querySelector(".cal-cell.empty-selected");
             if (prev && prev !== cell) prev.classList.remove("empty-selected");
             cell.classList.toggle("empty-selected");
-          }catch(_){}
+          }catch(_){ }
         });
       }
       if (info) {
         cell.classList.add("has-booking");
-// Flags m/c/g negli angoli (flat)
         try{
           const flags = document.createElement("div");
           flags.className = "cal-flags";
@@ -11125,30 +18938,24 @@ function renderCalendarioWeek(){
         const inner = document.createElement("div");
         inner.className = "cal-cell-inner";
 
-        const ini = document.createElement("div");
-        ini.className = "cal-initials";
-        const __ini = (info.initials && String(info.initials).trim()) ? String(info.initials).trim() : ((()=>{ const __g = findCalendarGuestById(info.guestId); return initialsFromName(__g?.nome || __g?.name || __g?.Nome || __g?.NOME || __g?.guestName || ""); })());
-        ini.textContent = __ini;
-        inner.appendChild(ini);
+        const full = document.createElement("div");
+        full.className = "cal-fullname is-single-cell";
+        full.textContent = __calendarGuestDisplayName__(info, 1);
+        inner.appendChild(full);
 
         const dots = document.createElement("div");
         dots.className = "cal-dots";
-        const arr = info.dots.slice(0, 4); // 2x2
+        const arr = info.dots.slice(0, 4);
         for (const t of arr) {
           const s = document.createElement("span");
           s.className = `bed-dot ${t === "m" ? "bed-dot-m" : t === "s" ? "bed-dot-s" : "bed-dot-c"}`;
           dots.appendChild(s);
         }
         inner.appendChild(dots);
-
         cell.appendChild(inner);
 
         cell.addEventListener("click", (ev) => {
-          // Pulisci eventuale selezione su casella vuota
-          try{ const prev = grid.querySelector(".cal-cell.empty-selected"); if (prev) prev.classList.remove("empty-selected"); }catch(_){}
-
-          // Se la cella ha una prenotazione, apri la scheda in SOLA LETTURA
-          // e blocca la propagazione per evitare l'apertura del popup letto (listener globale [data-room]).
+          try{ const prev = grid.querySelector(".cal-cell.empty-selected"); if (prev) prev.classList.remove("empty-selected"); }catch(_){ }
           try { ev.preventDefault(); } catch (_) {}
           try { ev.stopPropagation(); } catch (_) {}
 
@@ -11169,6 +18976,68 @@ function renderCalendarioWeek(){
 
 
 
+function syncCalendarRoomRailHeights(){
+  try{
+    const rail = document.getElementById("calRoomRail");
+    const grid = document.getElementById("calGridMonth");
+    const page = document.getElementById("page-calendario");
+    const wrap = document.getElementById("calDaysWrap") || document.querySelector("#page-calendario .cal-grid-wrap");
+    if (!rail || !grid || !page || !wrap || grid.hidden) return;
+
+    const head = grid.querySelector('.cal-cell.cal-head');
+    if (!head) return;
+
+    const rows = [];
+    const headH = Math.round(head.getBoundingClientRect().height || head.offsetHeight || 0);
+    if (headH <= 0) return;
+    rows.push(`${headH}px`);
+
+    const roomsCount = getConfiguredRoomsCount(6);
+    for (let r = 1; r <= roomsCount; r++){
+      const cell = grid.querySelector(`.cal-cell[data-room="${r}"]`);
+      const h = Math.round(cell?.getBoundingClientRect().height || cell?.offsetHeight || headH || 0);
+      rows.push(`${Math.max(1, h)}px`);
+    }
+
+    rail.style.gridTemplateRows = rows.join(' ');
+    rail.style.setProperty('--cal-cell-h', rows[1] || `${headH}px`);
+    wrap.style.setProperty('--cal-cell-h', rows[1] || `${headH}px`);
+
+    const headEl = rail.querySelector('.cal-room-rail-head');
+    if (headEl) headEl.style.height = rows[0];
+    for (let r = 1; r <= roomsCount; r++){
+      const pill = rail.querySelector(`.cal-room-rail-pill.room-${r}`);
+      if (pill) pill.style.height = rows[r] || '';
+    }
+  }catch(_){ }
+}
+
+function __runCalendarioLayoutRefreshPass__(){
+  try{
+    if (!state || state.page !== 'calendario') return;
+    if (!state.calendar || state.calendar.viewMode !== 'month') return;
+    __fitCalendarioMonthLandscape();
+    syncCalendarRoomRailHeights();
+  }catch(_){ }
+}
+
+const __scheduleCalendarioLayoutRefresh = (() => {
+  let t1 = null;
+  let t2 = null;
+  let t3 = null;
+  return function(){
+    try{ if (t1) clearTimeout(t1); }catch(_){ }
+    try{ if (t2) clearTimeout(t2); }catch(_){ }
+    try{ if (t3) clearTimeout(t3); }catch(_){ }
+    const fire = () => {
+      try{ requestAnimationFrame(() => { try{ __runCalendarioLayoutRefreshPass__(); }catch(_){ } }); }catch(_){ }
+    };
+    t1 = setTimeout(fire, 0);
+    t2 = setTimeout(fire, 120);
+    t3 = setTimeout(fire, 280);
+  };
+})();
+
 function __fitCalendarioMonthLandscape(){
   try{
     if (!state || state.page !== "calendario") return;
@@ -11176,11 +19045,11 @@ function __fitCalendarioMonthLandscape(){
 
     const isLandscape = (window.matchMedia && window.matchMedia("(orientation: landscape)").matches);
 
-    // dDAE_2.212: in vista mese su iPad landscape usa tutta la larghezza disponibile (margine 10px L/R)
+    // dDAE_1.020: in vista mese su iPad landscape usa tutta la larghezza disponibile (margine 10px L/R)
     try{ document.body.classList.toggle("cal-month-landscape", !!isLandscape); }catch(_){}
 
     const grid = document.getElementById("calGridMonth");
-    const wrap = document.querySelector("#page-calendario .cal-grid-wrap");
+    const wrap = document.getElementById("calDaysWrap") || document.querySelector("#page-calendario .cal-grid-wrap");
     if (!grid || !wrap) return;
 
     // Aggiorna abbreviazioni giorni (solo iniziale in landscape)
@@ -11201,11 +19070,13 @@ function __fitCalendarioMonthLandscape(){
       try{ grid.style.removeProperty("--cal-cell-h"); }catch(_){}
       try{ grid.style.removeProperty("--cal-pill-h"); }catch(_){}
       try{ grid.style.removeProperty("grid-template-columns"); }catch(_){}
+      try{ wrap.style.removeProperty("--cal-cell-h"); }catch(_){}
+      try{ wrap.style.removeProperty("--cal-pill-h"); }catch(_){}
       // Ripristina template dinamico standard (var day width) se possibile
       try{
         const anchor = (state.calendar && state.calendar.anchor) ? state.calendar.anchor : new Date();
         const daysCount = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0).getDate();
-        grid.style.gridTemplateColumns = `var(--cal-room-w) repeat(${daysCount}, var(--cal-day-w))`;
+        grid.style.gridTemplateColumns = `repeat(${daysCount}, var(--cal-day-w))`;
       }catch(_){}
       return;
     }
@@ -11224,13 +19095,7 @@ function __fitCalendarioMonthLandscape(){
     }catch(_){}
     if (wrapW <= 0) return;
 
-    // Room col: usa la larghezza effettiva della prima colonna (corner)
-    let roomW = 0;
-    try{
-      const corner = grid.querySelector(".cal-corner");
-      if (corner) roomW = corner.getBoundingClientRect().width;
-    }catch(_){}
-    if (!roomW || roomW < 10) roomW = 44;
+    // La colonna stanze è fuori dalla griglia scrollabile
 
     // Gap colonna
     let gap = 0;
@@ -11241,7 +19106,7 @@ function __fitCalendarioMonthLandscape(){
     // gap totali tra (1+daysCount) colonne = daysCount
     const totalGap = gap * daysCount;
 
-    const availDaysW = wrapW - roomW - totalGap;
+    const availDaysW = wrapW - totalGap;
     if (availDaysW <= 0) return;
 
     let dayW = Math.floor(availDaysW / daysCount);
@@ -11261,28 +19126,76 @@ function __fitCalendarioMonthLandscape(){
     let cellH = Math.floor((availH - rowGaps) / rows);
     cellH = Math.max(34, Math.min(cellH, 120));
 
-    let pillH = Math.floor(cellH * 0.38);
+    
+    // Riduci altezza celle del 10%
+    cellH = Math.floor(cellH * 0.90);
+let pillH = Math.floor(cellH * 0.38);
     pillH = Math.max(18, Math.min(pillH, 46));
 
     // Applica override inline (solo month+landscape)
     try{
-      grid.style.gridTemplateColumns = `${Math.floor(roomW)}px repeat(${daysCount}, minmax(${dayW}px, 1fr))`;
+      grid.style.gridTemplateColumns = `repeat(${daysCount}, minmax(${dayW}px, 1fr))`;
       grid.style.setProperty("--cal-cell-h", `${cellH}px`);
       grid.style.setProperty("--cal-pill-h", `${pillH}px`);
+      wrap.style.setProperty("--cal-cell-h", `${cellH}px`);
+      wrap.style.setProperty("--cal-pill-h", `${pillH}px`);
     }catch(_){}
   }catch(_){}
 }
 
+function getCalendarTodayColumnIndex(anchor){
+  try{
+    const now = new Date();
+    now.setHours(0,0,0,0);
+    const a = (anchor instanceof Date) ? anchor : new Date(anchor || Date.now());
+    if (now.getFullYear() !== a.getFullYear() || now.getMonth() !== a.getMonth()) return -1;
+    return now.getDate();
+  }catch(_){ return -1; }
+}
+
+function scrollCalendarMonthToDayLeft(dayIndex){
+  try{
+    const wrap = document.getElementById('calDaysWrap') || document.querySelector('#page-calendario .cal-grid-wrap');
+    const grid = document.getElementById('calGridMonth');
+    if (!wrap || !grid || !dayIndex || dayIndex < 1) return;
+    const head = grid.querySelector(`.cal-cell.cal-head[data-day-index="${dayIndex}"]`);
+    if (!head) return;
+    const headLeft = head.offsetLeft || 0;
+    const cellWidth = head.offsetWidth || 0;
+    let gap = 0;
+    try{
+      const st = getComputedStyle(grid);
+      gap = parseFloat(st.columnGap || st.gap || '0') || 0;
+    }catch(_){ }
+    const twoCellsBack = (cellWidth + gap) * 2;
+    const target = Math.max(0, headLeft - twoCellsBack);
+    try{ wrap.scrollTo({ left: target, behavior: 'auto' }); }catch(_){ wrap.scrollLeft = target; }
+    try{ if (wrap.__roomFreezeUpdate) wrap.__roomFreezeUpdate(); }catch(_){ }
+  }catch(_){ }
+}
+
+function __calendarGuestDisplayName__(info, span){
+  try{
+    const g = findCalendarGuestById(info && info.guestId);
+    const raw = collapseSpaces(String((g?.nome || g?.name || g?.Nome || g?.NOME || g?.guestName || '')).trim());
+    const fullName = raw || collapseSpaces(String(info?.fullName || '').trim());
+    if (!fullName) return String((info && info.initials) || '').trim();
+    return fullName;
+  }catch(_){
+    return String((info && info.initials) || '').trim();
+  }
+}
+
 function renderCalendarioMonth(){
-  const grid = document.getElementById("calGridMonth");
-  const gridWeek = document.getElementById("calGrid");
+  const parts = ensureCalendarFixedRailStructure();
+  const grid = parts.gridMonth || document.getElementById("calGridMonth");
+  const gridWeek = parts.gridWeek || document.getElementById("calGrid");
   try{ if (gridWeek) gridWeek.classList.remove("is-loading"); }catch(_){ }
   try{ if (grid) grid.classList.toggle("is-loading", !!(state.calendar && state.calendar.loading)); }catch(_){ }
   const title = document.getElementById("calWeekTitle");
   const input = document.getElementById("calDateInput");
   if (!grid) return;
 
-  // Toggle DOM visibility
   try{ if (gridWeek) gridWeek.hidden = true; }catch(_){ }
   try{ grid.hidden = false; }catch(_){ }
 
@@ -11294,30 +19207,26 @@ function renderCalendarioMonth(){
   const daysCount = new Date(anchor.getFullYear(), anchor.getMonth() + 1, 0).getDate();
   const days = Array.from({ length: daysCount }, (_, i) => addDays(monthStart, i));
 
-  // Mantieni input data sincronizzato con l'anchor
   try{ if (input) input.value = formatISODateLocal(anchor) || todayISO(); }catch(_){ }
-
   if (title) {
-    const month = monthNameIT(anchor).toUpperCase();
-    title.textContent = month;
+    title.textContent = "";
+    title.hidden = true;
   }
-
-  // Imposta le colonne dinamiche (1 colonna stanze + N giorni)
   try{
-    grid.style.gridTemplateColumns = `var(--cal-room-w) repeat(${daysCount}, var(--cal-day-w))`;
+    grid.style.gridTemplateColumns = `repeat(${daysCount}, var(--cal-day-w))`;
   }catch(_){ }
 
   const occ = buildMonthOccupancy(monthStart, daysCount);
-
-  const corner = document.createElement("div");
-  corner.className = "cal-cell cal-head cal-corner";
-  corner.innerHTML = `<div class="cal-corner-text">ST</div>`;
-  frag.appendChild(corner);
+  const roomsCount = getConfiguredRoomsCount(6);
+  const todayCol = getCalendarTodayColumnIndex(anchor);
+  renderCalendarRoomRail(roomsCount);
 
   for (let i = 0; i < daysCount; i++) {
     const d = days[i];
     const dayPill = document.createElement("div");
     dayPill.className = "cal-cell cal-head";
+    dayPill.dataset.dayIndex = String(i + 1);
+    if (todayCol === (i + 1)) dayPill.classList.add('is-today-col');
 
     const ab = document.createElement("div");
     ab.className = "cal-day-abbrev";
@@ -11329,170 +19238,105 @@ function renderCalendarioMonth(){
 
     dayPill.appendChild(ab);
     dayPill.appendChild(num);
-
     frag.appendChild(dayPill);
   }
 
-  for (let r = 1; r <= 6; r++) {
-    const pill = document.createElement("div");
-    pill.className = `cal-pill room room-${r}`;
-
-    const rn = document.createElement("span");
-    rn.className = "cal-room-num";
-    rn.textContent = String(r);
-    pill.appendChild(rn);
-
-    frag.appendChild(pill);
-
-    for (let i = 0; i < daysCount; i++) {
+  for (let r = 1; r <= roomsCount; r++) {
+    for (let i = 0; i < daysCount; ) {
       const d = days[i];
       const dIso = isoDate(d);
-
       const info = occ.get(`${dIso}:${r}`);
 
-      // Prenotazione: renderizza una sola "barra" che copre i giorni consecutivi (span)
-      if (info) {
-        let span = 1;
-        for (let j = i + 1; j < daysCount; j++) {
-          const d2Iso = isoDate(days[j]);
-          const info2 = occ.get(`${d2Iso}:${r}`);
-          if (info2 && String(info2.guestId) === String(info.guestId)) span++;
-          else break;
-        }
-
-        const endIdx = i + span - 1;
-        const endInfo = occ.get(`${isoDate(days[endIdx])}:${r}`);
-
+      if (!info) {
         const cell = document.createElement("button");
         cell.type = "button";
-        cell.className = `cal-cell room-${r} has-booking calendar-event-bar`;
-        cell.style.gridColumn = `span ${span}`;
-        cell.setAttribute("aria-label", `Stanza ${r}, ${weekdayShortIT(d)} ${d.getDate()} - ${days[endIdx].getDate()}`);
+        cell.className = `cal-cell room-${r}`;
+        cell.setAttribute("aria-label", `Stanza ${r}, ${weekdayShortIT(d)} ${d.getDate()}`);
         cell.dataset.date = dIso;
         cell.dataset.room = String(r);
-        cell.dataset.span = String(span);
-const openGuest = () => {
-          const ospite = findCalendarGuestById(info.guestId);
-          if (!ospite) return;
-          enterGuestViewMode(ospite);
-          showPage("ospite");
-        };
-
-        try{
-          const flags = document.createElement("div");
-          flags.className = "cal-flags";
-
-          const bindFlag = (el) => {
-            try{
-              el.tabIndex = 0;
-              el.setAttribute("role", "button");
-              el.addEventListener("click", (ev)=>{
-                try { ev.preventDefault(); } catch (_) {}
-                try { ev.stopPropagation(); } catch (_) {}
-                openGuest();
-              });
-              el.addEventListener("keydown", (ev)=>{
-                const k = ev && ev.key;
-                if (k === "Enter" || k === " ") {
-                  try { ev.preventDefault(); } catch (_) {}
-                  try { ev.stopPropagation(); } catch (_) {}
-                  openGuest();
-                }
-              });
-            }catch(_){}
-          };
-
-          if (info.mOn){
-            const f = document.createElement("span");
-            f.className = "cal-flag cal-flag-m";
-            f.textContent = "m";
-            bindFlag(f);
-            flags.appendChild(f);
-          }
-          if (info.cOn){
-            const f = document.createElement("span");
-            f.className = "cal-flag cal-flag-c";
-            f.textContent = "c";
-            bindFlag(f);
-            flags.appendChild(f);
-          }
-          if (info.gOn){
-            const f = document.createElement("span");
-            f.className = "cal-flag cal-flag-g";
-            f.textContent = "g";
-            bindFlag(f);
-            flags.appendChild(f);
-          }
-
-          if (flags.childNodes.length) cell.appendChild(flags);
-        }catch(_){ }
-
-        const inner = document.createElement("div");
-        inner.className = "cal-cell-inner";
-
-        const ini = document.createElement("div");
-        ini.className = "cal-initials";
-        ini.textContent = info.initials;
-        inner.appendChild(ini);
-
-        const dots = document.createElement("div");
-        dots.className = "cal-dots";
-        const arr = info.dots.slice(0, 4);
-        for (const t of arr) {
-          const s = document.createElement("span");
-          s.className = `bed-dot ${t === "m" ? "bed-dot-m" : t === "s" ? "bed-dot-s" : "bed-dot-c"}`;
-          dots.appendChild(s);
-        }
-        inner.appendChild(dots);
-
-        cell.appendChild(inner);
-
-        cell.addEventListener("click", (ev) => {
-          try{ const prev = grid.querySelector(".cal-cell.empty-selected"); if (prev) prev.classList.remove("empty-selected"); }catch(_){}
+        if (todayCol === (i + 1)) cell.classList.add('is-today-col');
+        cell.addEventListener("click", (ev)=>{
           try { ev.preventDefault(); } catch (_) {}
           try { ev.stopPropagation(); } catch (_) {}
-          openGuest();
+          try{
+            const prev = grid.querySelector(".cal-cell.empty-selected");
+            if (prev && prev !== cell) prev.classList.remove("empty-selected");
+            cell.classList.toggle("empty-selected");
+          }catch(_){ }
         });
-
         frag.appendChild(cell);
-
-        // Salta i giorni coperti dalla barra
-        i += (span - 1);
+        i += 1;
         continue;
       }
 
-      // Casella vuota
+      let span = 1;
+      while ((i + span) < daysCount) {
+        const nextInfo = occ.get(`${isoDate(days[i + span])}:${r}`);
+        if (!nextInfo) break;
+        if (String(nextInfo.guestId || '') !== String(info.guestId || '')) break;
+        span += 1;
+      }
+
       const cell = document.createElement("button");
       cell.type = "button";
-      cell.className = `cal-cell room-${r}`;
-      cell.setAttribute("aria-label", `Stanza ${r}, ${weekdayShortIT(d)} ${d.getDate()}`);
+      cell.className = `cal-cell room-${r} has-booking`;
       cell.dataset.date = dIso;
       cell.dataset.room = String(r);
+      cell.dataset.spanDays = String(span);
+      cell.style.gridColumn = `${i + 1} / span ${span}`;
+      cell.setAttribute("aria-label", span > 1
+        ? `Stanza ${r}, dal ${days[i].getDate()} al ${days[i + span - 1].getDate()}`
+        : `Stanza ${r}, ${weekdayShortIT(d)} ${d.getDate()}`);
 
-      cell.addEventListener("click", (ev)=>{
+      const coversToday = (todayCol >= (i + 1) && todayCol <= (i + span));
+      if (coversToday) cell.classList.add('is-today-col');
+      if (span === 1) cell.classList.add('booking-seg-single');
+      else cell.classList.add('booking-span-merged');
+
+      try{
+        const flags = document.createElement("div");
+        flags.className = "cal-flags";
+        if (info.mOn){ const f = document.createElement("span"); f.className = "cal-flag cal-flag-m"; f.textContent = "m"; flags.appendChild(f); }
+        if (info.cOn){ const f = document.createElement("span"); f.className = "cal-flag cal-flag-c"; f.textContent = "c"; flags.appendChild(f); }
+        if (info.gOn){ const f = document.createElement("span"); f.className = "cal-flag cal-flag-g"; f.textContent = "g"; flags.appendChild(f); }
+        if (flags.childNodes.length) cell.appendChild(flags);
+      }catch(_){ }
+
+      const inner = document.createElement("div");
+      inner.className = "cal-cell-inner";
+
+      const full = document.createElement("div");
+      full.className = `cal-fullname ${span <= 1 ? "is-single-cell" : "is-span-cell"}`;
+      full.textContent = __calendarGuestDisplayName__(info, span);
+      inner.appendChild(full);
+
+      const dots = document.createElement("div");
+      dots.className = "cal-dots";
+      for (const t of (Array.isArray(info.dots) ? info.dots : []).slice(0, 4)) {
+        const s = document.createElement("span");
+        s.className = `bed-dot ${t === "m" ? "bed-dot-m" : t === "s" ? "bed-dot-s" : "bed-dot-c"}`;
+        dots.appendChild(s);
+      }
+      if (dots.childNodes.length) inner.appendChild(dots);
+      cell.appendChild(inner);
+
+      cell.addEventListener("click", (ev) => {
+        try{ const prev = grid.querySelector(".cal-cell.empty-selected"); if (prev) prev.classList.remove("empty-selected"); }catch(_){ }
         try { ev.preventDefault(); } catch (_) {}
         try { ev.stopPropagation(); } catch (_) {}
-        try{
-          const prev = grid.querySelector(".cal-cell.empty-selected");
-          if (prev && prev !== cell) prev.classList.remove("empty-selected");
-          cell.classList.toggle("empty-selected");
-        }catch(_){}
+        const ospite = findCalendarGuestById(info.guestId);
+        if (!ospite) return;
+        enterGuestViewMode(ospite);
+        showPage("ospite");
       });
 
       frag.appendChild(cell);
+      i += span;
     }
   }
 
   grid.appendChild(frag);
-
-  // In landscape (solo vista mese) ridimensiona la griglia per rientrare nello schermo
-  try{ requestAnimationFrame(()=>{ try{ __fitCalendarioMonthLandscape(); }catch(_){ } }); }catch(_){ }
-}
-
-function findCalendarGuestById(id){
-  const gid = String(id ?? "").trim();
-  const arr = (state.calendar && Array.isArray(state.calendar.guests)) ? state.calendar.guests : [];
-  return arr.find(o => String(o.id ?? o.ID ?? o.ospite_id ?? o.ospiteId ?? o.guest_id ?? o.guestId ?? "").trim() === gid) || null;
+  try{ __scheduleCalendarioLayoutRefresh(); }catch(_){ }
 }
 
 function buildMonthOccupancy(monthStart, daysCount){
@@ -11518,11 +19362,10 @@ function buildMonthOccupancy(monthStart, daysCount){
       const st = g.stanze;
       if (Array.isArray(st)) roomsArr = st;
       else if (st != null && String(st).trim().length) {
-        const m = String(st).match(/[1-6]/g) || [];
-        roomsArr = m.map(x => parseInt(x, 10));
+        roomsArr = _parseRoomsArr(st);
       }
     } catch (_) {}
-    roomsArr = Array.from(new Set((roomsArr||[]).map(n=>parseInt(n,10)).filter(n=>isFinite(n) && n>=1 && n<=6))).sort((a,b)=>a-b);
+    roomsArr = normalizeRoomsList(roomsArr, 6);
     if (!roomsArr.length) continue;
 
     const initials = initialsFromName(g.nome || g.name || g.Nome || g.NOME || g.guestName || g.fullName || g.full_name || "");
@@ -11571,11 +19414,10 @@ function buildWeekOccupancy(weekStart){
       const st = g.stanze;
       if (Array.isArray(st)) roomsArr = st;
       else if (st != null && String(st).trim().length) {
-        const m = String(st).match(/[1-6]/g) || [];
-        roomsArr = m.map(x => parseInt(x, 10));
+        roomsArr = _parseRoomsArr(st);
       }
     } catch (_) {}
-    roomsArr = Array.from(new Set((roomsArr||[]).map(n=>parseInt(n,10)).filter(n=>isFinite(n) && n>=1 && n<=6))).sort((a,b)=>a-b);
+    roomsArr = normalizeRoomsList(roomsArr, 6);
     if (!roomsArr.length) continue;
 
     const initials = initialsFromName(g.nome || g.name || g.Nome || g.NOME || g.guestName || g.fullName || g.full_name || "");
@@ -11647,13 +19489,16 @@ function isoDate(date){
 }
 
 function weekdayShortIT(date){
-  const names = ["Dom","Lun","Mar","Mer","Gio","Ven","Sab"];
-  return names[new Date(date).getDay()];
+  try{
+    const label = __getWeekdayShortForLocale__(date);
+    return __capitalizeLocale__(label).replace('.', '');
+  }catch(_){ return ""; }
 }
 
 function monthNameIT(date){
-  const names = ["gennaio","febbraio","marzo","aprile","maggio","giugno","luglio","agosto","settembre","ottobre","novembre","dicembre"];
-  return names[new Date(date).getMonth()];
+  try{
+    return String(new Date(date).toLocaleDateString(__getCurrentLocale__(), { month:"long" }) || "");
+  }catch(_){ return ""; }
 }
 
 function romanWeekOfMonth(weekStart){
@@ -11678,28 +19523,30 @@ function toRoman(n){
 }
 
 
-(async ()=>{ try{ await init(); } catch(e){ console.error(e); try{ toast(e.message||"Errore"); }catch(_){ } } })();
-
-
-
-
 /* =========================
-   Lavanderia (dDAE_2.212)
+   Lavanderia (dDAE_1.020)
 ========================= */
-const LAUNDRY_COLS = ["MAT","SIN","FED","TDO","TFA","TBI","TAP","TPI"];
-const LAUNDRY_LABELS = {
-  MAT: "Matrimoniale",
-  SIN: "Singolo",
-  FED: "Federe",
-  // Teli (arancio)
-  TDO: "Telo doccia",
-  TFA: "Telo Faccia",
-  TBI: "Telo bidet",
-  // Eccezioni
-  TAP: "Tappeto",
-  TPI: "Telo Piscina",
-};
+function getLaundryLabelByCode(code, source){
+  const safe = __normalizeLaundryCode__(code);
+  if (!safe) return '';
+  const defs = source ? __getLaundryCatalogForRecord__(source) : getLaundryCatalogFromSettings();
+  const hit = defs.find(item => String(item?.abbreviazione || '') === safe);
+  return __laundryDisplayTitle__(hit || safe, safe) || safe;
+}
 
+function __laundryDefsFromSource__(source){
+  return source ? __getLaundryCatalogForRecord__(source) : getLaundryCatalogFromSettings();
+}
+
+function __laundryDeletedKey__(){
+  return "ddae_laundry_deleted_shared_board";
+}
+function __laundryDeletedIds__(){
+  return new Set();
+}
+function __laundryMarkDeleted__(id){
+  return;
+}
 function sanitizeLaundryItem_(it){
   it = it || {};
   const out = {};
@@ -11708,64 +19555,576 @@ function sanitizeLaundryItem_(it){
   out.endDate = String(it.endDate || it.end_date || it.to || "").trim();
   out.createdAt = String(it.createdAt || it.created_at || "").trim();
   out.updatedAt = String(it.updatedAt || it.updated_at || it.updatedAt || "").trim();
-  for (const k of LAUNDRY_COLS){
-    const n = Number(it[k]);
-    out[k] = isNaN(n) ? 0 : Math.max(0, Math.floor(n));
+  out.deletedAt = String(it.deletedAt || it.deleted_at || "").trim();
+  out.isDeleted = __normBool01(it.isDeleted ?? it.is_deleted ?? it.deleted);
+  out.is_deleted = out.isDeleted;
+  out.laundryCatalog = __getLaundryCatalogForRecord__(it);
+  const codes = out.laundryCatalog.map(item => String(item?.abbreviazione || '').trim()).filter(Boolean);
+  codes.forEach((k) => {
+    out[k] = 0;
+    out[`${k}_resi`] = 0;
+  });
+  out.laundryPrices = {};
+  out.laundryCatalog.forEach((item) => {
+    const code = String(item?.abbreviazione || '').trim();
+    if (!code) return;
+    out.laundryPrices[code] = Math.round((Number(item?.prezzo || 0) || 0) * 100) / 100;
+  });
+  Object.keys(it).forEach(rawKey => {
+    const key = String(rawKey || "").trim();
+    const lowered = key.toLowerCase();
+    let candidate = lowered;
+    if (/_resi$/i.test(key)) candidate = lowered.slice(0, -5);
+    else if (/_r$/i.test(key)) candidate = lowered.slice(0, -2);
+    else {
+      const maybe = lowered.slice(0, -1);
+      if (codes.some(c => c.toLowerCase() === maybe)) candidate = maybe;
+    }
+    const baseKey = codes.find(c => c.toLowerCase() === candidate);
+    if (!baseKey) return;
+    let n = Number(it[rawKey]);
+    if (!isFinite(n)) return;
+    n = Math.floor(n);
+    const isResKey = /_resi$/i.test(key) || /_r$/i.test(key) || (key.length === baseKey.length + 1 && key.toLowerCase().startsWith(baseKey.toLowerCase()) && key.toLowerCase().endsWith('r'));
+    if (isResKey){
+      out[`${baseKey}_resi`] += Math.max(0, Math.abs(n));
+    } else if (n < 0){
+      out[`${baseKey}_resi`] += Math.abs(n);
+    } else {
+      out[baseKey] += n;
+    }
+  });
+  if (it && typeof it.laundryPrices === 'object' && it.laundryPrices){
+    Object.keys(it.laundryPrices).forEach((rawKey) => {
+      const code = __normalizeLaundryCode__(rawKey);
+      if (!code) return;
+      const n = Number(String(it.laundryPrices?.[rawKey] ?? '').replace(',', '.'));
+      if (isFinite(n) && n >= 0) out.laundryPrices[code] = Math.round(n * 100) / 100;
+    });
   }
+  out.totalCost = (typeof it?.totalCost === 'number' && isFinite(it.totalCost)) ? Math.round(Number(it.totalCost) * 100) / 100 : __laundryComputeTotalCost__(out, out.laundryPrices);
   return out;
 }
 
 function setLaundryLabels_(){
-  for (const k of LAUNDRY_COLS){
-    const el = document.getElementById("laundryLbl"+k);
-    if (el) el.textContent = LAUNDRY_LABELS[k] || k;
+  try{
+    getLaundryCatalogFromSettings().forEach((item) => {
+      const code = String(item?.abbreviazione || '').trim();
+      const el = document.getElementById("laundryLbl" + code);
+      if (el) el.textContent = __laundryDisplayTitle__(item, code) || code;
+    });
+  }catch(_){ }
+}
+
+function __laundryDisplayPricesForCurrentView__(){
+  try{
+    const current = state?.laundry?.current || null;
+    if (current && current.laundryPrices && typeof current.laundryPrices === "object") return current.laundryPrices;
+  }catch(_){ }
+  return getLaundryPricesFromSettings();
+}
+
+function __laundryUpdatePriceHints__(){
+  try{
+    const prices = getLaundryPricesFromSettings();
+    getLaundryCatalogFromSettings().forEach((item) => {
+      const code = String(item?.abbreviazione || '').trim();
+      const tile = document.querySelector(`#laundryGrid .laundry-tile[data-key="${code}"]`);
+      if (!tile) return;
+      const n = Number(prices?.[code] || 0) || 0;
+      tile.setAttribute('title', `Costo ${__laundryDisplayTitle__(item, code) || code}: ${__laundryMoneyFmt__(n)}`);
+      tile.dataset.unitPrice = String(n.toFixed(2));
+    });
+  }catch(_){ }
+}
+
+async function __openLaundryPricePrompt__(key){
+  try{ await ensureSettingsLoaded({ force:false, showLoader:false }); }catch(_){ }
+  const label = getLaundryLabelByCode(key) || key;
+  const prices = getLaundryPricesFromSettings();
+  const current = Number(prices?.[key] || 0) || 0;
+  const raw = window.prompt(`Costo pulizia ${label} (${key})`, String(current).replace('.', ','));
+  if (raw === null) return;
+  const txt = String(raw || '').trim().replace(',', '.');
+  if (!txt){
+    prices[key] = 0;
+  } else {
+    const value = Number(txt);
+    if (!isFinite(value) || value < 0){
+      toast('Prezzo non valido', 'orange');
+      return;
+    }
+    prices[key] = Math.round(value * 100) / 100;
   }
+  await saveLaundryPricesToSettings(prices);
+  __laundryUpdatePriceHints__();
+  renderLaundry_(state?.laundry?.current || null);
+  try{ toast('Costo salvato', 'blue'); }catch(_){ }
+}
+
+function __ensureLaundryPricesModalBuilt__(){
+  const host = document.getElementById('laundryPricesList');
+  if (!host || host.dataset.ready === '1') return;
+  host.innerHTML = getLaundryCatalogFromSettings().map((item) => {
+    const k = String(item?.abbreviazione || '').trim();
+    const label = __laundryDisplayTitle__(item, k) || k;
+    return `<label class="laundry-price-row"><div class="laundry-price-copy"><div class="laundry-price-title">${label}</div><div class="laundry-price-code">${k}</div></div><input class="laundry-price-input" data-key="${k}" inputmode="decimal" min="0" step="0.01" type="number" /></label>`;
+  }).join('');
+  host.dataset.ready = '1';
+}
+
+async function __openLaundryPricesModal__(){
+  try{ await ensureSettingsLoaded({ force:false, showLoader:false }); }catch(_){ }
+  __ensureLaundryPricesModalBuilt__();
+  const modal = document.getElementById('laundryPricesModal');
+  if (!modal) return;
+  const prices = getLaundryPricesFromSettings();
+  getLaundryCatalogFromSettings().forEach((item) => {
+    const k = String(item?.abbreviazione || '').trim();
+    const input = modal.querySelector(`.laundry-price-input[data-key="${k}"]`);
+    if (!input) return;
+    const n = Number(prices?.[k] || 0) || 0;
+    input.value = n ? String(n.toFixed(2)) : '';
+  });
+  modal.hidden = false;
+  modal.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('modal-open');
+}
+
+function __closeLaundryPricesModal__(){
+  const modal = document.getElementById('laundryPricesModal');
+  if (!modal) return;
+  modal.hidden = true;
+  modal.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('modal-open');
+}
+
+async function __saveLaundryPricesModal__(){
+  const modal = document.getElementById('laundryPricesModal');
+  if (!modal) return;
+  const next = {};
+  for (const item of getLaundryCatalogFromSettings()){
+    const k = String(item?.abbreviazione || '').trim();
+    const input = modal.querySelector(`.laundry-price-input[data-key="${k}"]`);
+    const raw = String(input?.value ?? '').trim().replace(',', '.');
+    if (!raw){
+      next[k] = 0;
+      continue;
+    }
+    const n = Number(raw);
+    if (!isFinite(n) || n < 0){
+      if (input && typeof input.focus === 'function') input.focus();
+      throw new Error(`Prezzo non valido per ${__laundryDisplayTitle__(item, k) || k}`);
+    }
+    next[k] = Math.round(n * 100) / 100;
+  }
+  await saveLaundryPricesToSettings(next);
+  __laundryUpdatePriceHints__();
+  renderLaundry_(state?.laundry?.current || null);
+  __closeLaundryPricesModal__();
+  try{ toast('Costi salvati', 'blue'); }catch(_){ }
+}
+
+function __bindLaundryPriceLongPress__(){
+  const host = document.getElementById('laundryGrid');
+  if (!host || host.dataset.priceLongPressBound === '1') return;
+  host.dataset.priceLongPressBound = '1';
+  let timer = null;
+  let suppressClick = false;
+  let activeTile = null;
+  const clearPress = () => {
+    if (timer) { try{ clearTimeout(timer); }catch(_){ } }
+    timer = null;
+    activeTile = null;
+  };
+  const startPress = (ev) => {
+    const tile = ev.target && ev.target.closest ? ev.target.closest('.laundry-tile[data-key]') : null;
+    const key = tile ? String(tile.dataset.key || '').trim().toUpperCase() : '';
+    if (!tile || !getLaundryComponentCodes().includes(key)) return;
+    clearPress();
+    activeTile = tile;
+    suppressClick = false;
+    timer = setTimeout(async () => {
+      suppressClick = true;
+      const useKey = String(activeTile?.dataset?.key || key || '').trim().toUpperCase();
+      clearPress();
+      try{ await __openLaundryPricePrompt__(useKey); }catch(e){ try{ toast(e?.message || 'Errore', 'orange'); }catch(_){ } }
+      setTimeout(() => { suppressClick = false; }, 320);
+    }, 500);
+  };
+  host.addEventListener('pointerdown', startPress, { passive:true });
+  host.addEventListener('pointerup', clearPress, { passive:true });
+  host.addEventListener('pointerleave', clearPress, { passive:true });
+  host.addEventListener('pointercancel', clearPress, { passive:true });
+  host.addEventListener('click', (ev) => {
+    if (!suppressClick) return;
+    const tile = ev.target && ev.target.closest ? ev.target.closest('.laundry-tile[data-key]') : null;
+    const key = tile ? String(tile.dataset.key || '').trim().toUpperCase() : '';
+    if (!getLaundryComponentCodes().includes(key)) return;
+    ev.preventDefault();
+    ev.stopPropagation();
+  }, true);
 }
 
 function renderLaundry_(item){
-  item = item ? sanitizeLaundryItem_(item) : null;
   state.laundry.current = item;
+  const period = document.getElementById("laundryPeriodLabel");
+  const printRange = document.getElementById("laundryPrintRange");
+  const tbody = document.getElementById("laundryPrintBody");
+  const safeItem = item ? sanitizeLaundryItem_(item) : null;
+  const defs = __laundryDefsFromSource__(safeItem || null);
+  const pricesForView = safeItem?.laundryPrices && typeof safeItem?.laundryPrices === 'object' ? safeItem.laundryPrices : __laundryDisplayPricesForCurrentView__();
 
-  const rangeEl = document.getElementById("laundryPeriodLabel");
-  const printRangeEl = document.getElementById("laundryPrintRange");
+  __bindLaundryPriceLongPress__();
+  __laundryUpdatePriceHints__();
 
-  if (!item){
-    if (rangeEl){ rangeEl.hidden = true; rangeEl.textContent = ""; }
-    if (printRangeEl) printRangeEl.textContent = "";
-    for (const k of LAUNDRY_COLS){
-      const v = document.getElementById("laundryVal"+k);
+  if (!safeItem){
+    if (period) { period.hidden = true; period.textContent = "—"; }
+    if (printRange) printRange.textContent = "—";
+    defs.forEach((def) => {
+      const code = String(def?.abbreviazione || '').trim();
+      const v = document.getElementById("laundryVal" + code);
       if (v) v.textContent = "0";
-    }
-    const tbody = document.getElementById("laundryPrintBody");
+    });
+    const totalEl = document.getElementById('laundryValTOTAL');
+    if (totalEl) totalEl.textContent = __laundryMoneyFmt__(0);
     if (tbody) tbody.innerHTML = "";
     return;
   }
 
-  const startLbl = item.startDate ? formatLongDateIT(item.startDate) : "";
-  const endLbl = item.endDate ? formatLongDateIT(item.endDate) : "";
-  const rangeText = (startLbl && endLbl) ? `${startLbl} – ${endLbl}` : (startLbl || endLbl || "—");
-  if (rangeEl){ rangeEl.hidden = false; rangeEl.innerHTML = `<b>${rangeText}</b>`; }
-  if (printRangeEl) printRangeEl.textContent = rangeText;
+  const startLbl = safeItem.startDate ? formatLongDateIT(safeItem.startDate) : String(safeItem.startDate || "");
+  const endLbl = safeItem.endDate ? formatLongDateIT(safeItem.endDate) : String(safeItem.endDate || "");
+  const rangeText = (startLbl && endLbl) ? `${startLbl} → ${endLbl}` : "—";
 
-  for (const k of LAUNDRY_COLS){
-    const v = document.getElementById("laundryVal"+k);
-    if (v) v.textContent = String(item[k] || 0);
+  if (period){
+    period.hidden = false;
+    period.innerHTML = `<b>${rangeText}</b>`;
   }
+  if (printRange) printRange.textContent = rangeText;
 
-  const tbody = document.getElementById("laundryPrintBody");
+  defs.forEach((def) => {
+    const code = String(def?.abbreviazione || '').trim();
+    const v = document.getElementById("laundryVal" + code);
+    if (!v) return;
+    const qty = Number(safeItem?.[code] || 0) || 0;
+    const resi = Number(safeItem?.[`${code}_resi`] || 0) || 0;
+    if (resi > 0) v.innerHTML = `${qty}<span class="laundry-resi"> (${resi})</span>`;
+    else v.textContent = String(qty);
+  });
+
+  const computedTotal = (typeof safeItem?.totalCost === 'number' && isFinite(safeItem.totalCost))
+    ? Math.round(Number(safeItem.totalCost) * 100) / 100
+    : __laundryComputeTotalCost__(safeItem, pricesForView);
+  const totalEl = document.getElementById('laundryValTOTAL');
+  if (totalEl) totalEl.textContent = __laundryMoneyFmt__(computedTotal);
+
   if (tbody){
-    tbody.innerHTML = LAUNDRY_COLS.map(k => {
-      const label = LAUNDRY_LABELS[k] || k;
-      const val = String(item[k] || 0);
-      return `<tr><td><b>${label}</b> <span style="opacity:.7">(${k})</span></td><td style="text-align:right;font-weight:950">${val}</td></tr>`;
-    }).join("");
+    tbody.innerHTML = defs.map((def) => {
+      const code = String(def?.abbreviazione || '').trim();
+      const label = __laundryDisplayTitle__(def, code) || code;
+      const qty = Number(safeItem?.[code] || 0) || 0;
+      const resi = Number(safeItem?.[`${code}_resi`] || 0) || 0;
+      const unit = Number(pricesForView?.[code] ?? def?.prezzo ?? 0) || 0;
+      const subtotal = Math.round((qty * unit) * 100) / 100;
+      const qtyHtml = resi > 0 ? `${qty}<span class="laundry-resi"> (${resi})</span>` : `${qty}`;
+      return `<tr><td><b>${label}</b> <span style="opacity:.7">(${code})</span></td><td style="text-align:right;font-weight:950">${qtyHtml} · ${__laundryMoneyFmt__(subtotal)}</td></tr>`;
+    }).join('') + `<tr><td><b>Costo totale</b></td><td style="text-align:right;font-weight:950">${__laundryMoneyFmt__(computedTotal)}</td></tr>`;
   }
+}
+
+function __laundryReportRangeText__(item){
+  const startLbl = item?.startDate ? formatLongDateIT(item.startDate) : String(item?.startDate || "");
+  const endLbl = item?.endDate ? formatLongDateIT(item.endDate) : String(item?.endDate || "");
+  return (startLbl && endLbl) ? `${startLbl} → ${endLbl}` : "—";
+}
+
+function __buildLaundryDetailShareText__(raw){
+  const item = sanitizeLaundryItem_(raw || {});
+  const prices = item?.laundryPrices && typeof item.laundryPrices === 'object' ? item.laundryPrices : __laundryDisplayPricesForCurrentView__();
+  let imponibile = 0;
+  const defs = __laundryDefsFromSource__(item);
+  const rows = defs.map((def) => {
+    const k = String(def?.abbreviazione || '').trim();
+    const qty = Math.max(0, Number(item?.[k] || 0) || 0);
+    const resi = Math.max(0, Number(item?.[`${k}_resi`] || 0) || 0);
+    const unit = Math.max(0, Number(prices?.[k] ?? def?.prezzo ?? 0) || 0);
+    const subtotal = Math.round(qty * unit * 100) / 100;
+    imponibile += subtotal;
+    const qtyText = resi > 0 ? `${qty} (${resi})` : `${qty}`;
+    return `- ${__laundryDisplayTitle__(def, k) || k} (${k}): ${qtyText} x ${__laundryMoneyFmt__(unit)} = ${__laundryMoneyFmt__(subtotal)}`;
+  });
+  imponibile = Math.round(imponibile * 100) / 100;
+  const ivato = Math.round(imponibile * 1.22 * 100) / 100;
+  return [
+    'Report lavanderia',
+    __laundryReportRangeText__(item),
+    '',
+    ...rows,
+    '',
+    `Imponibile: ${__laundryMoneyFmt__(imponibile)}`,
+    `Totale IVA 22%: ${__laundryMoneyFmt__(ivato)}`
+  ].join('\n');
+}
+
+function __laundryRoundRect__(ctx, x, y, w, h, r){
+  const rr = Math.min(r, w / 2, h / 2);
+  ctx.beginPath();
+  ctx.moveTo(x + rr, y);
+  ctx.arcTo(x + w, y, x + w, y + h, rr);
+  ctx.arcTo(x + w, y + h, x, y + h, rr);
+  ctx.arcTo(x, y + h, x, y, rr);
+  ctx.arcTo(x, y, x + w, y, rr);
+  ctx.closePath();
+}
+
+function __laundryDetailFileName__(item){
+  const from = String(item?.startDate || '').replace(/[^0-9]/g, '') || 'report';
+  const to = String(item?.endDate || '').replace(/[^0-9]/g, '') || 'lavanderia';
+  return __safeFileName__(`dDAE_Lavanderia_${from}_${to}.png`);
+}
+
+async function __laundryDetailImageBlob__(raw){
+  const item = sanitizeLaundryItem_(raw || {});
+  const prices = item?.laundryPrices && typeof item.laundryPrices === 'object' ? item.laundryPrices : __laundryDisplayPricesForCurrentView__();
+  try{ if (document.fonts && document.fonts.ready) await document.fonts.ready; }catch(_){ }
+
+  const defs = __laundryDefsFromSource__(item);
+  const rows = defs.map((def) => {
+    const k = String(def?.abbreviazione || '').trim();
+    const qty = Math.max(0, Number(item?.[k] || 0) || 0);
+    const resi = Math.max(0, Number(item?.[`${k}_resi`] || 0) || 0);
+    const unit = Math.max(0, Number(prices?.[k] ?? def?.prezzo ?? 0) || 0);
+    const subtotal = Math.round(qty * unit * 100) / 100;
+    return { key:k, label: __laundryDisplayTitle__(def, k) || k, qty, resi, unit, subtotal, colors: __laundryColorTokens__(def?.colore || 'blue') };
+  });
+  const imponibile = Math.round(rows.reduce((acc, row) => acc + row.subtotal, 0) * 100) / 100;
+  const ivato = Math.round(imponibile * 1.22 * 100) / 100;
+  const width = 1200;
+  const outerPad = 36;
+  const cardPadX = 46;
+  const cardPadTop = 42;
+  const rowHeight = 120;
+  const rowGap = 18;
+  const totalsHeight = 92;
+  const cardHeight = cardPadTop + 150 + rows.length * rowHeight + (rows.length - 1) * rowGap + 28 + totalsHeight + 42;
+  const height = cardHeight + outerPad * 2;
+
+  const canvas = document.createElement('canvas');
+  canvas.width = width;
+  canvas.height = height;
+  const ctx = canvas.getContext('2d');
+  if (!ctx) throw new Error('Canvas non disponibile');
+
+  ctx.clearRect(0, 0, width, height);
+  const cardX = outerPad;
+  const cardY = outerPad;
+  const cardW = width - outerPad * 2;
+  const cardH = cardHeight;
+
+  ctx.save();
+  ctx.shadowColor = 'rgba(11,31,58,0.12)';
+  ctx.shadowBlur = 26;
+  ctx.shadowOffsetY = 10;
+  __laundryRoundRect__(ctx, cardX, cardY, cardW, cardH, 42);
+  ctx.fillStyle = '#f6fbff';
+  ctx.fill();
+  ctx.restore();
+
+  ctx.fillStyle = '#4d9cc5';
+  ctx.font = '900 24px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+  ctx.letterSpacing = '0';
+  ctx.fillText('REPORT LAVANDERIA', cardX + cardPadX, cardY + 54);
+
+  ctx.fillStyle = '#0b1f3a';
+  ctx.font = '900 52px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+  ctx.fillText('Dettaglio economico', cardX + cardPadX, cardY + 122);
+
+  ctx.fillStyle = 'rgba(11,31,58,0.78)';
+  ctx.font = '800 30px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+  ctx.fillText(__laundryReportRangeText__(item), cardX + cardPadX, cardY + 178);
+
+  let y = cardY + 212;
+  const rowX = cardX + 32;
+  const rowW = cardW - 64;
+  rows.forEach((row) => {
+    const colors = row?.colors || __laundryColorTokens__('blue');
+    __laundryRoundRect__(ctx, rowX, y, rowW, rowHeight, 34);
+    ctx.fillStyle = colors.rowBg;
+    ctx.fill();
+    ctx.lineWidth = 2;
+    ctx.strokeStyle = colors.rowBorder;
+    ctx.stroke();
+
+    const boxY = y + 14;
+    __laundryRoundRect__(ctx, rowX + 18, boxY, 92, 92, 24);
+    ctx.fillStyle = colors.badgePrimaryBg;
+    ctx.fill();
+    __laundryRoundRect__(ctx, rowX + 128, boxY, 92, 92, 24);
+    ctx.fillStyle = colors.badgeSecondaryBg;
+    ctx.fill();
+
+    ctx.fillStyle = colors.badgePrimaryText;
+    ctx.textAlign = 'center';
+    ctx.font = '900 28px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+    ctx.fillText(String(row.qty), rowX + 64, y + 56);
+    ctx.font = '900 14px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+    ctx.fillText('USATI', rowX + 64, y + 88);
+
+    ctx.fillStyle = colors.badgeSecondaryText;
+    ctx.font = '900 28px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+    ctx.fillText(String(row.resi), rowX + 174, y + 56);
+    ctx.font = '900 14px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+    ctx.fillText('RESI', rowX + 174, y + 88);
+
+    ctx.textAlign = 'left';
+    ctx.fillStyle = colors.label;
+    ctx.font = '900 28px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+    ctx.fillText(row.label, rowX + 250, y + 58);
+    ctx.fillStyle = colors.meta;
+    ctx.font = '700 22px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+    ctx.fillText(`${__laundryMoneyFmt__(row.unit)} / pezzo`, rowX + 250, y + 94);
+
+    ctx.textAlign = 'right';
+    ctx.fillStyle = colors.price;
+    ctx.font = '900 30px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+    ctx.fillText(__laundryMoneyFmt__(row.subtotal), rowX + rowW - 32, y + 74);
+
+    y += rowHeight + rowGap;
+  });
+
+  const totalsY = y + 10;
+  const totalsGap = 20;
+  const totalsW = (rowW - totalsGap) / 2;
+  __laundryRoundRect__(ctx, rowX, totalsY, totalsW, totalsHeight, 28);
+  ctx.fillStyle = '#0b1f3a';
+  ctx.fill();
+  __laundryRoundRect__(ctx, rowX + totalsW + totalsGap, totalsY, totalsW, totalsHeight, 28);
+  ctx.fillStyle = '#4d9cc5';
+  ctx.fill();
+
+  ctx.textAlign = 'left';
+  ctx.fillStyle = '#ffffff';
+  ctx.font = '900 24px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+  ctx.fillText('Imponibile', rowX + 26, totalsY + 52);
+  ctx.textAlign = 'right';
+  ctx.font = '900 34px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+  ctx.fillText(__laundryMoneyFmt__(imponibile), rowX + totalsW - 26, totalsY + 58);
+
+  ctx.textAlign = 'left';
+  ctx.font = '900 22px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+  ctx.fillText('Totale IVA', rowX + totalsW + totalsGap + 26, totalsY + 42);
+  ctx.fillText('22%', rowX + totalsW + totalsGap + 26, totalsY + 72);
+  ctx.textAlign = 'right';
+  ctx.font = '900 34px -apple-system, BlinkMacSystemFont, Segoe UI, Roboto, Arial, sans-serif';
+  ctx.fillText(__laundryMoneyFmt__(ivato), rowX + rowW - 26, totalsY + 58);
+
+  const blob = await new Promise((resolve) => canvas.toBlob(resolve, 'image/png', 1));
+  if (blob) return blob;
+  const dataUrl = canvas.toDataURL('image/png');
+  const base64 = dataUrl.split(',')[1] || '';
+  const bin = atob(base64);
+  const arr = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i += 1) arr[i] = bin.charCodeAt(i);
+  return new Blob([arr], { type: 'image/png' });
+}
+
+async function __shareLaundryDetail__(raw){
+  const item = sanitizeLaundryItem_(raw || {});
+  const blob = await __laundryDetailImageBlob__(item);
+  const filename = __laundryDetailFileName__(item);
+  const file = new File([blob], filename, { type: 'image/png' });
+  try{
+    if (navigator.canShare && navigator.canShare({ files:[file] })) {
+      await navigator.share({ title: 'Report lavanderia', files:[file] });
+      return true;
+    }
+  }catch(err){
+    if (err && err.name === 'AbortError') return false;
+  }
+  const url = URL.createObjectURL(blob);
+  try{
+    const a = document.createElement('a');
+    a.href = url;
+    a.download = filename;
+    document.body.appendChild(a);
+    try{ a.click(); }catch(_){ }
+    try{ document.body.removeChild(a); }catch(_){ }
+    try{ toast('Immagine report pronta', 'blue'); }catch(_){ }
+    return true;
+  }catch(_){
+    return false;
+  }finally{
+    setTimeout(() => { try{ URL.revokeObjectURL(url); }catch(_){ } }, 1200);
+  }
+}
+
+function __openLaundryDetailModal__(raw){
+  const item = sanitizeLaundryItem_(raw || {});
+  const modal = document.getElementById('laundryDetailModal');
+  const title = document.getElementById('laundryDetailTitle');
+  const range = document.getElementById('laundryDetailRange');
+  const list = document.getElementById('laundryDetailList');
+  const netEl = document.getElementById('laundryDetailNet');
+  const vatEl = document.getElementById('laundryDetailVat');
+  const shareBtn = document.getElementById('laundryDetailShare');
+  if (!modal || !title || !range || !list || !netEl || !vatEl) return;
+  const prices = item?.laundryPrices && typeof item.laundryPrices === 'object' ? item.laundryPrices : __laundryDisplayPricesForCurrentView__();
+  const rangeText = __laundryReportRangeText__(item);
+  title.textContent = 'Dettaglio economico';
+  range.textContent = rangeText;
+  let imponibile = 0;
+  const defs = __laundryDefsFromSource__(item);
+  list.innerHTML = defs.map((def) => {
+    const k = String(def?.abbreviazione || '').trim();
+    const qty = Math.max(0, Number(item?.[k] || 0) || 0);
+    const resi = Math.max(0, Number(item?.[`${k}_resi`] || 0) || 0);
+    const unit = Math.max(0, Number(prices?.[k] ?? def?.prezzo ?? 0) || 0);
+    const subtotal = Math.round(qty * unit * 100) / 100;
+    const colors = __laundryColorTokens__(def?.colore || 'blue');
+    imponibile += subtotal;
+    const style = [
+      `--laundry-report-row-bg:${colors.rowBg}`,
+      `--laundry-report-row-border:${colors.rowBorder}`,
+      `--laundry-report-badge-primary-bg:${colors.badgePrimaryBg}`,
+      `--laundry-report-badge-primary-text:${colors.badgePrimaryText}`,
+      `--laundry-report-badge-secondary-bg:${colors.badgeSecondaryBg}`,
+      `--laundry-report-badge-secondary-text:${colors.badgeSecondaryText}`,
+      `--laundry-report-label:${colors.label}`,
+      `--laundry-report-meta:${colors.meta}`,
+      `--laundry-report-price:${colors.price}`
+    ].join(';');
+    return `<div class="laundry-detail-row" style="${__laundryEscapeAttr__(style)}"><div class="laundry-detail-rowLeft"><div class="laundry-detail-badges"><div class="laundry-detail-code"><span class="laundry-detail-codeValue">${qty}</span><span class="laundry-detail-codeLabel">usati</span></div><div class="laundry-detail-code laundry-detail-code--secondary"><span class="laundry-detail-codeValue">${resi}</span><span class="laundry-detail-codeLabel">resi</span></div></div><div class="laundry-detail-copy"><div class="laundry-detail-label">${escapeHtml(__laundryDisplayTitle__(def, k) || k)}</div><div class="laundry-detail-meta">${__laundryMoneyFmt__(unit)} / pezzo</div></div></div><div class="laundry-detail-price">${__laundryMoneyFmt__(subtotal)}</div></div>`;
+  }).join('');
+  imponibile = Math.round(imponibile * 100) / 100;
+  const ivato = Math.round(imponibile * 1.22 * 100) / 100;
+  netEl.textContent = __laundryMoneyFmt__(imponibile);
+  vatEl.textContent = __laundryMoneyFmt__(ivato);
+  modal.__currentLaundryItem = item;
+  if (shareBtn && !shareBtn.__boundLaundryShare){
+    shareBtn.__boundLaundryShare = true;
+    bindFastTap(shareBtn, async () => {
+      try{ await __shareLaundryDetail__(modal.__currentLaundryItem || item); }catch(_){ toast('Condivisione non disponibile'); }
+    });
+  }
+  modal.hidden = false;
+  modal.setAttribute('aria-hidden', 'false');
+  document.body.classList.add('modal-open');
+}
+
+function __closeLaundryDetailModal__(){
+  const modal = document.getElementById('laundryDetailModal');
+  if (!modal) return;
+  modal.hidden = true;
+  modal.setAttribute('aria-hidden', 'true');
+  document.body.classList.remove('modal-open');
 }
 
 function renderLaundryHistory_(list){
   const host = document.getElementById("laundryHistory");
   if (!host) return;
   host.innerHTML = "";
+
+  try{ list = (Array.isArray(list)?list:[]).filter(it => !(it && (it.isDeleted || it.is_deleted))); }catch(_){ }
 
   if (!list || !list.length){
     const empty = document.createElement("div");
@@ -11778,8 +20137,9 @@ function renderLaundryHistory_(list){
 
   list.forEach((raw) => {
     const it = sanitizeLaundryItem_(raw);
-    const btn = document.createElement("button");
-    btn.type = "button";
+    const btn = document.createElement("div");
+    btn.setAttribute("role","button");
+    btn.tabIndex = 0;
     btn.className = "item";
     btn.style.width = "100%";
     btn.style.textAlign = "left";
@@ -11805,6 +20165,7 @@ function renderLaundryHistory_(list){
       try {
         ev && ev.preventDefault && ev.preventDefault();
         ev && ev.stopPropagation && ev.stopPropagation();
+        ev && ev.stopImmediatePropagation && ev.stopImmediatePropagation();
       } catch(_){}
 
       // Anti-doppio tap / tocchi multipli
@@ -11822,8 +20183,23 @@ function renderLaundryHistory_(list){
       del.disabled = true;
       del.innerHTML = `<span class="spinner" aria-hidden="true"></span>`;
 
+      // Nascondi subito in UI (e persisti localmente) per evitare che resti visibile
+      try{ __laundryMarkDeleted__(it.id); }catch(_){ }
       try{
-        await api("lavanderia", { method:"DELETE", body:{ id: it.id }, showLoader:true });
+        if (state && state.laundry && Array.isArray(state.laundry.list)){
+          state.laundry.list = state.laundry.list.filter(x => String(x && x.id) !== String(it.id));
+        }
+      }catch(_){ }
+      try{ btn && btn.remove && btn.remove(); }catch(_){ }
+
+      try{
+        try{
+          // Soft-delete (preferito): marca come eliminato
+          await api("lavanderia", { method:"PUT", body:{ id: it.id, isDeleted:true, is_deleted:true }, showLoader:true });
+        }catch(_e){
+          // Fallback: DELETE
+          await api("lavanderia", { method:"DELETE", body:{ id: it.id }, showLoader:true });
+        }
         toast("Report eliminato");
         await loadLavanderia();
       }catch(e){
@@ -11852,7 +20228,7 @@ function renderLaundryHistory_(list){
 
     bindFastTap(btn, () => {
       renderLaundry_(it);
-      // scroll su
+      try{ __openLaundryDetailModal__(it); }catch(_){ }
       try{ window.scrollTo({ top: 0, behavior: "smooth" }); }catch(_){
         window.scrollTo(0,0);
       }
@@ -11875,6 +20251,9 @@ function syncLaundryDateText_(){
 
 async function loadLavanderia() {
   setLaundryLabels_();
+  try{ await ensureSettingsLoaded({ force:false, showLoader:false }); }catch(_){ }
+  __bindLaundryPriceLongPress__();
+  __laundryUpdatePriceHints__();
   const hint = document.getElementById("laundryHint");
   try {
     const res = await api("lavanderia", { method:"GET", showLoader:false });
@@ -11883,7 +20262,13 @@ async function loadLavanderia() {
       : (res && res.data && Array.isArray(res.data.data) ? res.data.data
       : (res && Array.isArray(res.rows) ? res.rows
       : [])));
-    const list = (rows || []).map(sanitizeLaundryItem_).sort((a,b) => String(b.endDate||"").localeCompare(String(a.endDate||"")));
+    const rawList = (rows || []).map(sanitizeLaundryItem_);
+    const list = rawList.filter(it => !(it && (it.isDeleted || it.is_deleted))).sort((a,b) => {
+      const byEnd = String(b.endDate||"").localeCompare(String(a.endDate||""));
+      if (byEnd) return byEnd;
+      return String(b.updatedAt||b.createdAt||"").localeCompare(String(a.updatedAt||a.createdAt||""));
+    });
+
     state.laundry.list = list;
     renderLaundryHistory_(list);
     renderLaundry_(list[0] || null);
@@ -11937,16 +20322,15 @@ async function registerSW(){
 
     const checkUpdate = () => {
       try {
-        if (!reg || typeof reg.update !== "function") return;
-        const p = reg.update();
-        // Safari/iOS può rigettare la Promise con:
-        // "Cannot update a null/nonexistent service worker registration"
-        if (p && typeof p.then === "function") p.catch(() => {});
+        const p = reg?.update?.();
+        // Safari/iOS può rigettare la Promise con "Cannot update a null/nonexistent service worker registration"
+        // se la registration è stata invalidata: evitiamo un unhandled rejection.
+        if (p && typeof p.catch === "function") p.catch(() => {});
       } catch (_) {}
     };
 
-    // check (leggermente differito) + quando torna in primo piano
-    setTimeout(checkUpdate, 250);
+    // check immediato + quando torna in primo piano
+    checkUpdate();
     window.addEventListener("focus", checkUpdate);
     document.addEventListener("visibilitychange", () => {
       if (!document.hidden) checkUpdate();
@@ -12086,7 +20470,7 @@ document.getElementById('rc_cancel')?.addEventListener('click', ()=>{
 // --- end room beds config ---
 
 
-// --- FIX dDAE_2.212: renderSpese allineato al backend ---
+// --- FIX dDAE_1.020: renderSpese allineato al backend ---
 // --- dDAE: Spese riga singola (senza IVA in visualizzazione) ---
 function renderSpese(){
   const list = document.getElementById("speseList");
@@ -12182,7 +20566,7 @@ function renderSpese(){
 
 
 
-// --- FIX dDAE_2.212: delete reale ospiti ---
+// --- FIX dDAE_1.020: delete reale ospiti ---
 function attachDeleteOspite(card, ospite){
   const btn = document.createElement("button");
   btn.className = "delbtn";
@@ -12193,6 +20577,7 @@ function attachDeleteOspite(card, ospite){
     await api("ospiti", { method:"DELETE", params:{ id: ospite.id } });
     toast("Ospite eliminato");
     invalidateApiCache("ospiti|");
+    try{ refreshTopGuestAlerts({ force:true }); }catch(_){ }
     invalidateApiCache("stanze|");
     try{ if (state.calendar){ state.calendar.ready = false; state.calendar.rangeKey = ""; } }catch(_){ }
     await loadOspiti({ ...(state.period || {}), force:true });
@@ -12218,7 +20603,7 @@ function attachDeleteOspite(card, ospite){
 })();
 
 
-// --- FIX dDAE_2.212: mostra nome ospite ---
+// --- FIX dDAE_1.020: mostra nome ospite ---
 (function(){
   const orig = window.renderOspiti;
   if (!orig) return;
@@ -12398,7 +20783,8 @@ function buildTaxReportText(){
   lines.push(`Schede incluse: ${t.schede} (${t.mode === "stima" ? "tutte (anche non taggate)" : "solo taggate (PS o ISTAT)"})`);
   lines.push(`Adulti (somma): ${t.adultsTot}`);
   lines.push(`Bambini <10 (somma): ${t.kidsTot || 0}`);
-  lines.push(`Giorni tassabili (somma, max 3/notte per scheda): ${t.taxableDaysTot}`);
+  const maxTaxNights = Math.max(0, parseInt(getTouristTaxMaxNightsSetting(3), 10) || 0);
+  lines.push(`Giorni tassabili (somma, max ${maxTaxNights}/scheda): ${t.taxableDaysTot}`);
   lines.push("");
   lines.push(`Tariffa: ${formatEUR(t.rate)} / persona / notte`);
   lines.push("");
@@ -12529,7 +20915,7 @@ function initTassaPage(){
 
 /* =========================
    Ore pulizia (Calendario ore operatori)
-   Build: dDAE_2.212
+   Build: dDAE_1.020
 ========================= */
 
 state.orepulizia = state.orepulizia || {
@@ -12551,27 +20937,33 @@ function formatMonthYearIT_(monthKey){
   const parts = monthKey.split("-").map(n=>parseInt(n,10));
   const y = parts[0], m = parts[1];
   const dt = new Date(y, (m-1), 1);
-  const s = dt.toLocaleDateString("it-IT", { month:"long", year:"numeric" });
+  const s = dt.toLocaleDateString(__getCurrentLocale__(), { month:"long", year:"numeric" });
   return __capitalizeFirst_(s);
 }
 
 function __fmtHours_(h){
   const n = Number(h||0);
   if (!isFinite(n) || n <= 0) return "";
-  // 2 dec max, no trailing zeros
-  let s = (Math.round(n * 100) / 100).toFixed(2);
-  s = s.replace(/\.00$/, "").replace(/0$/, "");
-  // italiano: virgola
-  s = s.replace(".", ",");
-  return s;
+  const rounded = Math.round(n * 100) / 100;
+  try{
+    return new Intl.NumberFormat(__getCurrentLocale__(), { minimumFractionDigits: 0, maximumFractionDigits: 2 }).format(rounded);
+  }catch(_){
+    let s = rounded.toFixed(2);
+    s = s.replace(/\.00$/, "").replace(/0$/, "");
+    return s.replace(".", ",");
+  }
 }
 
 function __fmtMoneyNoSpace_(amount){
   const n = Number(amount || 0);
   if (!isFinite(n)) return "—";
-  // Formato italiano senza spazio prima di €
-  const s = n.toLocaleString("it-IT", { minimumFractionDigits: 2, maximumFractionDigits: 2 });
-  return s + "€";
+  try{
+    const parts = new Intl.NumberFormat(__getCurrentLocale__(), { style:"currency", currency:"EUR", minimumFractionDigits: 2, maximumFractionDigits: 2 }).formatToParts(n);
+    return parts.map((part) => part.type === "literal" ? "" : part.value).join("");
+  }catch(_){
+    const s = n.toLocaleString(__getCurrentLocale__(), { minimumFractionDigits: 2, maximumFractionDigits: 2 });
+    return s + "€";
+  }
 }
 
 
@@ -12651,48 +21043,46 @@ function __renderOrePuliziaCalendar_(){
   const dowMon0 = (jsDow + 6) % 7; // convert to Mon=0
   const totalCells = 42; // 6 settimane
 
-  // ore per giorno
+  // ore per giorno + costi per operatore
   const rows = state.orepulizia.rows || [];
   const hoursByDay = new Map();
+  let totalHours = 0;
+  let totalImporto = 0;
+  let presenze = 0;
+  let presenzeImporto = 0;
+  const presenceKeys = new Set();
   rows.forEach(r=>{
-    const iso = formatISODateLocal(r.data || r.date || r.Data || "");
+    const iso = formatISODateLocal(r.data || r.date || r.Data || '');
     if (!iso) return;
-    if (!iso.startsWith(monthKey + "-")) return;
+    if (!iso.startsWith(monthKey + '-')) return;
 
-    const oper = String(r.operatore || r.nome || "").trim();
-    if (op && op !== "__ALL__" && oper !== op) return;
+    const oper = String(r.operatore || r.nome || '').trim();
+    if (op && op !== '__ALL__' && String(oper||'').trim().toLowerCase() !== String(op||'').trim().toLowerCase()) return;
 
-    const oreRaw = (r.ore !== undefined && r.ore !== null) ? r.ore : (r.Ore !== undefined ? r.Ore : "");
-    const ore = Number(String(oreRaw).trim().replace(",", "."));
+    const oreRaw = (r.ore !== undefined && r.ore !== null) ? r.ore : (r.Ore !== undefined ? r.Ore : '');
+    const ore = Number(String(oreRaw).trim().replace(',', '.'));
     if (!isFinite(ore) || ore <= 0) return;
 
     const d = parseInt(iso.slice(8,10), 10);
     if (!d) return;
     hoursByDay.set(d, (hoursByDay.get(d) || 0) + ore);
+    totalHours += ore;
+
+    const tariffaOperatore = getOperatoreTariffaByName(oper, Number(r?.tariffa_euro ?? 0));
+    totalImporto += ore * tariffaOperatore;
+
+    const presenceKey = `${iso}|${String(oper || '').trim().toLowerCase()}`;
+    if (!presenceKeys.has(presenceKey)){
+      presenceKeys.add(presenceKey);
+      presenze += 1;
+      const benzinaOperatore = getOperatoreBenzinaByName(oper, Number(r?.benzina_unit_euro ?? r?.benzina_euro ?? 0));
+      presenzeImporto += benzinaOperatore;
+    }
   });
 
-  // stats
-  let totalHours = 0;
-  let presenze = 0;
-  for (const h of hoursByDay.values()){
-    if (h > 0){
-      totalHours += h;
-      presenze += 1;
-    }
-  }
-
-  // Tariffe da impostazioni
-  // - tariffa_oraria: €/ora
-  // - costo_benzina: €/presenza (giorno con ore)
-  const tariffaOraria = (state.settings && state.settings.loaded) ? getSettingNumber("tariffa_oraria", 0) : 0;
-  const costoBenzinaPerPresenza = (state.settings && state.settings.loaded) ? getSettingNumber("costo_benzina", 0) : 0;
-
   const hoursStr = __fmtHours_(totalHours);
-  const totalImporto = (isFinite(totalHours) && isFinite(tariffaOraria)) ? (totalHours * tariffaOraria) : 0;
-  const totalImportoStr = (tariffaOraria > 0) ? __fmtMoneyNoSpace_(totalImporto) : "—";
-
-  const presenzeImporto = (isFinite(presenze) && isFinite(costoBenzinaPerPresenza)) ? (presenze * costoBenzinaPerPresenza) : 0;
-  const presenzeImportoStr = (costoBenzinaPerPresenza > 0) ? __fmtMoneyNoSpace_(presenzeImporto) : "—";
+  const totalImportoStr = totalImporto > 0 ? __fmtMoneyNoSpace_(totalImporto) : '—';
+  const presenzeImportoStr = presenzeImporto > 0 ? __fmtMoneyNoSpace_(presenzeImporto) : '—';
 
   if (totalEl) {
     totalEl.textContent = hoursStr ? `${hoursStr} ore - ${totalImportoStr}` : "—";
@@ -12782,18 +21172,33 @@ async function initOrePuliziaPage(){
 
   __fillSelect_(selMonth, monthItems, s.monthKey);
 
-  // operatori list: da impostazioni + da righe
+  // operatori list: solo catalogo attivo dell'account
   let fromSet = [];
-  try{ fromSet = getOperatorNamesFromSettings(); }catch(_){ fromSet = []; }
-  const fromRows = Array.from(new Set((s.rows||[]).map(r=>String(r.operatore||r.nome||"").trim()).filter(Boolean))).sort();
-  const ops = Array.from(new Set([...(fromSet||[]), ...(fromRows||[])]))
-    .filter(Boolean)
-    .sort();
+  try{ fromSet = getActiveOperatorNames ? getActiveOperatorNames() : []; }catch(_){ fromSet = []; }
+  const ops = Array.from(new Set((fromSet||[]).map(x=>String(x||"").trim()).filter(Boolean)))
+    .sort((a,b)=>a.localeCompare(b, "it"));
 
   // opzioni: TUTTI + operatori
   const opItems = [{ value:"__ALL__", label:"TUTTI" }, ...ops.map(x=>({ value:x, label:x }))];
 
   // default operatore
+  // In sessione OPERATORE: pre-seleziona sempre il proprio nome (se presente), così il report è leggibile subito.
+  if (state && state.session && isOperatoreSession(state.session)){
+    const raw = String(
+      state.session._op_local ||
+      state.session.username ||
+      state.session.user ||
+      state.session.nome ||
+      state.session.name ||
+      state.session.email ||
+      ""
+    ).trim();
+    if (raw){
+      const norm = raw.toLowerCase();
+      const match = (ops||[]).find(x => String(x||"").trim().toLowerCase() === norm);
+      if (match) s.operatore = match;
+    }
+  }
   if (!s.operatore) s.operatore = ops.length ? ops[0] : "__ALL__";
   if (!opItems.some(o=>o.value === s.operatore)) s.operatore = ops.length ? ops[0] : "__ALL__";
 
@@ -12801,3 +21206,41 @@ async function initOrePuliziaPage(){
 
   __renderOrePuliziaCalendar_();
 }
+
+(async ()=>{ try{ await init(); } catch(e){ console.error(e); try{ toast(e.message||"Errore"); }catch(_){ } } })();
+
+
+/* dDAE_2.280 — Reset biancheria: icona X bianca in dark mode */
+function __applyLaundryResetCloseIcon__(){
+  try{
+    const btn = document.getElementById("cleanResetLaundry");
+    if (!btn) return false;
+    btn.classList.add('clean-reset-btn--laundry');
+    const svg = btn.querySelector('svg');
+    if (svg){
+      svg.setAttribute('viewBox','0 0 24 24');
+      svg.innerHTML = '<path d="M6 6l12 12"></path><path d="M18 6L6 18"></path>';
+      svg.classList.add('ui-ico');
+      try{ svg.style.stroke = '#ffffff'; svg.style.color = '#ffffff'; svg.style.fill = 'none'; }catch(_){ }
+    }
+    return true;
+  }catch(_){ return false; }
+}
+(function __bindLaundryResetCloseIconWatcher__(){
+  const run = ()=>{ try{ __applyLaundryResetCloseIcon__(); }catch(_){ } };
+  if (document.readyState === 'loading'){
+    document.addEventListener('DOMContentLoaded', run, { once:true });
+  } else {
+    setTimeout(run, 0);
+  }
+  try{
+    const mo = new MutationObserver(()=>{ if (__applyLaundryResetCloseIcon__()) { try{ mo.disconnect(); }catch(_){ } } });
+    mo.observe(document.documentElement || document.body, { childList:true, subtree:true });
+    setTimeout(()=>{ try{ mo.disconnect(); }catch(_){ } }, 15000);
+  }catch(_){ }
+  window.addEventListener('pageshow', run);
+  document.addEventListener('click', (e)=>{
+    const t = e && e.target && e.target.closest ? e.target.closest('#goPulizie, #goLavanderia, #topLaundryBtn, #cleanPrev, #cleanNext, #cleanToday') : null;
+    if (t) setTimeout(run, 0);
+  }, true);
+})();
