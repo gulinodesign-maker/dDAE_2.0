@@ -1,5 +1,5 @@
 /* dDAE - Service Worker (PWA)
- * Build: 2.308
+ * Build: 2.914
  *
  * Obiettivi:
  * - cache name cambia ad ogni build
@@ -9,7 +9,7 @@
  * - fix iOS/Safari cache aggressiva (cache:"reload"/"no-store" + query ?v)
  */
 
-const BUILD = "2.308";
+const BUILD = "2.914";
 const CACHE_NAME = `dDAE-local-cache-${BUILD}`; // cambia ad ogni build // cambia ad ogni build
 
 // Asset principali (versionati per forzare il fetch anche con cache aggressiva iOS)
@@ -21,10 +21,11 @@ const CORE_ASSETS = [
   `./app.js?v=${BUILD}`,
   `./config.js?v=${BUILD}`,
   `./manifest.json?v=${BUILD}`,
+  `./bg-daedalium.jpeg?v=${BUILD}`,
+  `./bg-daedalium_dark.PNG?v=${BUILD}`,
 
   // Immagini / icone (alcune linkate con ?v=... da index.html)
   `./assets/logo.jpg?v=${BUILD}`,
-  `./assets/bg-daedalium.png?v=${BUILD}`,
   "./assets/icons/icon-192.png",
   "./assets/icons/icon-512.png",
   `./assets/icons/icon-192.png?v=${BUILD}`,
@@ -174,7 +175,7 @@ self.addEventListener("fetch", (event) => {
     const u2 = new URL(event.request.url);
     const p = u2.pathname;
     const isSame = u2.origin === self.location.origin;
-    const coreAssets = ["/app.js","/styles.css","/config.js","/manifest.json"];
+    const coreAssets = ["/app.js","/styles.css","/config.js","/manifest.json","/assets/logo.jpg","/bg-daedalium.jpeg","/bg-daedalium_dark.PNG"];
     if (isSame && coreAssets.some(a => p.endsWith(a))) {
       event.respondWith(networkFirstAsset(event.request));
       return;
